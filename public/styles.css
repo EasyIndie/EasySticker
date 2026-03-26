@@ -1,0 +1,115 @@
+:root {
+  --bg: #0b1020;
+  --card: #111a33;
+  --text: #e9ecf5;
+  --muted: #9aa7c7;
+  --border: rgba(255, 255, 255, 0.12);
+  --btn: #2f6bff;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji",
+    "Segoe UI Emoji";
+  background: radial-gradient(1200px 600px at 20% 0%, rgba(47, 107, 255, 0.25), transparent 60%),
+    radial-gradient(1000px 500px at 90% 10%, rgba(140, 67, 255, 0.2), transparent 60%), var(--bg);
+  color: var(--text);
+}
+
+.container {
+  max-width: 920px;
+  padding: 24px;
+  margin: 0 auto;
+}
+
+.header {
+  margin-bottom: 16px;
+}
+
+.muted {
+  color: var(--muted);
+  margin: 4px 0 0 0;
+}
+
+.card {
+  border: 1px solid var(--border);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.03));
+  border-radius: 12px;
+  padding: 16px;
+  margin: 12px 0;
+}
+
+form {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.inline {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  color: var(--muted);
+}
+
+select,
+input[type="number"],
+input[type="text"] {
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  padding: 10px 12px;
+  background: rgba(0, 0, 0, 0.18);
+  color: var(--text);
+}
+
+input[type="file"] {
+  width: min(520px, 100%);
+}
+
+button {
+  appearance: none;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  background: var(--btn);
+  color: white;
+  border-radius: 10px;
+  padding: 10px 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.pre {
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px;
+  margin-top: 12px;
+  background: rgba(0, 0, 0, 0.25);
+  max-height: 240px;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.preview {
+  width: 100%;
+  height: 220px;
+  object-fit: contain;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: repeating-conic-gradient(rgba(255, 255, 255, 0.08) 0% 25%, transparent 0% 50%) 50% / 22px 22px;
+}
+
+@media (max-width: 720px) {
+  .grid {
+    grid-template-columns: 1fr;
+  }
+}

@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>EasySticker</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <main class="container">
+      <header class="header">
+        <h1>EasySticker</h1>
+        <p class="muted">自动化生成并打包表情资源（MVP）</p>
+      </header>
+
+      <section class="card">
+        <h2>上传图片</h2>
+        <form id="uploadForm">
+          <input id="file" name="file" type="file" accept="image/png,image/jpeg" required />
+          <button type="submit">上传</button>
+        </form>
+        <div class="grid">
+          <div>
+            <div class="muted">原图预览</div>
+            <img id="originalPreview" class="preview" alt="" />
+          </div>
+          <div>
+            <div class="muted">处理后预览</div>
+            <img id="processedPreview" class="preview" alt="" />
+          </div>
+        </div>
+        <pre id="uploadResult" class="pre"></pre>
+      </section>
+
+      <section class="card">
+        <h2>主体裁剪 / 背景透明化</h2>
+        <form id="processForm">
+          <label class="inline">
+            threshold
+            <input id="threshold" type="number" min="0" max="255" value="20" />
+          </label>
+          <label class="inline">
+            softness
+            <input id="softness" type="number" min="0" max="255" value="30" />
+          </label>
+          <button type="submit">处理</button>
+        </form>
+        <pre id="processResult" class="pre"></pre>
+      </section>
+
+      <section class="card">
+        <h2>静态生成（多尺寸）</h2>
+        <form id="generateForm">
+          <label class="inline">
+            sizes
+            <input id="sizes" type="text" value="128,256,512" />
+          </label>
+          <label class="inline">
+            text
+            <input id="overlayText" type="text" placeholder="可选文字" />
+          </label>
+          <select id="format">
+            <option value="png">png</option>
+            <option value="webp">webp</option>
+          </select>
+          <select id="effect">
+            <option value="none">none</option>
+            <option value="shadow">shadow</option>
+            <option value="glow">glow</option>
+          </select>
+          <button type="submit">生成</button>
+        </form>
+        <div id="generatedList" class="grid"></div>
+        <pre id="generateResult" class="pre"></pre>
+      </section>
+
+      <section class="card">
+        <h2>健康检查</h2>
+        <button id="healthBtn">GET /api/health</button>
+        <pre id="healthResult" class="pre"></pre>
+      </section>
+    </main>
+
+    <script src="/app.js"></script>
+  </body>
+</html>
