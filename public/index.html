@@ -19,65 +19,42 @@
           <input id="file" name="file" type="file" accept="image/png,image/jpeg" required />
           <button type="submit">上传</button>
         </form>
-        <div class="grid">
-          <div>
-            <div class="muted">原图预览</div>
-            <img id="originalPreview" class="preview" alt="" />
-          </div>
-          <div>
-            <div class="muted">处理后预览</div>
-            <img id="processedPreview" class="preview" alt="" />
-          </div>
+        <div class="stack">
+          <div class="muted">预览</div>
+          <img id="originalPreview" class="preview" alt="" />
         </div>
         <pre id="uploadResult" class="pre"></pre>
       </section>
 
       <section class="card">
-        <h2>主体裁剪 / 背景透明化</h2>
-        <form id="processForm">
+        <h2>AI 生成微信表情（最小流程）</h2>
+        <form id="wechatAiForm">
           <label class="inline">
-            threshold
-            <input id="threshold" type="number" min="0" max="255" value="20" />
+            referenceAssetId
+            <input id="wechatRefId" type="text" placeholder="默认用处理后/上传后的assetId" />
           </label>
           <label class="inline">
-            softness
-            <input id="softness" type="number" min="0" max="255" value="30" />
+            stickerCount
+            <input id="wechatAiCount" type="number" min="8" max="24" value="8" />
           </label>
-          <button type="submit">处理</button>
+          <label class="inline">
+            styles
+            <input id="wechatAiStyles" type="text" placeholder="扁平插画,3D卡通,日系Q版" />
+          </label>
+          <label class="inline">
+            title
+            <input id="wechatAiTitle" type="text" placeholder="可选" />
+          </label>
+          <button id="wechatAiSuggest" type="button">生成提示词</button>
+          <button type="submit">生成并打包</button>
         </form>
-        <pre id="processResult" class="pre"></pre>
-      </section>
-
-      <section class="card">
-        <h2>静态生成（多尺寸）</h2>
-        <form id="generateForm">
-          <label class="inline">
-            sizes
-            <input id="sizes" type="text" value="128,256,512" />
-          </label>
-          <label class="inline">
-            text
-            <input id="overlayText" type="text" placeholder="可选文字" />
-          </label>
-          <select id="format">
-            <option value="png">png</option>
-            <option value="webp">webp</option>
-          </select>
-          <select id="effect">
-            <option value="none">none</option>
-            <option value="shadow">shadow</option>
-            <option value="glow">glow</option>
-          </select>
-          <button type="submit">生成</button>
-        </form>
-        <div id="generatedList" class="grid"></div>
-        <pre id="generateResult" class="pre"></pre>
-      </section>
-
-      <section class="card">
-        <h2>健康检查</h2>
-        <button id="healthBtn">GET /api/health</button>
-        <pre id="healthResult" class="pre"></pre>
+        <label class="inline">
+          prompt
+          <input id="wechatAiPrompt" type="text" placeholder="在这里编辑提示词" />
+        </label>
+        <div id="wechatAiZipLink" class="stack"></div>
+        <div id="wechatAiPreview" class="grid"></div>
+        <pre id="wechatAiResult" class="pre"></pre>
       </section>
     </main>
 

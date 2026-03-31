@@ -51,3 +51,25 @@ export async function validateAsset(app: FastifyInstance, presetId: string, asse
     meta: { bytes: st.size, ext, width: w, height: h }
   };
 }
+
+export async function validateAssetList(app: FastifyInstance, presetId: string, assetIds: string[]) {
+  const preset = PLATFORM_PRESETS.find((p) => p.id === presetId);
+  if (!preset) throw createHttpError(404, "unknown preset");
+  const issues = [];
+
+  if (preset.minCount && assetIds.length < preset.minCount) {
+    issues.push({ code: "count", message: `count must be >= ${preset.minCount}` });
+  }
+  if (preset.maxCount && assetIds.length > preset.maxCount) {
+    issues.push({ code: "count", message: `count must be <= ${preset.maxCount}` });
+  }
+
+  const items = [];
+  for (const assetId of assetIds) {
+    const res = await validateAsset(app, presetId, assetId);
+    if (!res.ok) issues.push({ code: "asset", message: `asset ${assetId} not compatible` });
+    items.push(res);
+  }
+
+  return { presetId, ok: issues.length === 0, issues, items };
+}

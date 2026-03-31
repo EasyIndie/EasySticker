@@ -8,7 +8,11 @@ import { findAssetFile } from "../../lib/assets";
 
 export type PackRequest = {
   presetId: string;
-  assetIds: string[];
+  assetIds?: string[];
+  assets?: Array<{ label: string; assetId: string }>;
+  coverAssetId?: string;
+  bannerAssetId?: string;
+  iconAssetId?: string;
   metadata?: {
     title?: string;
     author?: string;
@@ -21,7 +25,14 @@ function packsDir(app: FastifyInstance) {
 }
 
 export async function buildZipPack(app: FastifyInstance, req: PackRequest) {
-  if (!Array.isArray(req.assetIds) || req.assetIds.length === 0) {
+  const normalizedAssets =
+    req.assets && req.assets.length
+      ? req.assets
+      : (req.assetIds ?? []).map((id, index) => ({
+          label: String(index + 1).padStart(3, "0"),
+          assetId: id
+        }));
+  if (!normalizedAssets.length) {
     throw createHttpError(400, "assetIds is required");
   }
 
@@ -44,16 +55,35 @@ export async function buildZipPack(app: FastifyInstance, req: PackRequest) {
 
   const entries: Array<{ assetId: string; filename: string; zipPath: string }> = [];
 
-  for (let i = 0; i < req.assetIds.length; i++) {
-    const id = req.assetIds[i]!;
+  for (const asset of normalizedAssets) {
+    const id = asset.assetId;
     const file = findAssetFile(app, id);
     if (!file) throw createHttpError(404, `asset not found: ${id}`);
 
     const ext = path.extname(file.filename).toLowerCase();
-    const name = `${String(i + 1).padStart(3, "0")}${ext}`;
+    const name = `${asset.label}${ext}`;
     const inZip = path.posix.join("assets", name);
     zip.file(file.filePath, { name: inZip });
     entries.push({ assetId: id, filename: name, zipPath: inZip });
+  }
+
+  if (req.coverAssetId) {
+    const cover = findAssetFile(app, req.coverAssetId);
+    if (!cover) throw createHttpError(404, `asset not found: ${req.coverAssetId}`);
+    const ext = path.extname(cover.filename).toLowerCase();
+    zip.file(cover.filePath, { name: path.posix.join("meta", `cover${ext}`) });
+  }
+  if (req.bannerAssetId) {
+    const banner = findAssetFile(app, req.bannerAssetId);
+    if (!banner) throw createHttpError(404, `asset not found: ${req.bannerAssetId}`);
+    const ext = path.extname(banner.filename).toLowerCase();
+    zip.file(banner.filePath, { name: path.posix.join("meta", `banner${ext}`) });
+  }
+  if (req.iconAssetId) {
+    const icon = findAssetFile(app, req.iconAssetId);
+    if (!icon) throw createHttpError(404, `asset not found: ${req.iconAssetId}`);
+    const ext = path.extname(icon.filename).toLowerCase();
+    zip.file(icon.filePath, { name: path.posix.join("meta", `icon${ext}`) });
   }
 
   const meta = {
@@ -62,6 +92,11 @@ export async function buildZipPack(app: FastifyInstance, req: PackRequest) {
     presetId: req.presetId,
     createdAt: new Date().toISOString(),
     metadata: req.metadata ?? {},
+    extras: {
+      coverAssetId: req.coverAssetId ?? null,
+      bannerAssetId: req.bannerAssetId ?? null,
+      iconAssetId: req.iconAssetId ?? null
+    },
     assets: entries
   };
   zip.append(JSON.stringify(meta, null, 2), { name: "metadata.json" });
@@ -77,4 +112,3 @@ export function getPackZipPath(app: FastifyInstance, packId: string) {
   if (!fs.existsSync(filePath)) throw createHttpError(404, "pack not found");
   return filePath;
 }
-
