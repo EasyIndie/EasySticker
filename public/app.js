@@ -1,110 +1,1436 @@
 const uploadForm = document.getElementById("uploadForm");
-const uploadResult = document.getElementById("uploadResult");
+const uploadSubmit = document.getElementById("uploadSubmit");
+const uploadState = document.getElementById("uploadState");
 const originalPreview = document.getElementById("originalPreview");
 const wechatAiForm = document.getElementById("wechatAiForm");
-const wechatAiResult = document.getElementById("wechatAiResult");
+const generateSubmit = document.getElementById("generateSubmit");
+const regenerateSubmit = document.getElementById("regenerateSubmit");
+const resetSubmit = document.getElementById("resetSubmit");
+const generateState = document.getElementById("generateState");
 const wechatAiZipLink = document.getElementById("wechatAiZipLink");
+const wechatAiActions = document.getElementById("wechatAiActions");
+const wechatAiExtras = document.getElementById("wechatAiExtras");
 const wechatAiPreview = document.getElementById("wechatAiPreview");
 const wechatAiSuggest = document.getElementById("wechatAiSuggest");
+const wechatAiPrompt = document.getElementById("wechatAiPrompt");
+const wechatAiTitle = document.getElementById("wechatAiTitle");
+const wechatAiAuthor = document.getElementById("wechatAiAuthor");
+const wechatAiVersion = document.getElementById("wechatAiVersion");
+const wechatAiCopyright = document.getElementById("wechatAiCopyright");
+const wechatAiCount = document.getElementById("wechatAiCount");
+const wechatAiRewardEnabled = document.getElementById("wechatAiRewardEnabled");
+const wechatAiRewardMessageField = document.getElementById("wechatAiRewardMessageField");
+const wechatAiRewardMessage = document.getElementById("wechatAiRewardMessage");
+const wechatAiStyleOptions = document.getElementById("wechatAiStyleOptions");
+const wechatAiSummary = document.getElementById("wechatAiSummary");
+const wechatAiExportInfo = document.getElementById("wechatAiExportInfo");
+const wechatAiMetadataPreview = document.getElementById("wechatAiMetadataPreview");
+const wechatAiFeedback = document.getElementById("wechatAiFeedback");
+const promptHint = document.getElementById("promptHint");
+const globalNotice = document.getElementById("globalNotice");
+const toastNotice = document.getElementById("toastNotice");
+
+const DEFAULT_STICKER_COUNT = 8;
+const MIN_STICKER_COUNT = 8;
+const MAX_STICKER_COUNT = 24;
+const DEFAULT_STYLE_OPTIONS = ["扁平插画", "3D 卡通", "日系 Q 版", "像素风", "国潮风"];
+const LAST_WECHAT_PACK_STORAGE_KEY = "easysticker:last-wechat-pack";
+const BASE_EXTRA_ASSET_DEFS = [
+  {
+    key: "coverAssetId",
+    title: "Cover 预览",
+    spec: "240 × 240",
+    description: "用于表情包封面展示。",
+    alt: "生成封面预览"
+  },
+  {
+    key: "iconAssetId",
+    title: "Icon 预览",
+    spec: "50 × 50",
+    description: "用于列表入口与缩略图展示。",
+    alt: "生成图标预览"
+  },
+  {
+    key: "bannerAssetId",
+    title: "Banner 预览",
+    spec: "750 × 400",
+    description: "用于详情页横幅展示。",
+    alt: "生成横幅预览",
+    wide: true
+  }
+];
+const REWARD_EXTRA_ASSET_DEFS = [
+  {
+    key: "rewardGuideAssetId",
+    title: "赞赏引导图",
+    spec: "750 × 400",
+    description: "用于展示赞赏引导语。",
+    alt: "赞赏引导图预览",
+    wide: true
+  },
+  {
+    key: "rewardThanksAssetId",
+    title: "赞赏感谢图",
+    spec: "750 × 400",
+    description: "用于赞赏完成后的感谢反馈。",
+    alt: "赞赏感谢图预览",
+    wide: true
+  }
+];
+const PLACEHOLDER_STATE_TEXT = {
+  idle: "等待生成",
+  loading: "生成中，完成后自动展示",
+  error: "生成失败，可点击重新生成",
+  success: "本次结果未返回该资源"
+};
+const STICKER_PREVIEW_SPEC = "240 × 240";
 
 let currentUploadId = null;
+let currentStyles = [];
+let availableStyles = [...DEFAULT_STYLE_OPTIONS];
+let currentRewardEnabled = false;
+let currentRewardMessage = "";
+let hasGenerationAttempted = false;
+let lastPackResult = null;
+let summaryResult = null;
+let exportInfoResult = null;
+let metadataPreviewResult = null;
+let isSummaryCollapsed = true;
+let isExportInfoCollapsed = true;
+let isMetadataPreviewCollapsed = true;
+let toastTimer = null;
+const CONFIRM_CARD_CONFIGS = {
+  summary: {
+    element: wechatAiSummary,
+    title: "结果概览",
+    description: "确认本次生成范围、风格与导出文件，再继续下载或重新生成。",
+    toggleAction: "toggle-summary",
+    toggleButtonClass: "ghost-button summary-toggle-button panel-toggle-button",
+    collapsedPlaceholder: "已默认折叠，展开后查看标题、作者、版本、版权、贴纸数量、风格、参考图方式与导出文件。",
+    getExpandedContent(result) {
+      return buildDetailGridMarkup(getSummaryData(result));
+    }
+  },
+  exportInfo: {
+    element: wechatAiExportInfo,
+    title: "导出信息",
+    description: "确认对外展示字段、packId 与 ZIP 文件名，确认后可直接复制。",
+    toggleAction: "toggle-export-info",
+    toggleButtonClass: "ghost-button export-info-toggle-button panel-toggle-button",
+    copyAction: "copy-export-info-card",
+    copyButtonClass: "ghost-button export-info-copy-button",
+    copyLabel: "复制导出信息",
+    copySuccess: "导出信息已复制",
+    collapsedPlaceholder: "已默认折叠，展开后查看标题、作者、版本、版权、packId 与导出文件。",
+    getExpandedContent(result) {
+      return buildDetailGridMarkup(getExportInfoData(result).items);
+    },
+    getCopyText(result) {
+      return buildExportInfoCardText(result);
+    }
+  },
+  metadata: {
+    element: wechatAiMetadataPreview,
+    title: "metadata.json",
+    description: "确认 packId、资源映射与扩展资源字段，再继续下载或提审。",
+    toggleAction: "toggle-metadata-preview",
+    toggleButtonClass: "ghost-button metadata-toggle-button panel-toggle-button",
+    copyAction: "copy-metadata-preview",
+    copyButtonClass: "ghost-button metadata-copy-button",
+    copyLabel: "复制 metadata.json",
+    copySuccess: "metadata.json 已复制",
+    collapsedPlaceholder: "已默认折叠，展开后查看 ZIP 中完整的 metadata.json 内容。",
+    getExpandedContent(result) {
+      return `<pre class="code-preview"><code>${escapeHtml(buildMetadataPreviewText(result))}</code></pre>`;
+    },
+    getCopyText(result) {
+      return buildMetadataPreviewText(result);
+    }
+  }
+};
+const CONFIRM_CARD_STATE = {
+  summary: {
+    getResult: () => summaryResult,
+    setResult: (result) => {
+      summaryResult = result;
+    },
+    getCollapsed: () => isSummaryCollapsed,
+    setCollapsed: (value) => {
+      isSummaryCollapsed = value;
+    }
+  },
+  exportInfo: {
+    getResult: () => exportInfoResult,
+    setResult: (result) => {
+      exportInfoResult = result;
+    },
+    getCollapsed: () => isExportInfoCollapsed,
+    setCollapsed: (value) => {
+      isExportInfoCollapsed = value;
+    }
+  },
+  metadata: {
+    getResult: () => metadataPreviewResult,
+    setResult: (result) => {
+      metadataPreviewResult = result;
+    },
+    getCollapsed: () => isMetadataPreviewCollapsed,
+    setCollapsed: (value) => {
+      isMetadataPreviewCollapsed = value;
+    }
+  }
+};
 
-uploadForm.addEventListener("submit", async (e) => {
-  e.preventDefault();
-  uploadResult.textContent = "上传中...";
+function setPromptHint(styles = []) {
+  const count = Number(wechatAiCount.value || DEFAULT_STICKER_COUNT);
+  promptHint.textContent = Array.isArray(styles) && styles.length
+    ? `已加载推荐风格：${styles.join("、")}。当前生成 ${count} 张表情${currentRewardEnabled ? "，并附带赞赏引导图和感谢图" : ""}。`
+    : `当前生成 ${count} 张表情，并自动补齐封面、图标和横幅${currentRewardEnabled ? "，以及赞赏引导图和感谢图" : ""}。`;
+}
+
+function syncRewardFields() {
+  currentRewardEnabled = Boolean(wechatAiRewardEnabled.checked);
+  wechatAiRewardMessageField.hidden = !currentRewardEnabled;
+  if (!currentRewardEnabled) {
+    wechatAiRewardMessage.value = "";
+    currentRewardMessage = "";
+    setFieldInvalid(wechatAiRewardMessage, false);
+  }
+}
+
+function renderStyleOptions(styles = DEFAULT_STYLE_OPTIONS) {
+  availableStyles = Array.isArray(styles) && styles.length ? [...new Set(styles.filter(Boolean))] : [...DEFAULT_STYLE_OPTIONS];
+  currentStyles = currentStyles.filter((item) => availableStyles.includes(item));
+  if (!currentStyles.length) {
+    currentStyles = [...availableStyles];
+  }
+
+  wechatAiStyleOptions.innerHTML = "";
+  for (const style of availableStyles) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "style-chip";
+    button.dataset.selected = currentStyles.includes(style) ? "true" : "false";
+    button.textContent = style;
+    button.addEventListener("click", () => {
+      if (currentStyles.includes(style)) {
+        if (currentStyles.length > 1) {
+          currentStyles = currentStyles.filter((item) => item !== style);
+        }
+      } else {
+        currentStyles = [...currentStyles, style];
+      }
+      setFieldInvalid(wechatAiStyleOptions, false);
+      renderStyleOptions(availableStyles);
+      setPromptHint(currentStyles);
+    });
+    wechatAiStyleOptions.appendChild(button);
+  }
+}
+
+function getStorage() {
+  try {
+    return window.localStorage;
+  } catch {
+    return null;
+  }
+}
+
+function clearPersistedPackResult() {
+  const storage = getStorage();
+  if (!storage) return;
+  try {
+    storage.removeItem(LAST_WECHAT_PACK_STORAGE_KEY);
+  } catch {
+    // ignore storage errors
+  }
+}
+
+function sanitizePersistedPackResult(raw) {
+  if (!raw || typeof raw !== "object") return null;
+
+  const result = raw.result;
+  if (!result || typeof result !== "object" || typeof result.packId !== "string" || typeof result.downloadUrl !== "string") {
+    return null;
+  }
+
+  const stickers = Array.isArray(result.stickers)
+    ? result.stickers
+        .filter((item) => item && typeof item === "object" && typeof item.label === "string" && typeof item.url === "string")
+        .map((item) => ({
+          label: item.label,
+          url: item.url,
+          assetId: typeof item.assetId === "string" ? item.assetId : undefined
+        }))
+    : [];
+
+  return {
+    uploadId: typeof raw.uploadId === "string" ? raw.uploadId : null,
+    prompt: typeof raw.prompt === "string" ? raw.prompt : "",
+    title: typeof raw.title === "string" ? raw.title : "",
+    author: typeof raw.author === "string" ? raw.author : "",
+    versionText: typeof raw.versionText === "string" ? raw.versionText : "",
+    copyrightText: typeof raw.copyrightText === "string" ? raw.copyrightText : "",
+    rewardEnabled: Boolean(raw.rewardEnabled),
+    rewardMessage: typeof raw.rewardMessage === "string" ? raw.rewardMessage : "",
+    stickerCount: Number.isFinite(raw.stickerCount) ? raw.stickerCount : DEFAULT_STICKER_COUNT,
+    styles: Array.isArray(raw.styles) ? raw.styles.filter((item) => typeof item === "string" && item.trim()) : [],
+    hasGenerationAttempted: Boolean(raw.hasGenerationAttempted),
+    result: {
+      packId: result.packId,
+      downloadUrl: result.downloadUrl,
+      downloadFilename: typeof result.downloadFilename === "string" ? result.downloadFilename : undefined,
+      stickers,
+      metadataJson: typeof result.metadataJson === "string" ? result.metadataJson : undefined,
+      meta:
+        result.meta && typeof result.meta === "object"
+          ? {
+              ...result.meta,
+              ...(typeof raw.title === "string" && raw.title ? { title: raw.title } : {}),
+              ...(typeof raw.author === "string" && raw.author ? { author: raw.author } : {}),
+              ...(typeof raw.versionText === "string" && raw.versionText ? { version: raw.versionText } : {}),
+              ...(typeof raw.copyrightText === "string" && raw.copyrightText ? { copyright: raw.copyrightText } : {}),
+              ...(typeof raw.rewardMessage === "string" && raw.rewardMessage ? { rewardMessage: raw.rewardMessage } : {}),
+              ...(raw.rewardEnabled ? { rewardEnabled: true } : {})
+            }
+          : {
+              ...(typeof raw.title === "string" && raw.title ? { title: raw.title } : {}),
+              ...(typeof raw.author === "string" && raw.author ? { author: raw.author } : {}),
+              ...(typeof raw.versionText === "string" && raw.versionText ? { version: raw.versionText } : {}),
+              ...(typeof raw.copyrightText === "string" && raw.copyrightText ? { copyright: raw.copyrightText } : {}),
+              ...(typeof raw.rewardMessage === "string" && raw.rewardMessage ? { rewardMessage: raw.rewardMessage } : {}),
+              ...(raw.rewardEnabled ? { rewardEnabled: true } : {})
+            },
+      extras: result.extras && typeof result.extras === "object" ? result.extras : {}
+    }
+  };
+}
+
+function persistLastGeneratedResult(result) {
+  const storage = getStorage();
+  if (!storage || !result?.packId || !result?.downloadUrl) return;
+
+  const payload = {
+    version: 1,
+    savedAt: new Date().toISOString(),
+    uploadId: currentUploadId,
+    prompt: wechatAiPrompt.value,
+    title: wechatAiTitle.value,
+    author: wechatAiAuthor.value,
+    versionText: wechatAiVersion.value,
+    copyrightText: wechatAiCopyright.value,
+    rewardEnabled: currentRewardEnabled,
+    rewardMessage: wechatAiRewardMessage.value,
+    stickerCount: Number(wechatAiCount.value || DEFAULT_STICKER_COUNT),
+    styles: Array.isArray(currentStyles) ? currentStyles.filter(Boolean) : [],
+    hasGenerationAttempted,
+    result: {
+      packId: result.packId,
+      downloadUrl: result.downloadUrl,
+      downloadFilename: result.downloadFilename,
+      stickers: Array.isArray(result.stickers)
+        ? result.stickers
+            .filter((item) => item && typeof item.label === "string" && typeof item.url === "string")
+            .map((item) => ({
+              label: item.label,
+              url: item.url,
+              assetId: typeof item.assetId === "string" ? item.assetId : undefined
+            }))
+        : [],
+      metadataJson: typeof result.metadataJson === "string" ? result.metadataJson : undefined,
+      meta: result.meta && typeof result.meta === "object" ? result.meta : {},
+      extras: result.extras && typeof result.extras === "object" ? result.extras : {}
+    }
+  };
+
+  try {
+    storage.setItem(LAST_WECHAT_PACK_STORAGE_KEY, JSON.stringify(payload));
+  } catch {
+    // ignore storage errors
+  }
+}
+
+function restorePersistedPackResult() {
+  const storage = getStorage();
+  if (!storage) return false;
+
+  try {
+    const rawText = storage.getItem(LAST_WECHAT_PACK_STORAGE_KEY);
+    if (!rawText) return false;
+
+    const restored = sanitizePersistedPackResult(JSON.parse(rawText));
+    if (!restored) {
+      clearPersistedPackResult();
+      return false;
+    }
+
+    currentUploadId = restored.uploadId;
+    currentStyles = restored.styles.length ? restored.styles : [...DEFAULT_STYLE_OPTIONS];
+    currentRewardEnabled = Boolean(restored.rewardEnabled || restored.result?.meta?.rewardEnabled);
+    hasGenerationAttempted = Boolean(restored.uploadId && restored.prompt && restored.hasGenerationAttempted);
+    lastPackResult = restored.result;
+
+    wechatAiPrompt.value = restored.prompt;
+    wechatAiTitle.value = restored.title;
+    wechatAiAuthor.value = restored.author;
+    wechatAiVersion.value = restored.versionText;
+    wechatAiCopyright.value = restored.copyrightText;
+    wechatAiRewardMessage.value = restored.rewardMessage;
+    wechatAiCount.value = String(restored.stickerCount || DEFAULT_STICKER_COUNT);
+    wechatAiRewardEnabled.checked = currentRewardEnabled;
+    currentRewardMessage = restored.rewardMessage;
+    syncRewardFields();
+    renderStyleOptions(currentStyles);
+    setPromptHint(currentStyles);
+
+    if (restored.uploadId) {
+      originalPreview.src = buildAssetUrl(restored.uploadId);
+      setStatus(uploadState, "已恢复参考图", "success");
+    }
+
+    renderPreview(restored.result.stickers, "success");
+    renderExtraAssets(restored.result.extras, "success");
+    renderDownload(restored.result.packId, restored.result.downloadUrl, restored.result.downloadFilename);
+    renderActions(restored.result);
+    renderSummary(restored.result);
+    renderExportInfo(restored.result);
+    renderMetadataPreview(restored.result);
+    setFeedback("已从本地恢复最近一次生成结果，可直接预览、下载或重新生成。", "success");
+    setStatus(generateState, "已恢复最近结果", "success");
+    setNotice("已恢复最近一次生成结果，可继续下载或重新生成。", "success");
+    syncRegenerateButton();
+    return true;
+  } catch {
+    clearPersistedPackResult();
+    return false;
+  }
+}
+
+function setBusy(button, busy, text) {
+  button.disabled = busy;
+  button.dataset.label = button.dataset.label || button.textContent;
+  button.textContent = busy ? text : button.dataset.label;
+}
+
+function setStatus(node, text, tone = "idle") {
+  node.textContent = text;
+  node.dataset.tone = tone;
+}
+
+function setNotice(text, tone = "info") {
+  globalNotice.textContent = text;
+  globalNotice.dataset.tone = tone;
+  if (tone === "success" || tone === "error") {
+    showToast(text, tone);
+  }
+}
+
+function showToast(text, tone = "info") {
+  if (!toastNotice) return;
+  toastNotice.textContent = text;
+  toastNotice.dataset.tone = tone;
+  toastNotice.dataset.visible = "true";
+  if (toastTimer) {
+    clearTimeout(toastTimer);
+  }
+  toastTimer = setTimeout(() => {
+    toastNotice.dataset.visible = "false";
+  }, 2200);
+}
+
+function setFieldInvalid(target, invalid) {
+  if (!target) return;
+  const container = target.className?.includes?.("style-options") ? target : target.closest?.(".field") || target;
+  if (container?.dataset) {
+    container.dataset.invalid = invalid ? "true" : "false";
+  }
+  if (target.setAttribute) {
+    target.setAttribute("aria-invalid", invalid ? "true" : "false");
+  }
+}
+
+function clearGenerateValidation() {
+  setFieldInvalid(wechatAiPrompt, false);
+  setFieldInvalid(wechatAiTitle, false);
+  setFieldInvalid(wechatAiAuthor, false);
+  setFieldInvalid(wechatAiCount, false);
+  setFieldInvalid(wechatAiRewardMessage, false);
+  setFieldInvalid(wechatAiStyleOptions, false);
+}
+
+function validateGenerateInputs() {
+  clearGenerateValidation();
+
+  const prompt = wechatAiPrompt.value.trim();
+  const title = wechatAiTitle.value.trim();
+  const author = wechatAiAuthor.value.trim();
+  const rewardMessage = wechatAiRewardMessage.value.trim();
+  const stickerCount = Number(wechatAiCount.value || DEFAULT_STICKER_COUNT);
+
+  if (!prompt) {
+    setFieldInvalid(wechatAiPrompt, true);
+    setNotice("请先填写提示词。", "error");
+    setStatus(generateState, "缺少提示词", "error");
+    return false;
+  }
+
+  if (!title) {
+    setFieldInvalid(wechatAiTitle, true);
+    setNotice("请填写表情包标题。", "error");
+    setStatus(generateState, "缺少标题", "error");
+    return false;
+  }
+
+  if (!author) {
+    setFieldInvalid(wechatAiAuthor, true);
+    setNotice("请填写作者名。", "error");
+    setStatus(generateState, "缺少作者", "error");
+    return false;
+  }
+
+  if (!Number.isInteger(stickerCount) || stickerCount < MIN_STICKER_COUNT || stickerCount > MAX_STICKER_COUNT) {
+    setFieldInvalid(wechatAiCount, true);
+    setNotice(`贴纸数量需在 ${MIN_STICKER_COUNT}-${MAX_STICKER_COUNT} 张之间。`, "error");
+    setStatus(generateState, "数量不合法", "error");
+    return false;
+  }
+
+  if (!currentStyles.length) {
+    setFieldInvalid(wechatAiStyleOptions, true);
+    setNotice("请至少选择一种风格。", "error");
+    setStatus(generateState, "缺少风格", "error");
+    return false;
+  }
+
+  if (currentRewardEnabled && !rewardMessage) {
+    setFieldInvalid(wechatAiRewardMessage, true);
+    setNotice("开启赞赏功能后，请填写赞赏引导语。", "error");
+    setStatus(generateState, "缺少引导语", "error");
+    return false;
+  }
+
+  return true;
+}
+
+function setSummary(title, description) {
+  renderConfirmCardPlaceholder("summary", description, { title });
+}
+
+function buildConfirmCardMarkup({ title, description, actions = "", content = "" }) {
+  return `
+    <div class="summary-card-head">
+      <div class="summary-card-copy">
+        <div class="section-title">${escapeHtml(title)}</div>
+        <p class="muted">${escapeHtml(description)}</p>
+      </div>
+      ${actions ? `<div class="summary-card-actions">${actions}</div>` : ""}
+    </div>
+    ${content}
+  `;
+}
+
+function setExportInfo(message) {
+  renderConfirmCardPlaceholder("exportInfo", message);
+}
+
+function setMetadataPreview(message) {
+  renderConfirmCardPlaceholder("metadata", message);
+}
+
+function buildConfirmCardActions(config, collapsed) {
+  const actions = [];
+  if (config.toggleAction) {
+    actions.push(`
+      <button
+        type="button"
+        class="${config.toggleButtonClass}"
+        data-action="${config.toggleAction}"
+        aria-expanded="${collapsed ? "false" : "true"}"
+      >${collapsed ? "展开内容" : "收起内容"}</button>
+    `);
+  }
+
+  if (config.copyAction) {
+    actions.push(`
+      <button
+        type="button"
+        class="${config.copyButtonClass}"
+        data-action="${config.copyAction}"
+      >${config.copyLabel}</button>
+    `);
+  }
+
+  return actions.join("");
+}
+
+function renderConfirmCardPlaceholder(key, message, { title } = {}) {
+  const config = CONFIRM_CARD_CONFIGS[key];
+  const state = CONFIRM_CARD_STATE[key];
+  state.setResult(null);
+  state.setCollapsed(true);
+  config.element.innerHTML = buildConfirmCardMarkup({
+    title: title ?? config.title,
+    description: config.description,
+    content: `<p class="muted summary-card-placeholder">${escapeHtml(message)}</p>`
+  });
+}
+
+function renderConfirmCard(key, result, { resetCollapsed = true } = {}) {
+  const config = CONFIRM_CARD_CONFIGS[key];
+  const state = CONFIRM_CARD_STATE[key];
+  if (!result) {
+    renderConfirmCardPlaceholder(key, "");
+    return;
+  }
+
+  state.setResult(result);
+  if (resetCollapsed) {
+    state.setCollapsed(true);
+  }
+
+  const collapsed = state.getCollapsed();
+  config.element.innerHTML = buildConfirmCardMarkup({
+    title: config.title,
+    description: config.description,
+    actions: buildConfirmCardActions(config, collapsed),
+    content: collapsed
+      ? `<p class="muted summary-card-placeholder">${config.collapsedPlaceholder}</p>`
+      : config.getExpandedContent(result)
+  });
+}
+
+function toggleConfirmCard(key) {
+  const state = CONFIRM_CARD_STATE[key];
+  const result = state.getResult();
+  if (!result) return;
+  state.setCollapsed(!state.getCollapsed());
+  renderConfirmCard(key, result, { resetCollapsed: false });
+}
+
+async function copyConfirmCardContent(key) {
+  const config = CONFIRM_CARD_CONFIGS[key];
+  const result = CONFIRM_CARD_STATE[key].getResult();
+  if (!config.getCopyText || !result) return;
+  await copyText(config.getCopyText(result));
+  setNotice(config.copySuccess, "success");
+}
+
+async function handleConfirmCardClick(key, event) {
+  const config = CONFIRM_CARD_CONFIGS[key];
+  const state = CONFIRM_CARD_STATE[key];
+  const toggleButton = event?.target?.closest?.(`[data-action="${config.toggleAction}"]`);
+  if (toggleButton && state.getResult()) {
+    toggleConfirmCard(key);
+    return;
+  }
+
+  if (!config.copyAction) return;
+
+  const copyButton = event?.target?.closest?.(`[data-action="${config.copyAction}"]`);
+  if (!copyButton || !state.getResult()) return;
+
+  try {
+    await copyConfirmCardContent(key);
+  } catch (error) {
+    setNotice(error instanceof Error ? error.message : "复制失败，请稍后重试。", "error");
+  }
+}
+
+function buildDetailGridMarkup(items) {
+  return `
+    <div class="detail-grid">
+      ${items
+        .map(
+          (item) => `
+            <div class="detail-item">
+              <span class="muted">${escapeHtml(item.label)}</span>
+              <strong>${escapeHtml(item.value)}</strong>
+            </div>
+          `
+        )
+        .join("")}
+    </div>
+  `;
+}
+
+function getSummaryData(result) {
+  const count = result?.stickers?.length ?? result?.meta?.count ?? DEFAULT_STICKER_COUNT;
+  const styles = Array.isArray(result?.meta?.styles) && result.meta.styles.length ? result.meta.styles.join("、") : "默认";
+  const referenceMode = result?.meta?.referenceMode ?? "base64";
+  const filename = result?.downloadFilename ?? `${result?.packId ?? "pack"}.zip`;
+  const title = result?.meta?.title ?? "未命名表情包";
+  const author = result?.meta?.author ?? "未填写";
+  const version = result?.meta?.version ?? "未填写";
+  const copyright = result?.meta?.copyright ?? "未填写";
+  const rewardEnabled = result?.meta?.rewardEnabled ? "已开启" : "未开启";
+  const rewardMessage = result?.meta?.rewardMessage ?? "未填写";
+
+  return [
+    { label: "标题", value: title },
+    { label: "作者", value: author },
+    { label: "版本", value: version },
+    { label: "版权", value: copyright },
+    { label: "贴纸数量", value: `${count} 张` },
+    { label: "赞赏功能", value: rewardEnabled },
+    ...(result?.meta?.rewardEnabled ? [{ label: "赞赏引导语", value: rewardMessage }] : []),
+    { label: "风格", value: styles },
+    { label: "参考图方式", value: referenceMode },
+    { label: "导出文件", value: filename }
+  ];
+}
+
+function renderSummary(result, { resetCollapsed = true } = {}) {
+  if (!result) {
+    setSummary("结果概览", "生成后在这里查看标题、数量、风格、参考图方式与导出文件。");
+    return;
+  }
+
+  renderConfirmCard("summary", result, { resetCollapsed });
+}
+
+function renderExportInfo(result, { resetCollapsed = true } = {}) {
+  if (!result) {
+    setExportInfo("生成后在这里集中确认标题、作者、版本、版权、packId 与导出文件。");
+    return;
+  }
+
+  renderConfirmCard("exportInfo", result, { resetCollapsed });
+}
+
+function setFeedback(text, tone = "idle") {
+  wechatAiFeedback.dataset.tone = tone;
+  wechatAiFeedback.innerHTML = `
+    <div class="section-title">预览状态</div>
+    <p class="muted">${text}</p>
+  `;
+}
+
+function escapeHtml(text) {
+  return String(text)
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#39;");
+}
+
+function getExportInfoData(result) {
+  const title = result?.meta?.title ?? "未命名表情包";
+  const author = result?.meta?.author ?? "未填写";
+  const version = result?.meta?.version ?? "未填写";
+  const copyright = result?.meta?.copyright ?? "未填写";
+  const packId = result?.packId ?? "未生成";
+  const filename = result?.downloadFilename ?? `${packId}.zip`;
+  const rewardEnabled = result?.meta?.rewardEnabled ? "已开启" : "未开启";
+  const rewardMessage = result?.meta?.rewardMessage ?? "未填写";
+
+  return {
+    title,
+    author,
+    version,
+    copyright,
+    rewardEnabled,
+    rewardMessage,
+    packId,
+    filename,
+    items: [
+      { label: "标题", value: title },
+      { label: "作者", value: author },
+      { label: "版本", value: version },
+      { label: "版权", value: copyright },
+      { label: "赞赏功能", value: rewardEnabled },
+      ...(result?.meta?.rewardEnabled ? [{ label: "赞赏引导语", value: rewardMessage }] : []),
+      { label: "packId", value: packId },
+      { label: "导出文件", value: filename }
+    ]
+  };
+}
+
+function buildExportInfoCardText(result) {
+  if (!result) return "";
+  return getExportInfoData(result).items.map((item) => `${item.label}：${item.value}`).join("\n");
+}
+
+function buildExportInfoText(result) {
+  if (!result) return "";
+  const { title, author, version, copyright, packId, filename } = getExportInfoData(result);
+  const downloadHref = result?.downloadUrl ? new URL(result.downloadUrl, window.location.origin).toString() : "未生成";
+
+  return [
+    `标题：${title}`,
+    `作者：${author}`,
+    `版本：${version}`,
+    `版权：${copyright}`,
+    `packId：${packId}`,
+    `导出文件：${filename}`,
+    `下载链接：${downloadHref}`
+  ].join("\n");
+}
+
+function buildMetadataPreviewText(result) {
+  if (!result) return "";
+  if (typeof result.metadataJson === "string" && result.metadataJson.trim()) {
+    return result.metadataJson;
+  }
+
+  const metadata = {
+    schema: "easysticker-pack@0.1",
+    packId: result?.packId ?? null,
+    presetId: "wechat_stickers",
+    createdAt: null,
+    metadata: {
+      ...(result?.meta?.title ? { title: result.meta.title } : {}),
+      ...(result?.meta?.author ? { author: result.meta.author } : {}),
+      ...(result?.meta?.version ? { version: result.meta.version } : {}),
+      ...(result?.meta?.copyright ? { copyright: result.meta.copyright } : {}),
+      ...(result?.meta?.rewardMessage ? { rewardMessage: result.meta.rewardMessage } : {})
+    },
+    extras: {
+      coverAssetId: result?.extras?.coverAssetId ?? null,
+      bannerAssetId: result?.extras?.bannerAssetId ?? null,
+      iconAssetId: result?.extras?.iconAssetId ?? null,
+      rewardGuideAssetId: result?.extras?.rewardGuideAssetId ?? null,
+      rewardThanksAssetId: result?.extras?.rewardThanksAssetId ?? null
+    },
+    assets: Array.isArray(result?.stickers)
+      ? result.stickers.map((item) => ({
+          assetId: item.assetId ?? null,
+          filename: `${item.label ?? "sticker"}.png`,
+          zipPath: `assets/${item.label ?? "sticker"}.png`
+        }))
+      : []
+  };
+
+  return JSON.stringify(metadata, null, 2);
+}
+
+function renderMetadataPreview(result, tone = "success", { resetCollapsed = true } = {}) {
+  if (tone === "loading") {
+    setMetadataPreview("正在准备 metadata.json 内容...");
+    return;
+  }
+
+  if (tone === "error") {
+    setMetadataPreview("生成失败，暂时无法展示 metadata.json 内容。");
+    return;
+  }
+
+  if (!result || tone === "idle") {
+    setMetadataPreview("生成后在这里查看 ZIP 中的 metadata.json 内容。");
+    return;
+  }
+
+  renderConfirmCard("metadata", result, { resetCollapsed });
+}
+
+async function copyText(text) {
+  if (!text) throw new Error("没有可复制的内容");
+  if (navigator.clipboard?.writeText) {
+    await navigator.clipboard.writeText(text);
+    return;
+  }
+
+  const input = document.createElement("textarea");
+  input.value = text;
+  input.setAttribute("readonly", "");
+  input.style.position = "absolute";
+  input.style.left = "-9999px";
+  document.body.appendChild(input);
+  input.select();
+  const ok = document.execCommand("copy");
+  document.body.removeChild(input);
+  if (!ok) throw new Error("复制失败，请手动复制");
+}
+
+function buildAssetUrl(assetId) {
+  return assetId ? `/api/assets/${assetId}` : "";
+}
+
+function getExtraAssetDefs(extras = {}) {
+  const rewardAssetPresent = Boolean(extras?.rewardGuideAssetId || extras?.rewardThanksAssetId);
+  return currentRewardEnabled || rewardAssetPresent
+    ? [...BASE_EXTRA_ASSET_DEFS, ...REWARD_EXTRA_ASSET_DEFS]
+    : BASE_EXTRA_ASSET_DEFS;
+}
+
+function getExtraAssetDescription(item, assetId, tone) {
+  const descriptions = [item.description];
+  const isRewardAsset = item.key === "rewardGuideAssetId" || item.key === "rewardThanksAssetId";
+
+  if (isRewardAsset && currentRewardMessage) {
+    descriptions.push(`当前文案：${currentRewardMessage}`);
+  } else if (tone === "success" && !assetId) {
+    descriptions.push("本次结果未返回该资源。");
+  } else if (tone === "loading") {
+    descriptions.push("生成完成后自动更新。");
+  } else if (tone === "error") {
+    descriptions.push("生成失败后可重新生成。");
+  } else if (tone === "idle") {
+    descriptions.push("等待生成后展示。");
+  }
+
+  return descriptions.filter(Boolean).join(" ");
+}
+
+function getPreviewCardContent(sticker, tone) {
+  const descriptionPrefix = "用于展示聊天场景贴纸与序号资源。";
+
+  if (tone === "loading") {
+    return {
+      title: "表情预览",
+      description: `${descriptionPrefix} 生成完成后自动更新。`
+    };
+  }
+
+  if (tone === "error") {
+    return {
+      title: "表情预览",
+      description: `${descriptionPrefix} 生成失败后可重新生成。`
+    };
+  }
+
+  if (tone !== "success") {
+    return {
+      title: "表情预览",
+      description: `${descriptionPrefix} 等待生成后展示。`
+    };
+  }
+
+  const label = sticker?.label || "---";
+  return {
+    title: `表情 ${label}`,
+    description: `${descriptionPrefix} 当前序号：${label}`
+  };
+}
+
+function createPreviewCard(sticker, tone = "success") {
+  const card = document.createElement("article");
+  card.className = "preview-item";
+  card.dataset.tone = tone;
+
+  if (tone !== "success") {
+    card.classList.add("preview-item-empty");
+  }
+
+  const content = getPreviewCardContent(sticker, tone);
+  const hasImage = tone === "success" && Boolean(sticker?.url);
+
+  const head = document.createElement("div");
+  head.className = "preview-head";
+
+  const title = document.createElement("div");
+  title.className = "preview-title";
+  title.textContent = content.title;
+
+  const spec = document.createElement("div");
+  spec.className = "preview-spec";
+  spec.textContent = STICKER_PREVIEW_SPEC;
+
+  const description = document.createElement("p");
+  description.className = "preview-description";
+  description.textContent = content.description;
+
+  head.appendChild(title);
+  head.appendChild(spec);
+  head.appendChild(description);
+
+  const media = document.createElement(hasImage ? "img" : "div");
+  media.className = "preview-media";
+
+  if (hasImage) {
+    media.src = sticker.url;
+    media.alt = `聊天场景贴纸 ${sticker.label} 预览`;
+  } else {
+    media.classList.add("asset-placeholder");
+    media.textContent = PLACEHOLDER_STATE_TEXT[tone] ?? PLACEHOLDER_STATE_TEXT.idle;
+  }
+
+  card.appendChild(head);
+  card.appendChild(media);
+  return card;
+}
+
+function canRegenerate() {
+  return Boolean(currentUploadId && wechatAiPrompt.value.trim() && hasGenerationAttempted);
+}
+
+function syncRegenerateButton() {
+  regenerateSubmit.disabled = canRegenerate() ? false : true;
+}
+
+function setGenerateButtonsBusy(busy) {
+  setBusy(generateSubmit, busy, "生成中...");
+  setBusy(regenerateSubmit, busy, "重新生成中...");
+  if (!busy) {
+    syncRegenerateButton();
+  }
+}
+
+function renderExtraAssets(extras = {}, tone = "idle") {
+  wechatAiExtras.innerHTML = "";
+
+  for (const item of getExtraAssetDefs(extras)) {
+    const assetId = extras?.[item.key];
+    const card = document.createElement("article");
+    card.className = `asset-card${item.wide ? " asset-card-wide" : ""}`;
+    card.dataset.tone = tone;
+
+    const head = document.createElement("div");
+    head.className = "asset-head";
+
+    const title = document.createElement("div");
+    title.className = "asset-title";
+    title.textContent = item.title;
+
+    const spec = document.createElement("div");
+    spec.className = "asset-spec";
+    spec.textContent = item.spec;
+
+    const description = document.createElement("p");
+    description.className = "asset-description";
+    description.textContent = getExtraAssetDescription(item, assetId, tone);
+
+    head.appendChild(title);
+    head.appendChild(spec);
+    head.appendChild(description);
+
+    const media = document.createElement(assetId && tone === "success" ? "img" : "div");
+    media.className = `asset-media${item.wide ? " asset-media-wide" : ""}`;
+
+    if (assetId && tone === "success") {
+      media.src = buildAssetUrl(assetId);
+      media.alt = item.alt;
+    } else {
+      media.classList.add("asset-placeholder");
+      media.textContent = PLACEHOLDER_STATE_TEXT[tone] ?? PLACEHOLDER_STATE_TEXT.idle;
+    }
+
+    card.appendChild(head);
+    card.appendChild(media);
+    wechatAiExtras.appendChild(card);
+  }
+}
+
+function resetGenerationResult({ clearPersisted = true } = {}) {
+  wechatAiZipLink.innerHTML = "";
+  wechatAiActions.innerHTML = "";
+  clearGenerateValidation();
+  renderPreview([], "idle");
+  renderExtraAssets({}, "idle");
+  setFeedback("等待生成后展示 cover、icon、banner 与表情预览。", "idle");
+  setSummary("结果概览", "生成后在这里查看标题、数量、风格、参考图方式与导出文件。");
+  renderExportInfo(null);
+  renderMetadataPreview(null);
+  setStatus(generateState, "等待生成", "idle");
+  hasGenerationAttempted = false;
+  lastPackResult = null;
+  if (clearPersisted) {
+    clearPersistedPackResult();
+  }
+  syncRegenerateButton();
+}
+
+function resetAllState() {
+  currentUploadId = null;
+  currentStyles = [...DEFAULT_STYLE_OPTIONS];
+  availableStyles = [...DEFAULT_STYLE_OPTIONS];
+  currentRewardEnabled = false;
+  currentRewardMessage = "";
+  hasGenerationAttempted = false;
+  lastPackResult = null;
+
+  uploadForm.reset();
+  wechatAiPrompt.value = "";
+  wechatAiTitle.value = "";
+  wechatAiAuthor.value = "";
+  wechatAiVersion.value = "";
+  wechatAiCopyright.value = "";
+  wechatAiCount.value = String(DEFAULT_STICKER_COUNT);
+  wechatAiRewardEnabled.checked = false;
+  wechatAiRewardMessage.value = "";
+  syncRewardFields();
+  originalPreview.removeAttribute("src");
+
+  renderStyleOptions(DEFAULT_STYLE_OPTIONS);
+  resetGenerationResult({ clearPersisted: true });
+  setPromptHint(currentStyles);
+  setStatus(uploadState, "等待上传", "idle");
+  setNotice("已重置当前配置与最近结果，请重新上传一张主体清晰的图片。", "info");
+}
+
+function renderDownload(packId, downloadUrl, filename) {
+  if (!downloadUrl) return;
+  const resolvedFilename = filename || `${packId}.zip`;
+  const link = document.createElement("a");
+  link.href = downloadUrl;
+  link.className = "download-button";
+  link.rel = "noopener";
+  link.download = resolvedFilename;
+  link.textContent = `确认后下载 ${resolvedFilename}`;
+  link.addEventListener("click", async (event) => {
+    event.preventDefault();
+    try {
+      setNotice("正在准备下载文件…", "info");
+      const response = await fetch(link.href);
+      if (!response.ok) {
+        throw new Error("下载失败，请稍后重试。");
+      }
+      const blob = await response.blob();
+      const objectUrl = URL.createObjectURL(blob);
+      const tempLink = document.createElement("a");
+      tempLink.href = objectUrl;
+      tempLink.download = resolvedFilename;
+      tempLink.style.display = "none";
+      document.body.appendChild(tempLink);
+      tempLink.click();
+      document.body.removeChild(tempLink);
+      setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
+      setNotice("下载已开始，请留意浏览器下载列表。", "success");
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "下载失败，请稍后重试。", "error");
+    }
+  });
+  wechatAiZipLink.innerHTML = "";
+  wechatAiZipLink.appendChild(link);
+}
+
+function renderActions(result) {
+  wechatAiActions.innerHTML = "";
+  if (!result?.packId || !result?.downloadUrl) return;
+
+  const downloadHref = new URL(result.downloadUrl, window.location.origin).toString();
+  const actions = [
+    {
+      action: "copy-export-info",
+      label: "复制导出信息",
+      text: buildExportInfoText(result),
+      success: "导出信息已复制"
+    },
+    {
+      action: "copy-metadata-json",
+      label: "复制 metadata.json",
+      text: buildMetadataPreviewText(result),
+      success: "metadata.json 已复制"
+    },
+    {
+      action: "copy-download-link",
+      label: "复制下载链接",
+      text: downloadHref,
+      success: "下载链接已复制"
+    },
+    {
+      action: "copy-pack-id",
+      label: "复制 packId",
+      text: result.packId,
+      success: "packId 已复制"
+    }
+  ];
+
+  for (const action of actions) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "ghost-button";
+    button.dataset.action = action.action;
+    button.textContent = action.label;
+    button.addEventListener("click", async () => {
+      try {
+        await copyText(action.text);
+        setNotice(action.success, "success");
+      } catch (error) {
+        setNotice(error instanceof Error ? error.message : "复制失败，请稍后重试。", "error");
+      }
+    });
+    wechatAiActions.appendChild(button);
+  }
+}
+
+function renderPreview(stickers, tone = "success") {
+  wechatAiPreview.innerHTML = "";
+
+  if (!stickers.length) {
+    wechatAiPreview.appendChild(createPreviewCard(null, tone === "success" ? "idle" : tone));
+    return;
+  }
+
+  for (const sticker of stickers) {
+    wechatAiPreview.appendChild(createPreviewCard(sticker, tone));
+  }
+}
+
+async function parseJson(response) {
+  const text = await response.text();
+  if (!text) return {};
+  try {
+    return JSON.parse(text);
+  } catch {
+    throw new Error("服务返回了无法解析的响应");
+  }
+}
+
+async function requestJson(url, options) {
+  const response = await fetch(url, options);
+  const json = await parseJson(response);
+  if (!response.ok) {
+    throw new Error(json?.message || "请求失败，请稍后重试");
+  }
+  return json;
+}
+
+async function suggestPrompt({ silent = false } = {}) {
+  if (!currentUploadId) {
+    throw new Error("请先上传参考图");
+  }
+
+  if (!silent) {
+    setBusy(wechatAiSuggest, true, "生成中...");
+    setNotice("正在生成推荐提示词...", "info");
+  }
+
+  try {
+    const json = await requestJson("/api/wechat/prompt", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ referenceAssetId: currentUploadId })
+    });
+
+    wechatAiPrompt.value = json.prompt ?? "";
+    currentStyles = Array.isArray(json.styles) ? json.styles.filter(Boolean) : [];
+    renderStyleOptions(currentStyles.length ? currentStyles : DEFAULT_STYLE_OPTIONS);
+    setPromptHint(currentStyles);
+    setNotice("提示词已准备好，可以直接生成，也可以继续编辑。", "success");
+  } finally {
+    if (!silent) {
+      setBusy(wechatAiSuggest, false);
+    }
+  }
+}
+
+async function generateWechatPack() {
+  if (!currentUploadId) {
+    setNotice("请先上传参考图。", "error");
+    setStatus(generateState, "缺少参考图", "error");
+    return;
+  }
+
+  if (!validateGenerateInputs()) {
+    syncRegenerateButton();
+    return;
+  }
+
+  const prompt = wechatAiPrompt.value.trim();
+  const title = wechatAiTitle.value.trim();
+  const author = wechatAiAuthor.value.trim();
+  const version = wechatAiVersion.value.trim();
+  const copyright = wechatAiCopyright.value.trim();
+  const rewardMessage = wechatAiRewardMessage.value.trim();
+  const stickerCount = Number(wechatAiCount.value || DEFAULT_STICKER_COUNT);
+
+  hasGenerationAttempted = true;
+  setGenerateButtonsBusy(true);
+  setStatus(generateState, "生成中...", "loading");
+  setNotice("正在生成微信表情并打包，请稍候...", "info");
+  wechatAiZipLink.innerHTML = "";
+  renderPreview([], "loading");
+  renderExtraAssets({}, "loading");
+  setFeedback(
+    currentRewardEnabled
+      ? "正在生成 cover、icon、banner、赞赏引导图、赞赏感谢图与表情预览。"
+      : "正在生成 cover、icon、banner 与表情预览。",
+    "loading"
+  );
+  setSummary("结果概览", "正在生成中，请稍候。");
+  renderMetadataPreview(null, "loading");
+
+  try {
+    const json = await requestJson("/api/wechat/generate", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        referenceAssetId: currentUploadId,
+        prompt,
+        styles: currentStyles.length ? currentStyles : undefined,
+        stickerCount,
+        enableReward: currentRewardEnabled,
+        includeCover: true,
+        includeIcon: true,
+        includeBanner: true,
+        metadata:
+          title || author || version || copyright || rewardMessage
+            ? {
+                ...(title ? { title } : {}),
+                ...(author ? { author } : {}),
+                ...(version ? { version } : {}),
+                ...(copyright ? { copyright } : {}),
+                ...(rewardMessage ? { rewardMessage } : {})
+              }
+            : undefined
+      })
+    });
+
+    const stickers = Array.isArray(json?.stickers) ? json.stickers : [];
+    currentRewardEnabled = Boolean(json?.meta?.rewardEnabled ?? currentRewardEnabled);
+    currentRewardMessage = json?.meta?.rewardMessage ?? rewardMessage;
+    wechatAiRewardEnabled.checked = currentRewardEnabled;
+    wechatAiRewardMessage.value = currentRewardMessage;
+    syncRewardFields();
+    lastPackResult = json;
+    renderPreview(stickers, "success");
+    renderExtraAssets(json?.extras ?? {}, "success");
+    renderDownload(json?.packId, json?.downloadUrl, json?.downloadFilename);
+    renderActions(json);
+    persistLastGeneratedResult(json);
+    setStatus(generateState, "生成完成", "success");
+    setNotice("表情包已生成完成，可以先预览，再下载 ZIP。", "success");
+    setFeedback(
+      currentRewardEnabled
+        ? "已生成 cover、icon、banner、赞赏引导图、赞赏感谢图与表情预览，可继续重新生成当前方案。"
+        : "已生成 cover、icon、banner 与表情预览，可继续重新生成当前方案。",
+      "success"
+    );
+    renderSummary(json);
+    renderExportInfo(json);
+    renderMetadataPreview(json);
+  } catch (error) {
+    if (lastPackResult) {
+      renderActions(lastPackResult);
+      renderExportInfo(lastPackResult);
+      renderMetadataPreview(lastPackResult);
+    } else {
+      renderMetadataPreview(null, "error");
+    }
+    setStatus(generateState, "生成失败", "error");
+    setNotice(error instanceof Error ? error.message : "生成失败，请稍后重试。", "error");
+    renderPreview([], "error");
+    renderExtraAssets({}, "error");
+    setFeedback("本次生成失败，可直接点击重新生成再次尝试。", "error");
+    setSummary("结果概览", "生成失败，请调整提示词或稍后重试。");
+    renderExportInfo(lastPackResult);
+  } finally {
+    setGenerateButtonsBusy(false);
+  }
+}
+
+uploadForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
 
   const fileEl = document.getElementById("file");
   const file = fileEl.files?.[0];
-  if (!file) return;
+  if (!file) {
+    setNotice("请选择一张图片后再上传。", "error");
+    setStatus(uploadState, "缺少图片", "error");
+    return;
+  }
+
+  setBusy(uploadSubmit, true, "上传中...");
+  setStatus(uploadState, "上传中...", "loading");
+  setNotice("正在上传参考图...", "info");
+  resetGenerationResult();
 
   const form = new FormData();
   form.append("file", file);
 
-  const res = await fetch("/api/uploads", { method: "POST", body: form });
-  const json = await res.json();
-  uploadResult.textContent = JSON.stringify(json, null, 2);
+  try {
+    const json = await requestJson("/api/uploads", { method: "POST", body: form });
+    currentUploadId = json?.uploadId ?? null;
+    currentStyles = [...DEFAULT_STYLE_OPTIONS];
+    renderStyleOptions(DEFAULT_STYLE_OPTIONS);
+    clearGenerateValidation();
+    hasGenerationAttempted = false;
 
-  currentUploadId = json?.uploadId ?? null;
-  wechatAiResult.textContent = "";
-  wechatAiZipLink.innerHTML = "";
-  wechatAiPreview.innerHTML = "";
+    if (json?.original?.url) {
+      originalPreview.src = json.original.url;
+    }
 
-  if (json?.original?.url) {
-    originalPreview.src = json.original.url;
+    setStatus(uploadState, "上传成功", "success");
+    setNotice("参考图已上传，正在为你准备推荐提示词。", "success");
+    setSummary("结果概览", "参考图已就绪，下一步补充提示词并生成表情包。");
+
+    try {
+      await suggestPrompt({ silent: true });
+    } catch (promptError) {
+      setNotice(
+        promptError instanceof Error ? promptError.message : "参考图已上传，请手动生成提示词。",
+        "error"
+      );
+    }
+  } catch (error) {
+    currentUploadId = null;
+    hasGenerationAttempted = false;
+    originalPreview.removeAttribute("src");
+    setStatus(uploadState, "上传失败", "error");
+    setNotice(error instanceof Error ? error.message : "上传失败，请稍后重试。", "error");
+    syncRegenerateButton();
+  } finally {
+    setBusy(uploadSubmit, false);
   }
-  document.getElementById("wechatRefId").value = currentUploadId ?? "";
 });
 
 wechatAiSuggest.addEventListener("click", async () => {
-  const ref = document.getElementById("wechatRefId").value.trim() || currentUploadId;
-  if (!ref) return;
-  wechatAiResult.textContent = "生成中...";
-  const res = await fetch("/api/wechat/prompt", {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ referenceAssetId: ref })
-  });
-  const json = await res.json();
-  wechatAiResult.textContent = JSON.stringify(json, null, 2);
-  document.getElementById("wechatAiPrompt").value = json.prompt ?? "";
-  document.getElementById("wechatAiStyles").value = (json.styles ?? []).join(",");
-});
-
-wechatAiForm.addEventListener("submit", async (e) => {
-  e.preventDefault();
-  const ref = document.getElementById("wechatRefId").value.trim() || currentUploadId;
-  if (!ref) return;
-  const prompt = document.getElementById("wechatAiPrompt").value.trim();
-  if (!prompt) return;
-
-  wechatAiResult.textContent = "生成中...";
-  wechatAiZipLink.innerHTML = "";
-  wechatAiPreview.innerHTML = "";
-
-  const count = Number(document.getElementById("wechatAiCount").value);
-  const stylesRaw = document.getElementById("wechatAiStyles").value.trim();
-  const styles = stylesRaw
-    .split(",")
-    .map((s) => s.trim())
-    .filter(Boolean);
-  const title = document.getElementById("wechatAiTitle").value.trim();
-
-  const res = await fetch("/api/wechat/generate", {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({
-      referenceAssetId: ref,
-      prompt,
-      styles: styles.length ? styles : undefined,
-      stickerCount: Number.isFinite(count) ? count : undefined,
-      includeCover: true,
-      includeIcon: true,
-      includeBanner: true,
-      metadata: title ? { title } : undefined
-    })
-  });
-  const json = await res.json();
-  wechatAiResult.textContent = JSON.stringify(json, null, 2);
-
-  if (json?.downloadUrl) {
-    const link = document.createElement("a");
-    link.href = json.downloadUrl;
-    link.textContent = `下载 ${json.packId}.zip`;
-    link.rel = "noopener";
-    wechatAiZipLink.appendChild(link);
-  }
-
-  const stickers = json?.stickers ?? [];
-  for (const s of stickers.slice(0, 6)) {
-    const wrap = document.createElement("div");
-    const label = document.createElement("div");
-    label.className = "muted";
-    label.textContent = s.label;
-    const img = document.createElement("img");
-    img.className = "preview";
-    img.src = s.url;
-    wrap.appendChild(label);
-    wrap.appendChild(img);
-    wechatAiPreview.appendChild(wrap);
+  try {
+    await suggestPrompt();
+  } catch (error) {
+    setNotice(error instanceof Error ? error.message : "提示词生成失败，请稍后重试。", "error");
+  } finally {
+    setBusy(wechatAiSuggest, false);
   }
 });
+
+wechatAiPrompt.addEventListener("input", () => {
+  setFieldInvalid(wechatAiPrompt, false);
+  syncRegenerateButton();
+});
+
+wechatAiTitle.addEventListener("input", () => {
+  setFieldInvalid(wechatAiTitle, false);
+});
+
+wechatAiAuthor.addEventListener("input", () => {
+  setFieldInvalid(wechatAiAuthor, false);
+});
+
+wechatAiCount.addEventListener("change", () => {
+  setFieldInvalid(wechatAiCount, false);
+  setPromptHint(currentStyles);
+});
+
+wechatAiRewardEnabled.addEventListener("change", () => {
+  syncRewardFields();
+  setPromptHint(currentStyles);
+  renderExtraAssets(lastPackResult?.extras ?? {}, lastPackResult ? "success" : "idle");
+});
+
+wechatAiRewardMessage.addEventListener("input", () => {
+  currentRewardMessage = wechatAiRewardMessage.value.trim();
+  setFieldInvalid(wechatAiRewardMessage, false);
+});
+
+wechatAiForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  await generateWechatPack();
+});
+
+regenerateSubmit.addEventListener("click", async () => {
+  await generateWechatPack();
+});
+
+wechatAiSummary.addEventListener("click", (event) => {
+  handleConfirmCardClick("summary", event);
+});
+
+wechatAiMetadataPreview.addEventListener("click", async (event) => {
+  await handleConfirmCardClick("metadata", event);
+});
+
+wechatAiExportInfo.addEventListener("click", async (event) => {
+  await handleConfirmCardClick("exportInfo", event);
+});
+
+resetSubmit.addEventListener("click", () => {
+  resetAllState();
+});
+
+renderStyleOptions(DEFAULT_STYLE_OPTIONS);
+syncRewardFields();
+resetGenerationResult({ clearPersisted: false });
+setPromptHint(currentStyles);
+restorePersistedPackResult();

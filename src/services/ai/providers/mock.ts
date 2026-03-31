@@ -23,10 +23,27 @@ function colorFromSeed(seed: number) {
   return { r, g, b, alpha: 1 };
 }
 
+async function colorFromReference(input: AiGenerateInput) {
+  const b64 = input.referenceImageBase64;
+  if (!b64) return null;
+  try {
+    const bytes = Buffer.from(b64, "base64");
+    const tiny = await sharp(bytes)
+      .ensureAlpha()
+      .resize(1, 1, { fit: "cover" })
+      .raw()
+      .toBuffer();
+    return { r: tiny[0] ?? 0, g: tiny[1] ?? 0, b: tiny[2] ?? 0, alpha: 1 };
+  } catch {
+    return null;
+  }
+}
+
 export class MockAiProvider implements AiProvider {
   async generateImage(input: AiGenerateInput): Promise<AiGenerateOutput> {
     const seed = hashCode(`${input.prompt}|${input.style ?? ""}|${input.width}x${input.height}`);
-    const bg = colorFromSeed(seed);
+    const ref = await colorFromReference(input);
+    const bg = ref ?? colorFromSeed(seed);
     const bg2 = colorFromSeed(seed ^ 0x9e3779b9);
 
     const title = escapeXml((input.style ?? "style").slice(0, 28));
@@ -65,4 +82,3 @@ export class MockAiProvider implements AiProvider {
     return { mime: "image/png", bytes };
   }
 }
-

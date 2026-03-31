@@ -11,6 +11,7 @@ const generateSchema = z.object({
   prompt: z.string().min(1),
   styles: z.array(z.string().min(1)).optional(),
   stickerCount: z.number().int().min(8).max(24).optional(),
+  enableReward: z.boolean().optional(),
   includeCover: z.boolean().optional(),
   includeIcon: z.boolean().optional(),
   includeBanner: z.boolean().optional(),
@@ -18,7 +19,9 @@ const generateSchema = z.object({
     .object({
       title: z.string().min(1).optional(),
       author: z.string().min(1).optional(),
-      copyright: z.string().min(1).optional()
+      copyright: z.string().min(1).optional(),
+      version: z.string().min(1).optional(),
+      rewardMessage: z.string().min(1).optional()
     })
     .optional()
 });
@@ -42,4 +45,3 @@ export async function registerWeChatAiRoutes(app: FastifyInstance) {
     return generateWeChatAssetsAndPack(app, parsed.data);
   });
 }
-

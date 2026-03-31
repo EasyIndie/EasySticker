@@ -13,15 +13,88 @@ export type PackRequest = {
   coverAssetId?: string;
   bannerAssetId?: string;
   iconAssetId?: string;
+  rewardGuideAssetId?: string;
+  rewardThanksAssetId?: string;
   metadata?: {
     title?: string;
     author?: string;
     copyright?: string;
+    version?: string;
+    rewardMessage?: string;
   };
+};
+
+export type PackInfo = {
+  packId: string;
+  downloadFilename: string;
+};
+
+export type PackMetadata = {
+  schema: string;
+  packId: string;
+  presetId: string;
+  createdAt: string;
+  metadata: {
+    title?: string;
+    author?: string;
+    copyright?: string;
+    version?: string;
+    rewardMessage?: string;
+  };
+  extras: {
+    coverAssetId: string | null;
+    bannerAssetId: string | null;
+    iconAssetId: string | null;
+    rewardGuideAssetId: string | null;
+    rewardThanksAssetId: string | null;
+  };
+  assets: Array<{ assetId: string; filename: string; zipPath: string }>;
 };
 
 function packsDir(app: FastifyInstance) {
   return path.join(app.appConfig.dataDir, "packs");
+}
+
+function sanitizeFilenamePart(input: string) {
+  return input
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9\u4e00-\u9fa5]+/gi, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-|-$/g, "")
+    .slice(0, 48);
+}
+
+function buildDownloadFilename(req: PackRequest, packId: string) {
+  const base = sanitizeFilenamePart(req.metadata?.title || "");
+  return `${base || req.presetId || "easysticker-pack"}-${packId}.zip`;
+}
+
+function packInfoPath(app: FastifyInstance, packId: string) {
+  return path.join(packsDir(app), `${packId}.json`);
+}
+
+function buildPackMetadata(
+  packId: string,
+  req: PackRequest,
+  entries: Array<{ assetId: string; filename: string; zipPath: string }>,
+  createdAt = new Date().toISOString()
+): PackMetadata {
+  return {
+    schema: "easysticker-pack@0.1",
+    packId,
+    presetId: req.presetId,
+    createdAt,
+    metadata: req.metadata ?? {},
+    extras: {
+      coverAssetId: req.coverAssetId ?? null,
+      bannerAssetId: req.bannerAssetId ?? null,
+      iconAssetId: req.iconAssetId ?? null,
+      rewardGuideAssetId: req.rewardGuideAssetId ?? null,
+      rewardThanksAssetId: req.rewardThanksAssetId ?? null
+    },
+    assets: entries
+  };
 }
 
 export async function buildZipPack(app: FastifyInstance, req: PackRequest) {
@@ -37,6 +110,7 @@ export async function buildZipPack(app: FastifyInstance, req: PackRequest) {
   }
 
   const packId = nanoid();
+  const downloadFilename = buildDownloadFilename(req, packId);
   const dir = packsDir(app);
   fs.mkdirSync(dir, { recursive: true });
 
@@ -85,30 +159,41 @@ export async function buildZipPack(app: FastifyInstance, req: PackRequest) {
     const ext = path.extname(icon.filename).toLowerCase();
     zip.file(icon.filePath, { name: path.posix.join("meta", `icon${ext}`) });
   }
+  if (req.rewardGuideAssetId) {
+    const rewardGuide = findAssetFile(app, req.rewardGuideAssetId);
+    if (!rewardGuide) throw createHttpError(404, `asset not found: ${req.rewardGuideAssetId}`);
+    const ext = path.extname(rewardGuide.filename).toLowerCase();
+    zip.file(rewardGuide.filePath, { name: path.posix.join("meta", `reward-guide${ext}`) });
+  }
+  if (req.rewardThanksAssetId) {
+    const rewardThanks = findAssetFile(app, req.rewardThanksAssetId);
+    if (!rewardThanks) throw createHttpError(404, `asset not found: ${req.rewardThanksAssetId}`);
+    const ext = path.extname(rewardThanks.filename).toLowerCase();
+    zip.file(rewardThanks.filePath, { name: path.posix.join("meta", `reward-thanks${ext}`) });
+  }
 
-  const meta = {
-    schema: "easysticker-pack@0.1",
-    packId,
-    presetId: req.presetId,
-    createdAt: new Date().toISOString(),
-    metadata: req.metadata ?? {},
-    extras: {
-      coverAssetId: req.coverAssetId ?? null,
-      bannerAssetId: req.bannerAssetId ?? null,
-      iconAssetId: req.iconAssetId ?? null
-    },
-    assets: entries
-  };
-  zip.append(JSON.stringify(meta, null, 2), { name: "metadata.json" });
+  const metadata = buildPackMetadata(packId, req, entries);
+  const metadataJson = JSON.stringify(metadata, null, 2);
+  zip.append(metadataJson, { name: "metadata.json" });
 
   await zip.finalize();
   await done;
 
-  return { packId, zipPath };
+  fs.writeFileSync(packInfoPath(app, packId), JSON.stringify({ packId, downloadFilename }, null, 2));
+
+  return { packId, zipPath, downloadFilename, metadataJson };
 }
 
 export function getPackZipPath(app: FastifyInstance, packId: string) {
   const filePath = path.join(packsDir(app), `${packId}.zip`);
   if (!fs.existsSync(filePath)) throw createHttpError(404, "pack not found");
   return filePath;
+}
+
+export function getPackInfo(app: FastifyInstance, packId: string): PackInfo {
+  const infoPath = packInfoPath(app, packId);
+  if (fs.existsSync(infoPath)) {
+    return JSON.parse(fs.readFileSync(infoPath, "utf8")) as PackInfo;
+  }
+  return { packId, downloadFilename: `${packId}.zip` };
 }
