@@ -6,7 +6,18 @@ import { buildZipPack, getPackZipPath } from "../services/pack/service";
 
 const schema = z.object({
   presetId: z.string().min(1),
-  assetIds: z.array(z.string().min(1)).min(1),
+  assetIds: z.array(z.string().min(1)).optional(),
+  assets: z
+    .array(
+      z.object({
+        label: z.string().min(1),
+        assetId: z.string().min(1)
+      })
+    )
+    .optional(),
+  coverAssetId: z.string().min(1).optional(),
+  bannerAssetId: z.string().min(1).optional(),
+  iconAssetId: z.string().min(1).optional(),
   metadata: z
     .object({
       title: z.string().min(1).optional(),
@@ -45,4 +56,3 @@ export async function registerPackRoutes(app: FastifyInstance) {
     return { packId: req.params.packId, bytes: st.size, filename: path.basename(zipPath) };
   });
 }
-

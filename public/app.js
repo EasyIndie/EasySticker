@@ -1,23 +1,13 @@
 const uploadForm = document.getElementById("uploadForm");
 const uploadResult = document.getElementById("uploadResult");
 const originalPreview = document.getElementById("originalPreview");
-const processedPreview = document.getElementById("processedPreview");
-const processForm = document.getElementById("processForm");
-const processResult = document.getElementById("processResult");
-const generateForm = document.getElementById("generateForm");
-const generateResult = document.getElementById("generateResult");
-const generatedList = document.getElementById("generatedList");
-const healthBtn = document.getElementById("healthBtn");
-const healthResult = document.getElementById("healthResult");
+const wechatAiForm = document.getElementById("wechatAiForm");
+const wechatAiResult = document.getElementById("wechatAiResult");
+const wechatAiZipLink = document.getElementById("wechatAiZipLink");
+const wechatAiPreview = document.getElementById("wechatAiPreview");
+const wechatAiSuggest = document.getElementById("wechatAiSuggest");
 
 let currentUploadId = null;
-let currentAssetId = null;
-
-healthBtn.addEventListener("click", async () => {
-  const res = await fetch("/api/health");
-  const json = await res.json();
-  healthResult.textContent = JSON.stringify(json, null, 2);
-});
 
 uploadForm.addEventListener("submit", async (e) => {
   e.preventDefault();
@@ -35,75 +25,86 @@ uploadForm.addEventListener("submit", async (e) => {
   uploadResult.textContent = JSON.stringify(json, null, 2);
 
   currentUploadId = json?.uploadId ?? null;
-  currentAssetId = null;
-  generatedList.innerHTML = "";
-  generateResult.textContent = "";
-  processResult.textContent = "";
+  wechatAiResult.textContent = "";
+  wechatAiZipLink.innerHTML = "";
+  wechatAiPreview.innerHTML = "";
 
   if (json?.original?.url) {
     originalPreview.src = json.original.url;
   }
-  processedPreview.removeAttribute("src");
+  document.getElementById("wechatRefId").value = currentUploadId ?? "";
 });
 
-processForm.addEventListener("submit", async (e) => {
-  e.preventDefault();
-  if (!currentUploadId) return;
-
-  processResult.textContent = "处理中...";
-  const threshold = Number(document.getElementById("threshold").value);
-  const softness = Number(document.getElementById("softness").value);
-
-  const res = await fetch(`/api/process/${currentUploadId}`, {
+wechatAiSuggest.addEventListener("click", async () => {
+  const ref = document.getElementById("wechatRefId").value.trim() || currentUploadId;
+  if (!ref) return;
+  wechatAiResult.textContent = "生成中...";
+  const res = await fetch("/api/wechat/prompt", {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ threshold, softness })
+    body: JSON.stringify({ referenceAssetId: ref })
   });
   const json = await res.json();
-  processResult.textContent = JSON.stringify(json, null, 2);
-  if (json?.assetId) {
-    currentAssetId = json.assetId;
-    processedPreview.src = json.url;
-  }
+  wechatAiResult.textContent = JSON.stringify(json, null, 2);
+  document.getElementById("wechatAiPrompt").value = json.prompt ?? "";
+  document.getElementById("wechatAiStyles").value = (json.styles ?? []).join(",");
 });
 
-generateForm.addEventListener("submit", async (e) => {
+wechatAiForm.addEventListener("submit", async (e) => {
   e.preventDefault();
-  const assetId = currentAssetId ?? currentUploadId;
-  if (!assetId) return;
+  const ref = document.getElementById("wechatRefId").value.trim() || currentUploadId;
+  if (!ref) return;
+  const prompt = document.getElementById("wechatAiPrompt").value.trim();
+  if (!prompt) return;
 
-  generateResult.textContent = "生成中...";
-  generatedList.innerHTML = "";
+  wechatAiResult.textContent = "生成中...";
+  wechatAiZipLink.innerHTML = "";
+  wechatAiPreview.innerHTML = "";
 
-  const sizesRaw = document.getElementById("sizes").value;
-  const sizes = sizesRaw
+  const count = Number(document.getElementById("wechatAiCount").value);
+  const stylesRaw = document.getElementById("wechatAiStyles").value.trim();
+  const styles = stylesRaw
     .split(",")
-    .map((s) => Number(s.trim()))
-    .filter((n) => Number.isFinite(n) && n > 0);
-  const format = document.getElementById("format").value;
-  const effect = document.getElementById("effect").value;
-  const text = document.getElementById("overlayText").value.trim();
+    .map((s) => s.trim())
+    .filter(Boolean);
+  const title = document.getElementById("wechatAiTitle").value.trim();
 
-  const body = { assetId, sizes, format, effect, text: text ? { content: text } : undefined };
-  const res = await fetch("/api/generate/static", {
+  const res = await fetch("/api/wechat/generate", {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify(body)
+    body: JSON.stringify({
+      referenceAssetId: ref,
+      prompt,
+      styles: styles.length ? styles : undefined,
+      stickerCount: Number.isFinite(count) ? count : undefined,
+      includeCover: true,
+      includeIcon: true,
+      includeBanner: true,
+      metadata: title ? { title } : undefined
+    })
   });
   const json = await res.json();
-  generateResult.textContent = JSON.stringify(json, null, 2);
+  wechatAiResult.textContent = JSON.stringify(json, null, 2);
 
-  const results = json?.results ?? [];
-  for (const r of results) {
+  if (json?.downloadUrl) {
+    const link = document.createElement("a");
+    link.href = json.downloadUrl;
+    link.textContent = `下载 ${json.packId}.zip`;
+    link.rel = "noopener";
+    wechatAiZipLink.appendChild(link);
+  }
+
+  const stickers = json?.stickers ?? [];
+  for (const s of stickers.slice(0, 6)) {
     const wrap = document.createElement("div");
     const label = document.createElement("div");
     label.className = "muted";
-    label.textContent = `${r.size}px`;
+    label.textContent = s.label;
     const img = document.createElement("img");
     img.className = "preview";
-    img.src = r.url;
+    img.src = s.url;
     wrap.appendChild(label);
     wrap.appendChild(img);
-    generatedList.appendChild(wrap);
+    wechatAiPreview.appendChild(wrap);
   }
 });

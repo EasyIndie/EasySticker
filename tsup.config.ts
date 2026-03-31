@@ -1,7 +1,7 @@
 import { defineConfig } from "tsup";
 
 export default defineConfig({
-  entry: ["src/server.ts", "src/workers/imageWorker.ts"],
+  entry: ["src/server.ts"],
   outDir: "dist",
   format: ["cjs"],
   sourcemap: true,
