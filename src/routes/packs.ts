@@ -1,8 +1,13 @@
 import fs from "node:fs";
-import path from "node:path";
 import { type FastifyInstance } from "fastify";
 import { z } from "zod";
-import { buildZipPack, getPackZipPath } from "../services/pack/service";
+import { buildZipPack, getPackInfo, getPackZipPath } from "../services/pack/service";
+
+function buildDownloadDisposition(filename: string) {
+  const asciiFallback = filename.replace(/[^\x20-\x7E]/g, "_").replace(/["\\]/g, "_");
+  const encodedFilename = encodeURIComponent(filename);
+  return `attachment; filename="${asciiFallback}"; filename*=UTF-8''${encodedFilename}`;
+}
 
 const schema = z.object({
   presetId: z.string().min(1),
@@ -18,11 +23,15 @@ const schema = z.object({
   coverAssetId: z.string().min(1).optional(),
   bannerAssetId: z.string().min(1).optional(),
   iconAssetId: z.string().min(1).optional(),
+  rewardGuideAssetId: z.string().min(1).optional(),
+  rewardThanksAssetId: z.string().min(1).optional(),
   metadata: z
     .object({
       title: z.string().min(1).optional(),
       author: z.string().min(1).optional(),
-      copyright: z.string().min(1).optional()
+      copyright: z.string().min(1).optional(),
+      version: z.string().min(1).optional(),
+      rewardMessage: z.string().min(1).optional()
     })
     .optional()
 });
@@ -35,16 +44,17 @@ export async function registerPackRoutes(app: FastifyInstance) {
       return { error: "BadRequest", message: "invalid request body", issues: parsed.error.issues };
     }
 
-    const { packId } = await buildZipPack(app, parsed.data);
-    return { packId, downloadUrl: `/api/packs/${packId}/download` };
+    const { packId, downloadFilename } = await buildZipPack(app, parsed.data);
+    return { packId, downloadUrl: `/api/packs/${packId}/download`, downloadFilename };
   });
 
   app.get<{
     Params: { packId: string };
   }>("/packs/:packId/download", async (req, reply) => {
     const zipPath = getPackZipPath(app, req.params.packId);
+    const info = getPackInfo(app, req.params.packId);
     reply.header("content-type", "application/zip");
-    reply.header("content-disposition", `attachment; filename=\"${req.params.packId}.zip\"`);
+    reply.header("content-disposition", buildDownloadDisposition(info.downloadFilename));
     return reply.send(fs.createReadStream(zipPath));
   });
 
@@ -53,6 +63,7 @@ export async function registerPackRoutes(app: FastifyInstance) {
   }>("/packs/:packId", async (req) => {
     const zipPath = getPackZipPath(app, req.params.packId);
     const st = fs.statSync(zipPath);
-    return { packId: req.params.packId, bytes: st.size, filename: path.basename(zipPath) };
+    const info = getPackInfo(app, req.params.packId);
+    return { packId: req.params.packId, bytes: st.size, filename: info.downloadFilename };
   });
 }

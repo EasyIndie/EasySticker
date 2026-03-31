@@ -10,6 +10,7 @@
     "dev": "concurrently -k \"tsup --watch\" \"node --watch dist/server.js\"",
     "build": "tsup",
     "start": "node dist/server.js",
+    "mock-ai": "node scripts/mock-ai-server.mjs",
     "test": "npm run build && vitest run"
   },
   "dependencies": {
