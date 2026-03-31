@@ -32,7 +32,6 @@ export async function registerUploadRoutes(app: FastifyInstance) {
       original: {
         mime: part.mimetype,
         filename: part.filename,
-        path: filePath,
         url: `/api/assets/${id}`
       }
     });

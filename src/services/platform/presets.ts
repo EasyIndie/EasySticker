@@ -57,6 +57,26 @@ export const PLATFORM_PRESETS: PlatformPreset[] = [
     maxHeight: 400
   },
   {
+    id: "wechat_reward_guide",
+    title: "WeChat (Reward Guide 750x400)",
+    allowedExts: [".png", ".jpg", ".jpeg"],
+    maxBytes: 500 * 1024,
+    exactWidth: 750,
+    exactHeight: 400,
+    maxWidth: 750,
+    maxHeight: 400
+  },
+  {
+    id: "wechat_reward_thanks",
+    title: "WeChat (Reward Thanks 750x400)",
+    allowedExts: [".png", ".jpg", ".jpeg"],
+    maxBytes: 500 * 1024,
+    exactWidth: 750,
+    exactHeight: 400,
+    maxWidth: 750,
+    maxHeight: 400
+  },
+  {
     id: "wechat_cover",
     title: "WeChat (Cover 240x240 PNG)",
     allowedExts: [".png"],

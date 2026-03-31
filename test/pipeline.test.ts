@@ -1,4 +1,5 @@
 import fs from "node:fs";
+import http from "node:http";
 import os from "node:os";
 import path from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -68,21 +69,143 @@ describe("pipeline", () => {
     const res = await app.inject({
       method: "POST",
       url: "/api/wechat/generate",
-      payload: { referenceAssetId: upload.uploadId, prompt: "test", stickerCount: 8, styles: ["flat"] },
+      payload: {
+        referenceAssetId: upload.uploadId,
+        prompt: "test",
+        stickerCount: 24,
+        styles: ["flat"],
+        metadata: {
+          title: "Cute Cat Pack",
+          author: "EasySticker Studio",
+          version: "v1.0",
+          copyright: "© 2026 EasySticker Studio",
+          rewardMessage: "喜欢这套表情的话，欢迎赞赏支持"
+        },
+        enableReward: true,
+        includeCover: true,
+        includeIcon: true,
+        includeBanner: true
+      },
       headers: { "content-type": "application/json" }
     });
     expect(res.statusCode).toBe(200);
     const json = res.json();
     expect(json.packId).toBeTypeOf("string");
     expect(json.downloadUrl).toBeTypeOf("string");
-    expect(json.stickers).toHaveLength(8);
+    expect(json.downloadFilename).toBe(`cute-cat-pack-${json.packId}.zip`);
+    expect(json.stickers).toHaveLength(24);
+    expect(json.metadataJson).toBeTypeOf("string");
+    expect(json.metadataJson).toContain(`"packId": "${json.packId}"`);
+    expect(json.metadataJson).toContain('"presetId": "wechat_stickers"');
+    expect(json.metadataJson).toContain('"title": "Cute Cat Pack"');
+    expect(json.metadataJson).toContain('"rewardMessage": "喜欢这套表情的话，欢迎赞赏支持"');
+    expect(json.meta.title).toBe("Cute Cat Pack");
+    expect(json.meta.author).toBe("EasySticker Studio");
+    expect(json.meta.version).toBe("v1.0");
+    expect(json.meta.copyright).toBe("© 2026 EasySticker Studio");
+    expect(json.meta.rewardMessage).toBe("喜欢这套表情的话，欢迎赞赏支持");
+    expect(json.meta.rewardEnabled).toBe(true);
+    expect(json.meta.count).toBe(24);
+    expect(json.meta.referenceAssetId).toBe(upload.uploadId);
+    expect(json.extras.coverAssetId).toBeTypeOf("string");
+    expect(json.extras.iconAssetId).toBeTypeOf("string");
+    expect(json.extras.bannerAssetId).toBeTypeOf("string");
+    expect(json.extras.rewardGuideAssetId).toBeTypeOf("string");
+    expect(json.extras.rewardThanksAssetId).toBeTypeOf("string");
 
     const assetId0 = json.stickers[0].assetId;
     const assetRes = await app.inject({ method: "GET", url: `/api/assets/${assetId0}` });
     expect(assetRes.statusCode).toBe(200);
 
+    const coverRes = await app.inject({ method: "GET", url: `/api/assets/${json.extras.coverAssetId}` });
+    expect(coverRes.statusCode).toBe(200);
+    const iconRes = await app.inject({ method: "GET", url: `/api/assets/${json.extras.iconAssetId}` });
+    expect(iconRes.statusCode).toBe(200);
+    const bannerRes = await app.inject({ method: "GET", url: `/api/assets/${json.extras.bannerAssetId}` });
+    expect(bannerRes.statusCode).toBe(200);
+    const rewardGuideRes = await app.inject({ method: "GET", url: `/api/assets/${json.extras.rewardGuideAssetId}` });
+    expect(rewardGuideRes.statusCode).toBe(200);
+    const rewardThanksRes = await app.inject({ method: "GET", url: `/api/assets/${json.extras.rewardThanksAssetId}` });
+    expect(rewardThanksRes.statusCode).toBe(200);
+
     const zipRes = await app.inject({ method: "GET", url: json.downloadUrl });
     expect(zipRes.statusCode).toBe(200);
     expect(zipRes.headers["content-type"]).toContain("application/zip");
+    expect(zipRes.headers["content-disposition"]).toContain('filename="');
+    expect(zipRes.headers["content-disposition"]).toContain("filename*=");
+  });
+
+  it("wechat ai generate via http provider with base64 reference", async () => {
+    const hits: any[] = [];
+    const server = http.createServer(async (req, res) => {
+      if (req.method !== "POST") {
+        res.writeHead(404);
+        res.end();
+        return;
+      }
+
+      const chunks: Buffer[] = [];
+      for await (const chunk of req) chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+      const body = JSON.parse(Buffer.concat(chunks).toString("utf8"));
+      hits.push(body);
+
+      const png = await sharp({
+        create: { width: 1024, height: 1024, channels: 4, background: { r: 40, g: 120, b: 220, alpha: 1 } }
+      })
+        .png()
+        .toBuffer();
+
+      res.writeHead(200, { "content-type": "application/json" });
+      res.end(JSON.stringify({ mime: "image/png", imageBase64: png.toString("base64") }));
+    });
+
+    await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", () => resolve()));
+    const address = server.address();
+    const port = typeof address === "object" && address ? address.port : 0;
+
+    const prevProvider = process.env.AI_PROVIDER;
+    const prevEndpoint = process.env.AI_HTTP_ENDPOINT;
+    const prevMode = process.env.AI_HTTP_REFERENCE_MODE;
+
+    process.env.AI_PROVIDER = "http";
+    process.env.AI_HTTP_ENDPOINT = `http://127.0.0.1:${port}`;
+    process.env.AI_HTTP_REFERENCE_MODE = "base64";
+
+    try {
+      const png = await sharp({
+        create: { width: 256, height: 256, channels: 4, background: { r: 255, g: 180, b: 80, alpha: 1 } }
+      })
+        .png()
+        .toBuffer();
+
+      const mp = multipartPayload("file", "ref.png", "image/png", png);
+      const uploadRes = await app.inject({
+        method: "POST",
+        url: "/api/uploads",
+        payload: mp.body,
+        headers: { "content-type": `multipart/form-data; boundary=${mp.boundary}` }
+      });
+      expect(uploadRes.statusCode).toBe(200);
+      const upload = uploadRes.json();
+
+      const genRes = await app.inject({
+        method: "POST",
+        url: "/api/wechat/generate",
+        payload: { referenceAssetId: upload.uploadId, prompt: "http-test", stickerCount: 8, styles: ["flat"] },
+        headers: { "content-type": "application/json" }
+      });
+      expect(genRes.statusCode).toBe(200);
+      const json = genRes.json();
+      expect(json.meta.referenceMode).toBe("base64");
+      expect(hits.length).toBeGreaterThan(0);
+      expect(typeof hits[0].referenceImageBase64).toBe("string");
+      expect(hits[0].referenceImageBase64.length).toBeGreaterThan(10);
+      expect(hits[0].referenceImageUrl).toBeUndefined();
+    } finally {
+      process.env.AI_PROVIDER = prevProvider;
+      process.env.AI_HTTP_ENDPOINT = prevEndpoint;
+      process.env.AI_HTTP_REFERENCE_MODE = prevMode;
+      await new Promise<void>((resolve, reject) => server.close((err) => (err ? reject(err) : resolve())));
+    }
   });
 });

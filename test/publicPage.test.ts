@@ -1,0 +1,1191 @@
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import vm from "node:vm";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import sharp from "sharp";
+import { buildApp } from "../src/app";
+
+function multipartPayload(field: string, filename: string, contentType: string, buf: Buffer) {
+  const boundary = `----easysticker-${Math.random().toString(16).slice(2)}`;
+  const head = Buffer.from(
+    `--${boundary}\r\n` +
+      `Content-Disposition: form-data; name="${field}"; filename="${filename}"\r\n` +
+      `Content-Type: ${contentType}\r\n\r\n`
+  );
+  const tail = Buffer.from(`\r\n--${boundary}--\r\n`);
+  return {
+    boundary,
+    body: Buffer.concat([head, buf, tail])
+  };
+}
+
+class FakeElement {
+  tagName: string;
+  id: string;
+  children: FakeElement[];
+  dataset: Record<string, string>;
+  style: Record<string, string>;
+  className: string;
+  textContent: string;
+  value: string;
+  disabled: boolean;
+  checked: boolean;
+  hidden: boolean;
+  src: string;
+  href: string;
+  rel: string;
+  download: string;
+  type: string;
+  alt: string;
+  clicked: boolean;
+  files?: { 0?: { name: string }; length: number };
+  classList: { add: (...tokens: string[]) => void };
+  listeners: Map<string, (event?: { preventDefault: () => void }) => void | Promise<void>>;
+  private _innerHTML: string;
+
+  constructor(tagName = "div", id = "") {
+    this.tagName = tagName.toUpperCase();
+    this.id = id;
+    this.children = [];
+    this.dataset = {};
+    this.style = {};
+    this.className = "";
+    this.textContent = "";
+    this._innerHTML = "";
+    this.value = "";
+    this.disabled = false;
+    this.checked = false;
+    this.hidden = false;
+    this.src = "";
+    this.href = "";
+    this.rel = "";
+    this.download = "";
+    this.type = "";
+    this.alt = "";
+    this.clicked = false;
+    this.files = { length: 0 };
+    this.listeners = new Map();
+    this.classList = {
+      add: (...tokens: string[]) => {
+        const classes = new Set(this.className.split(/\s+/).filter(Boolean));
+        for (const token of tokens) classes.add(token);
+        this.className = Array.from(classes).join(" ");
+      }
+    };
+  }
+
+  get innerHTML() {
+    return this._innerHTML;
+  }
+
+  set innerHTML(value: string) {
+    this._innerHTML = value;
+    this.children = [];
+  }
+
+  appendChild(child: FakeElement) {
+    this.children.push(child);
+    return child;
+  }
+
+  removeChild(child: FakeElement) {
+    this.children = this.children.filter((item) => item !== child);
+    return child;
+  }
+
+  addEventListener(type: string, listener: (event?: { preventDefault: () => void }) => void | Promise<void>) {
+    this.listeners.set(type, listener);
+  }
+
+  setAttribute(name: string, value: string) {
+    if (name === "readonly") return;
+    (this as unknown as Record<string, string>)[name] = value;
+  }
+
+  removeAttribute(name: string) {
+    (this as unknown as Record<string, string>)[name] = "";
+  }
+
+  select() {
+    return undefined;
+  }
+
+  click() {
+    this.clicked = true;
+    return undefined;
+  }
+
+  reset() {
+    this.value = "";
+    this.checked = false;
+    this.files = { length: 0 };
+    return undefined;
+  }
+}
+
+function createAppSandbox(persistedValue?: Record<string, unknown>) {
+  const ids = [
+    "uploadForm",
+    "uploadSubmit",
+    "uploadState",
+    "originalPreview",
+    "wechatAiForm",
+    "generateSubmit",
+    "regenerateSubmit",
+    "resetSubmit",
+    "generateState",
+    "wechatAiZipLink",
+    "wechatAiActions",
+    "wechatAiExtras",
+    "wechatAiPreview",
+    "wechatAiSuggest",
+    "wechatAiPrompt",
+    "wechatAiTitle",
+    "wechatAiAuthor",
+    "wechatAiVersion",
+    "wechatAiCopyright",
+    "wechatAiCount",
+    "wechatAiRewardEnabled",
+    "wechatAiRewardMessageField",
+    "wechatAiRewardMessage",
+    "wechatAiStyleOptions",
+    "wechatAiSummary",
+    "wechatAiExportInfo",
+    "wechatAiMetadataPreview",
+    "wechatAiFeedback",
+    "promptHint",
+    "globalNotice",
+    "toastNotice",
+    "file"
+  ];
+
+  const elements = new Map(ids.map((id) => [id, new FakeElement("div", id)]));
+  const body = new FakeElement("body");
+  const storage = new Map<string, string>();
+  const clipboard = { value: "" };
+  const fetchCalls: Array<{ url: string; options: Record<string, unknown> | undefined }> = [];
+  const fetchState = { ok: true, text: "{}", blob: new Blob(["zip"]) };
+  const urlShim = URL as typeof URL & {
+    createObjectURL: () => string;
+    revokeObjectURL: () => undefined;
+  };
+  urlShim.createObjectURL = () => "blob:http://localhost:3000/mock-download";
+  urlShim.revokeObjectURL = () => undefined;
+  if (persistedValue) {
+    storage.set("easysticker:last-wechat-pack", JSON.stringify(persistedValue));
+  }
+
+  const document = {
+    body,
+    getElementById(id: string) {
+      const el = elements.get(id);
+      if (!el) throw new Error(`missing element: ${id}`);
+      return el;
+    },
+    createElement(tagName: string) {
+      return new FakeElement(tagName);
+    },
+    execCommand() {
+      return true;
+    }
+  };
+
+  const localStorage = {
+    getItem(key: string) {
+      return storage.has(key) ? storage.get(key)! : null;
+    },
+    setItem(key: string, value: string) {
+      storage.set(key, value);
+    },
+    removeItem(key: string) {
+      storage.delete(key);
+    }
+  };
+
+  const sandbox = {
+    document,
+    window: {
+      document,
+      localStorage,
+      location: { origin: "http://localhost:3000" }
+    },
+    localStorage,
+    navigator: {
+      clipboard: {
+        async writeText(text: string) {
+          clipboard.value = text;
+          return undefined;
+        }
+      }
+    },
+    FormData: class {
+      append() {
+        return undefined;
+      }
+    },
+    fetch: async (url: string, options?: Record<string, unknown>) => {
+      fetchCalls.push({ url, options });
+      return { ok: fetchState.ok, text: async () => fetchState.text, blob: async () => fetchState.blob };
+    },
+    URL: urlShim,
+    console,
+    setTimeout,
+    clearTimeout
+  };
+
+  return { sandbox, elements, storage, clipboard, fetchCalls, fetchState };
+}
+
+function loadPublicApp(persistedValue?: Record<string, unknown>) {
+  const { sandbox, elements, storage, clipboard, fetchCalls, fetchState } = createAppSandbox(persistedValue);
+  const source = fs.readFileSync(path.join(process.cwd(), "public/app.js"), "utf8");
+  const script = `${source}
+globalThis.__appTest = {
+  resetGenerationResult,
+  resetAllState,
+  restorePersistedPackResult,
+  clearPersistedPackResult,
+  renderPreview,
+  generateWechatPack,
+  getState: () => ({ currentUploadId, currentStyles, hasGenerationAttempted, lastPackResult })
+};`;
+  vm.runInNewContext(script, sandbox);
+  return {
+    app: (sandbox as typeof sandbox & { __appTest: Record<string, () => unknown> }).__appTest,
+    elements,
+    storage,
+    clipboard,
+    fetchCalls,
+    fetchState
+  };
+}
+
+function findChildByText(parent: FakeElement | undefined, text: string) {
+  return parent?.children.find((child) => child.textContent === text);
+}
+
+describe("public page", () => {
+  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), "easysticker-public-"));
+  const app = buildApp({ host: "127.0.0.1", port: 0, dataDir, logLevel: "silent" });
+
+  beforeAll(async () => {
+    await app.ready();
+  });
+
+  afterAll(async () => {
+    await app.close();
+    fs.rmSync(dataDir, { recursive: true, force: true });
+  });
+
+  it("serves a minimal wechat ai flow page", async () => {
+    const res = await app.inject({ method: "GET", url: "/" });
+    expect(res.statusCode).toBe(200);
+    expect(res.headers["content-type"]).toContain("text/html");
+
+    const html = res.body;
+    expect(html).toContain("上传参考图");
+    expect(html).toContain("编辑提示词");
+    expect(html).toContain("生成表情");
+    expect(html).toContain("预览与下载");
+    expect(html).toContain('id="wechatAiTitle"');
+    expect(html).toContain('id="wechatAiAuthor"');
+    expect(html).toContain('id="wechatAiVersion"');
+    expect(html).toContain('id="wechatAiCopyright"');
+    expect(html).toContain('id="wechatAiCount"');
+    expect(html).toContain('id="wechatAiRewardEnabled"');
+    expect(html).toContain('id="wechatAiRewardMessage"');
+    expect(html).toContain('id="wechatAiStyleOptions"');
+    expect(html).toContain('id="regenerateSubmit"');
+    expect(html).toContain('id="resetSubmit"');
+    expect(html).toContain('id="wechatAiExtras"');
+    expect(html).toContain('id="wechatAiFeedback"');
+    expect(html).toContain('id="wechatAiSummary"');
+    expect(html).toContain('id="wechatAiExportInfo"');
+    expect(html).toContain('id="wechatAiMetadataPreview"');
+    expect(html).toContain('id="wechatAiActions"');
+    expect(html).toContain('id="toastNotice"');
+    expect(html).toContain("导出确认面板");
+    expect(html).toContain('<span class="required-mark">*</span>选择图片');
+    expect(html).toContain('<span class="required-mark">*</span>提示词');
+    expect(html).toContain('<span class="required-mark">*</span>表情包标题');
+    expect(html).toContain('<span class="required-mark">*</span>作者名');
+    expect(html).toContain('<span class="required-mark">*</span>贴纸数量');
+    expect(html).toContain('<span class="required-mark">*</span>风格选择');
+    expect(html).toContain('版本信息<span class="optional-mark">可选</span>');
+    expect(html).toContain('版权信息<span class="optional-mark">可选</span>');
+    expect(html).toContain('赞赏功能<span class="optional-mark">可选</span>');
+    expect(html).toContain('<span class="required-mark">*</span>赞赏引导语');
+    expect(html.indexOf('class="export-confirm-panel"')).toBeLessThan(html.indexOf('id="wechatAiSummary"'));
+    expect(html).toContain("结果概览、导出信息与 metadata.json");
+    expect(html).not.toContain("<pre");
+    expect(html).not.toContain("referenceAssetId");
+    expect(html).not.toContain("stickerCount");
+    expect(html).not.toContain("wechatAiStyles");
+    expect(html).not.toContain("wechatRefId");
+  });
+
+  it("upload response does not expose server file path", async () => {
+    const png = await sharp({
+      create: { width: 128, height: 128, channels: 4, background: { r: 255, g: 255, b: 255, alpha: 1 } }
+    })
+      .png()
+      .toBuffer();
+
+    const mp = multipartPayload("file", "safe.png", "image/png", png);
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/uploads",
+      payload: mp.body,
+      headers: { "content-type": `multipart/form-data; boundary=${mp.boundary}` }
+    });
+
+    expect(res.statusCode).toBe(200);
+    const json = res.json();
+    expect(json.uploadId).toBeTypeOf("string");
+    expect(json.original.url).toBe(`/api/assets/${json.uploadId}`);
+    expect(json.original.path).toBeUndefined();
+  });
+
+  it("serves frontend script with preview assets and retry states", async () => {
+    const res = await app.inject({ method: "GET", url: "/app.js" });
+    expect(res.statusCode).toBe(200);
+    expect(res.headers["content-type"]).toContain("application/javascript");
+    expect(res.body).toContain("renderSummary");
+    expect(res.body).toContain("renderExtraAssets");
+    expect(res.body).toContain("renderActions");
+    expect(res.body).toContain("renderStyleOptions");
+    expect(res.body).toContain("renderExportInfo");
+    expect(res.body).toContain("DEFAULT_STYLE_OPTIONS");
+    expect(res.body).toContain("resetAllState");
+    expect(res.body).toContain("buildExportInfoCardText");
+    expect(res.body).toContain("buildDetailGridMarkup");
+    expect(res.body).toContain("CONFIRM_CARD_CONFIGS");
+    expect(res.body).toContain("renderConfirmCard");
+    expect(res.body).toContain("handleConfirmCardClick");
+    expect(res.body).toContain("复制 packId");
+    expect(res.body).toContain("复制下载链接");
+    expect(res.body).toContain("复制导出信息");
+    expect(res.body).toContain("结果概览");
+    expect(res.body).toContain("复制 metadata.json");
+    expect(res.body).toContain("validateGenerateInputs");
+    expect(res.body).toContain("enableReward");
+    expect(res.body).toContain("rewardMessage");
+    expect(res.body).toContain("rewardGuideAssetId");
+    expect(res.body).toContain("rewardThanksAssetId");
+    expect(res.body).toContain("toggle-summary");
+    expect(res.body).toContain("toggle-export-info");
+    expect(res.body).toContain("确认对外展示字段、packId 与 ZIP 文件名");
+    expect(res.body).toContain("metadata.json");
+    expect(res.body).toContain("buildMetadataPreviewText");
+    expect(res.body).toContain("toggle-metadata-preview");
+    expect(res.body).toContain("展开内容");
+    expect(res.body).toContain("showToast");
+    expect(res.body).toContain("用于展示聊天场景贴纸与序号资源。");
+    expect(res.body).toContain("getExtraAssetDescription");
+    expect(res.body).toContain("asset-description");
+    expect(res.body).toContain("createPreviewCard");
+    expect(res.body).toContain("240 × 240");
+    expect(res.body).toContain("link.download");
+    expect(res.body).toContain("未命名表情包");
+    expect(res.body).toContain("重新生成中...");
+    expect(res.body).toContain("生成完成后自动更新");
+    expect(res.body).toContain("生成失败后可重新生成");
+    expect(res.body).toContain("easysticker:last-wechat-pack");
+    expect(res.body).toContain("restorePersistedPackResult");
+  });
+
+  it("serves a noop vite client shim for embedded preview environments", async () => {
+    const res = await app.inject({ method: "GET", url: "/@vite/client" });
+    expect(res.statusCode).toBe(200);
+    expect(res.headers["content-type"]).toContain("application/javascript");
+    expect(res.body).toContain("export {}");
+  });
+
+  it("restores the latest generated result from local storage on page boot", () => {
+    const persistedValue = {
+      version: 1,
+      uploadId: "upload-123",
+      prompt: "生成一组猫咪表情",
+      title: "猫咪日常",
+      author: "EasySticker Studio",
+      versionText: "v1.2",
+      copyrightText: "© EasySticker",
+      rewardEnabled: true,
+      rewardMessage: "喜欢的话欢迎赞赏支持",
+      stickerCount: 12,
+      styles: ["可爱", "简洁"],
+      hasGenerationAttempted: true,
+      result: {
+        packId: "pack-001",
+        downloadUrl: "/api/packs/pack-001/download",
+        downloadFilename: "猫咪日常-pack-001.zip",
+        stickers: [
+          { label: "001", url: "/api/assets/sticker-001", assetId: "sticker-001" },
+          { label: "002", url: "/api/assets/sticker-002", assetId: "sticker-002" }
+        ],
+        metadataJson: JSON.stringify(
+          {
+            schema: "easysticker-pack@0.1",
+            packId: "pack-001",
+            presetId: "wechat_stickers",
+            createdAt: "2026-03-31T00:00:00.000Z",
+            metadata: {
+              title: "猫咪日常",
+              author: "EasySticker Studio",
+              version: "v1.2",
+              copyright: "© EasySticker",
+              rewardMessage: "喜欢的话欢迎赞赏支持"
+            },
+            extras: {
+              coverAssetId: "cover-001",
+              iconAssetId: "icon-001",
+              bannerAssetId: "banner-001",
+              rewardGuideAssetId: "reward-guide-001",
+              rewardThanksAssetId: "reward-thanks-001"
+            },
+            assets: [
+              { assetId: "sticker-001", filename: "001.png", zipPath: "assets/001.png" },
+              { assetId: "sticker-002", filename: "002.png", zipPath: "assets/002.png" }
+            ]
+          },
+          null,
+          2
+        ),
+        meta: {
+          title: "猫咪日常",
+          styles: ["可爱", "简洁"],
+          author: "EasySticker Studio",
+          version: "v1.2",
+          copyright: "© EasySticker",
+          rewardMessage: "喜欢的话欢迎赞赏支持",
+          rewardEnabled: true,
+          count: 8,
+          referenceMode: "base64"
+        },
+        extras: {
+          coverAssetId: "cover-001",
+          iconAssetId: "icon-001",
+          bannerAssetId: "banner-001",
+          rewardGuideAssetId: "reward-guide-001",
+          rewardThanksAssetId: "reward-thanks-001"
+        }
+      }
+    };
+
+    const { app: pageApp, elements } = loadPublicApp(persistedValue);
+    const state = (pageApp.getState as () => {
+      currentUploadId: string;
+      currentStyles: string[];
+      hasGenerationAttempted: boolean;
+      lastPackResult: { packId: string };
+    })();
+
+    expect(state.currentUploadId).toBe("upload-123");
+    expect(state.currentStyles).toEqual(["可爱", "简洁"]);
+    expect(state.hasGenerationAttempted).toBe(true);
+    expect(state.lastPackResult.packId).toBe("pack-001");
+    expect(elements.get("wechatAiPrompt")?.value).toBe("生成一组猫咪表情");
+    expect(elements.get("wechatAiTitle")?.value).toBe("猫咪日常");
+    expect(elements.get("wechatAiAuthor")?.value).toBe("EasySticker Studio");
+    expect(elements.get("wechatAiVersion")?.value).toBe("v1.2");
+    expect(elements.get("wechatAiCopyright")?.value).toBe("© EasySticker");
+    expect(elements.get("wechatAiRewardEnabled")?.checked).toBe(true);
+    expect(elements.get("wechatAiRewardMessageField")?.hidden).toBe(false);
+    expect(elements.get("wechatAiRewardMessage")?.value).toBe("喜欢的话欢迎赞赏支持");
+    expect(elements.get("wechatAiCount")?.value).toBe("12");
+    expect(elements.get("originalPreview")?.src).toBe("/api/assets/upload-123");
+    expect(elements.get("uploadState")?.textContent).toBe("已恢复参考图");
+    expect(elements.get("generateState")?.textContent).toBe("已恢复最近结果");
+    expect(elements.get("globalNotice")?.textContent).toContain("已恢复最近一次生成结果");
+    expect(elements.get("promptHint")?.textContent).toContain("可爱、简洁");
+    expect(elements.get("promptHint")?.textContent).toContain("12 张");
+    expect(elements.get("wechatAiSummary")?.innerHTML).toContain("结果概览");
+    expect(elements.get("wechatAiSummary")?.innerHTML).toContain("展开内容");
+    expect(elements.get("wechatAiSummary")?.innerHTML).toContain("已默认折叠");
+    expect(elements.get("wechatAiSummary")?.innerHTML).not.toContain("猫咪日常");
+    expect(elements.get("wechatAiSummary")?.innerHTML).not.toContain("EasySticker Studio");
+    expect(elements.get("wechatAiExportInfo")?.innerHTML).toContain("导出信息");
+    expect(elements.get("wechatAiExportInfo")?.innerHTML).toContain("复制导出信息");
+    expect(elements.get("wechatAiExportInfo")?.innerHTML).toContain("展开内容");
+    expect(elements.get("wechatAiExportInfo")?.innerHTML).toContain("已默认折叠");
+    expect(elements.get("wechatAiExportInfo")?.innerHTML).not.toContain("pack-001");
+    expect(elements.get("wechatAiMetadataPreview")?.innerHTML).toContain("metadata.json");
+    expect(elements.get("wechatAiMetadataPreview")?.innerHTML).toContain("复制 metadata.json");
+    expect(elements.get("wechatAiMetadataPreview")?.innerHTML).toContain("展开内容");
+    expect(elements.get("wechatAiMetadataPreview")?.innerHTML).toContain("已默认折叠");
+    expect(elements.get("wechatAiMetadataPreview")?.innerHTML).not.toContain("&quot;packId&quot;: &quot;pack-001&quot;");
+    expect(elements.get("wechatAiStyleOptions")?.children.length).toBeGreaterThan(0);
+    expect(elements.get("wechatAiFeedback")?.innerHTML).toContain("已从本地恢复最近一次生成结果");
+    expect(elements.get("wechatAiZipLink")?.children[0]?.download).toBe("猫咪日常-pack-001.zip");
+    expect(elements.get("wechatAiActions")?.children).toHaveLength(4);
+    expect(elements.get("wechatAiActions")?.children.map((child) => child.textContent)).toEqual([
+      "复制导出信息",
+      "复制 metadata.json",
+      "复制下载链接",
+      "复制 packId"
+    ]);
+    expect(elements.get("wechatAiPreview")?.children).toHaveLength(2);
+    expect(elements.get("wechatAiPreview")?.children[0]?.children[0]?.children.map((child) => child.textContent)).toEqual([
+      "表情 001",
+      "240 × 240",
+      "用于展示聊天场景贴纸与序号资源。 当前序号：001"
+    ]);
+    expect(elements.get("wechatAiExtras")?.children).toHaveLength(5);
+    expect(elements.get("regenerateSubmit")?.disabled).toBe(false);
+    expect(elements.get("wechatAiExtras")?.children[0]?.children[0]?.children.map((child) => child.textContent)).toEqual([
+      "Cover 预览",
+      "240 × 240",
+      "用于表情包封面展示。"
+    ]);
+    expect(elements.get("wechatAiExtras")?.children[3]?.children[0]?.children.map((child) => child.textContent)).toEqual([
+      "赞赏引导图",
+      "750 × 400",
+      "用于展示赞赏引导语。 当前文案：喜欢的话欢迎赞赏支持"
+    ]);
+    expect(elements.get("wechatAiExtras")?.children[4]?.children[0]?.children.map((child) => child.textContent)).toEqual([
+      "赞赏感谢图",
+      "750 × 400",
+      "用于赞赏完成后的感谢反馈。 当前文案：喜欢的话欢迎赞赏支持"
+    ]);
+  });
+
+  it("shows download success toast after clicking download button", async () => {
+    const persistedValue = {
+      version: 1,
+      uploadId: "upload-download",
+      prompt: "生成整套表情",
+      title: "下载测试",
+      author: "EasySticker Studio",
+      stickerCount: 8,
+      styles: ["可爱"],
+      hasGenerationAttempted: true,
+      result: {
+        packId: "pack-download",
+        downloadUrl: "/api/packs/pack-download/download",
+        downloadFilename: "下载测试-pack-download.zip",
+        stickers: [],
+        meta: { title: "下载测试", author: "EasySticker Studio", count: 8, styles: ["可爱"] },
+        extras: {}
+      }
+    };
+
+    const { elements, fetchCalls } = loadPublicApp(persistedValue);
+    const link = elements.get("wechatAiZipLink")?.children[0];
+    await link?.listeners.get("click")?.({ preventDefault: () => undefined });
+
+    expect(fetchCalls.at(-1)?.url).toBe("/api/packs/pack-download/download");
+    expect(elements.get("globalNotice")?.textContent).toBe("下载已开始，请留意浏览器下载列表。");
+    expect(elements.get("toastNotice")?.textContent).toBe("下载已开始，请留意浏览器下载列表。");
+  });
+
+  it("shows download failure toast when zip request fails", async () => {
+    const persistedValue = {
+      version: 1,
+      uploadId: "upload-download-fail",
+      prompt: "生成整套表情",
+      title: "下载测试",
+      author: "EasySticker Studio",
+      stickerCount: 8,
+      styles: ["可爱"],
+      hasGenerationAttempted: true,
+      result: {
+        packId: "pack-download-fail",
+        downloadUrl: "/api/packs/pack-download-fail/download",
+        downloadFilename: "下载测试-pack-download-fail.zip",
+        stickers: [],
+        meta: { title: "下载测试", author: "EasySticker Studio", count: 8, styles: ["可爱"] },
+        extras: {}
+      }
+    };
+
+    const { elements, fetchState } = loadPublicApp(persistedValue);
+    fetchState.ok = false;
+    const link = elements.get("wechatAiZipLink")?.children[0];
+    await link?.listeners.get("click")?.({ preventDefault: () => undefined });
+
+    expect(elements.get("globalNotice")?.textContent).toBe("下载失败，请稍后重试。");
+    expect(elements.get("toastNotice")?.textContent).toBe("下载失败，请稍后重试。");
+  });
+
+  it("prevents generate request when required fields are missing", async () => {
+    const persistedValue = {
+      version: 1,
+      uploadId: "upload-validate",
+      prompt: "生成表情",
+      title: "原始标题",
+      author: "原始作者",
+      stickerCount: 8,
+      styles: ["可爱"],
+      hasGenerationAttempted: true,
+      result: {
+        packId: "pack-validate",
+        downloadUrl: "/api/packs/pack-validate/download",
+        stickers: [],
+        meta: { count: 8, styles: ["可爱"] },
+        extras: {}
+      }
+    };
+
+    const { app: pageApp, elements, fetchCalls } = loadPublicApp(persistedValue);
+    const titleEl = elements.get("wechatAiTitle")! as FakeElement & Record<string, string>;
+    const authorEl = elements.get("wechatAiAuthor")! as FakeElement & Record<string, string>;
+    titleEl.value = "";
+    await (pageApp.generateWechatPack as () => Promise<void>)();
+    expect(fetchCalls).toHaveLength(0);
+    expect(elements.get("globalNotice")?.textContent).toBe("请填写表情包标题。");
+    expect(titleEl["aria-invalid"]).toBe("true");
+
+    titleEl.value = "新的标题";
+    authorEl.value = "";
+    await (pageApp.generateWechatPack as () => Promise<void>)();
+    expect(fetchCalls).toHaveLength(0);
+    expect(elements.get("globalNotice")?.textContent).toBe("请填写作者名。");
+    expect(authorEl["aria-invalid"]).toBe("true");
+
+    authorEl.value = "新的作者";
+    elements.get("wechatAiRewardEnabled")!.checked = true;
+    elements.get("wechatAiRewardEnabled")?.listeners.get("change")?.();
+    await (pageApp.generateWechatPack as () => Promise<void>)();
+    expect(fetchCalls).toHaveLength(0);
+    expect(elements.get("globalNotice")?.textContent).toBe("开启赞赏功能后，请填写赞赏引导语。");
+    const rewardMessageEl = elements.get("wechatAiRewardMessage")! as FakeElement & Record<string, string>;
+    expect(rewardMessageEl["aria-invalid"]).toBe("true");
+  });
+
+  it("renders all restored sticker previews instead of truncating to six", () => {
+    const stickers = Array.from({ length: 7 }, (_, index) => ({
+      label: String(index + 1).padStart(3, "0"),
+      url: `/api/assets/sticker-${index + 1}`,
+      assetId: `sticker-${index + 1}`
+    }));
+
+    const persistedValue = {
+      version: 1,
+      uploadId: "upload-many",
+      prompt: "生成整套表情",
+      stickerCount: 7,
+      styles: ["可爱"],
+      hasGenerationAttempted: true,
+      result: {
+        packId: "pack-many",
+        downloadUrl: "/api/packs/pack-many/download",
+        downloadFilename: "pack-many.zip",
+        stickers,
+        meta: { count: 7, styles: ["可爱"] },
+        extras: {}
+      }
+    };
+
+    const { elements } = loadPublicApp(persistedValue);
+    expect(elements.get("wechatAiPreview")?.children).toHaveLength(7);
+    expect(elements.get("wechatAiPreview")?.children[0]?.children[0]?.children.map((child) => child.textContent)).toEqual([
+      "表情 001",
+      "240 × 240",
+      "用于展示聊天场景贴纸与序号资源。 当前序号：001"
+    ]);
+  });
+
+  it("renders extra asset placeholders as title size description blocks", () => {
+    const { elements } = loadPublicApp();
+
+    expect(elements.get("wechatAiExtras")?.children).toHaveLength(3);
+    expect(elements.get("wechatAiExtras")?.children[0]?.children[0]?.children.map((child) => child.textContent)).toEqual([
+      "Cover 预览",
+      "240 × 240",
+      "用于表情包封面展示。 等待生成后展示。"
+    ]);
+    expect(elements.get("wechatAiExtras")?.children[0]?.children[1]?.textContent).toBe("等待生成");
+
+    elements.get("wechatAiRewardEnabled")!.checked = true;
+    elements.get("wechatAiRewardEnabled")?.listeners.get("change")?.();
+
+    expect(elements.get("wechatAiExtras")?.children).toHaveLength(5);
+    expect(elements.get("wechatAiExtras")?.children[3]?.children[0]?.children.map((child) => child.textContent)).toEqual([
+      "赞赏引导图",
+      "750 × 400",
+      "用于展示赞赏引导语。 等待生成后展示。"
+    ]);
+    expect(elements.get("wechatAiExtras")?.children[3]?.children[1]?.textContent).toBe("等待生成");
+  });
+
+  it("renders sticker preview placeholder as title size description with unified media state", () => {
+    const { elements } = loadPublicApp();
+
+    expect(elements.get("wechatAiPreview")?.children).toHaveLength(1);
+    expect(elements.get("wechatAiPreview")?.children[0]?.children[0]?.children.map((child) => child.textContent)).toEqual([
+      "表情预览",
+      "240 × 240",
+      "用于展示聊天场景贴纸与序号资源。 等待生成后展示。"
+    ]);
+    expect(elements.get("wechatAiPreview")?.children[0]?.children[1]?.textContent).toBe("等待生成");
+  });
+
+  it("renders sticker preview loading and error copy with resource description tone", () => {
+    const { app: pageApp, elements } = loadPublicApp();
+
+    (pageApp.renderPreview as (stickers: Array<Record<string, unknown>>, tone: string) => void)([], "loading");
+    expect(elements.get("wechatAiPreview")?.children[0]?.children[0]?.children.map((child) => child.textContent)).toEqual([
+      "表情预览",
+      "240 × 240",
+      "用于展示聊天场景贴纸与序号资源。 生成完成后自动更新。"
+    ]);
+    expect(elements.get("wechatAiPreview")?.children[0]?.children[1]?.textContent).toBe("生成中，完成后自动展示");
+
+    (pageApp.renderPreview as (stickers: Array<Record<string, unknown>>, tone: string) => void)([], "error");
+    expect(elements.get("wechatAiPreview")?.children[0]?.children[0]?.children.map((child) => child.textContent)).toEqual([
+      "表情预览",
+      "240 × 240",
+      "用于展示聊天场景贴纸与序号资源。 生成失败后可重新生成。"
+    ]);
+    expect(elements.get("wechatAiPreview")?.children[0]?.children[1]?.textContent).toBe("生成失败，可点击重新生成");
+  });
+
+  it("toggles summary card content from collapsed state", () => {
+    const persistedValue = {
+      version: 1,
+      uploadId: "upload-summary-toggle",
+      prompt: "生成一组猫咪表情",
+      title: "猫咪日常",
+      author: "EasySticker Studio",
+      versionText: "v1.2",
+      copyrightText: "© EasySticker",
+      stickerCount: 8,
+      styles: ["可爱", "简洁"],
+      hasGenerationAttempted: true,
+      result: {
+        packId: "pack-summary-toggle",
+        downloadUrl: "/api/packs/pack-summary-toggle/download",
+        downloadFilename: "猫咪日常-pack-summary-toggle.zip",
+        stickers: [{ label: "001", url: "/api/assets/sticker-001", assetId: "sticker-001" }],
+        meta: {
+          title: "猫咪日常",
+          styles: ["可爱", "简洁"],
+          author: "EasySticker Studio",
+          version: "v1.2",
+          copyright: "© EasySticker",
+          count: 8,
+          referenceMode: "base64"
+        },
+        extras: {}
+      }
+    };
+
+    const { elements } = loadPublicApp(persistedValue);
+    const summary = elements.get("wechatAiSummary");
+
+    expect(summary?.innerHTML).toContain("展开内容");
+    expect(summary?.innerHTML).toContain("已默认折叠");
+    expect(summary?.innerHTML).not.toContain("猫咪日常-pack-summary-toggle.zip");
+
+    summary?.listeners.get("click")?.({
+      preventDefault: () => undefined,
+      target: {
+        closest: (selector: string) => (selector === '[data-action="toggle-summary"]' ? {} : null)
+      }
+    } as unknown as { preventDefault: () => void });
+
+    expect(summary?.innerHTML).toContain("收起内容");
+    expect(summary?.innerHTML).toContain("猫咪日常");
+    expect(summary?.innerHTML).toContain("EasySticker Studio");
+    expect(summary?.innerHTML).toContain("猫咪日常-pack-summary-toggle.zip");
+
+    summary?.listeners.get("click")?.({
+      preventDefault: () => undefined,
+      target: {
+        closest: (selector: string) => (selector === '[data-action="toggle-summary"]' ? {} : null)
+      }
+    } as unknown as { preventDefault: () => void });
+
+    expect(summary?.innerHTML).toContain("展开内容");
+    expect(summary?.innerHTML).not.toContain("猫咪日常-pack-summary-toggle.zip");
+  });
+
+  it("toggles export info card content from collapsed state", () => {
+    const persistedValue = {
+      version: 1,
+      uploadId: "upload-export-toggle",
+      prompt: "生成一组猫咪表情",
+      title: "猫咪日常",
+      author: "EasySticker Studio",
+      versionText: "v1.2",
+      copyrightText: "© EasySticker",
+      stickerCount: 8,
+      styles: ["可爱"],
+      hasGenerationAttempted: true,
+      result: {
+        packId: "pack-export-toggle",
+        downloadUrl: "/api/packs/pack-export-toggle/download",
+        downloadFilename: "猫咪日常-pack-export-toggle.zip",
+        stickers: [],
+        meta: {
+          title: "猫咪日常",
+          author: "EasySticker Studio",
+          version: "v1.2",
+          copyright: "© EasySticker"
+        },
+        extras: {}
+      }
+    };
+
+    const { elements } = loadPublicApp(persistedValue);
+    const exportInfo = elements.get("wechatAiExportInfo");
+
+    expect(exportInfo?.innerHTML).toContain("展开内容");
+    expect(exportInfo?.innerHTML).not.toContain("pack-export-toggle");
+
+    exportInfo?.listeners.get("click")?.({
+      preventDefault: () => undefined,
+      target: {
+        closest: (selector: string) => (selector === '[data-action="toggle-export-info"]' ? {} : null)
+      }
+    } as unknown as { preventDefault: () => void });
+
+    expect(exportInfo?.innerHTML).toContain("收起内容");
+    expect(exportInfo?.innerHTML).toContain("pack-export-toggle");
+    expect(exportInfo?.innerHTML).toContain("猫咪日常-pack-export-toggle.zip");
+
+    exportInfo?.listeners.get("click")?.({
+      preventDefault: () => undefined,
+      target: {
+        closest: (selector: string) => (selector === '[data-action="toggle-export-info"]' ? {} : null)
+      }
+    } as unknown as { preventDefault: () => void });
+
+    expect(exportInfo?.innerHTML).toContain("展开内容");
+    expect(exportInfo?.innerHTML).not.toContain("pack-export-toggle");
+  });
+
+  it("toggles metadata preview content from collapsed state", () => {
+    const persistedValue = {
+      version: 1,
+      uploadId: "upload-toggle",
+      prompt: "生成一组猫咪表情",
+      title: "猫咪日常",
+      author: "EasySticker Studio",
+      versionText: "v1.2",
+      copyrightText: "© EasySticker",
+      stickerCount: 8,
+      styles: ["可爱"],
+      hasGenerationAttempted: true,
+      result: {
+        packId: "pack-toggle",
+        downloadUrl: "/api/packs/pack-toggle/download",
+        downloadFilename: "猫咪日常-pack-toggle.zip",
+        metadataJson: JSON.stringify({ packId: "pack-toggle", metadata: { title: "猫咪日常" } }, null, 2),
+        stickers: [],
+        meta: {
+          title: "猫咪日常",
+          author: "EasySticker Studio",
+          version: "v1.2",
+          copyright: "© EasySticker"
+        },
+        extras: {}
+      }
+    };
+
+    const { elements } = loadPublicApp(persistedValue);
+    const metadataPreview = elements.get("wechatAiMetadataPreview");
+
+    expect(metadataPreview?.innerHTML).toContain("展开内容");
+    expect(metadataPreview?.innerHTML).not.toContain("&quot;packId&quot;: &quot;pack-toggle&quot;");
+
+    metadataPreview?.listeners.get("click")?.({
+      preventDefault: () => undefined,
+      target: {
+        closest: (selector: string) => (selector === '[data-action="toggle-metadata-preview"]' ? {} : null)
+      }
+    } as unknown as { preventDefault: () => void });
+
+    expect(metadataPreview?.innerHTML).toContain("收起内容");
+    expect(metadataPreview?.innerHTML).toContain("&quot;packId&quot;: &quot;pack-toggle&quot;");
+
+    metadataPreview?.listeners.get("click")?.({
+      preventDefault: () => undefined,
+      target: {
+        closest: (selector: string) => (selector === '[data-action="toggle-metadata-preview"]' ? {} : null)
+      }
+    } as unknown as { preventDefault: () => void });
+
+    expect(metadataPreview?.innerHTML).toContain("展开内容");
+    expect(metadataPreview?.innerHTML).not.toContain("&quot;packId&quot;: &quot;pack-toggle&quot;");
+  });
+
+  it("ignores unrelated clicks on shared confirm card handlers", () => {
+    const persistedValue = {
+      version: 1,
+      uploadId: "upload-ignore-click",
+      prompt: "生成一组猫咪表情",
+      title: "猫咪日常",
+      author: "EasySticker Studio",
+      versionText: "v1.2",
+      copyrightText: "© EasySticker",
+      stickerCount: 8,
+      styles: ["可爱"],
+      hasGenerationAttempted: true,
+      result: {
+        packId: "pack-ignore-click",
+        downloadUrl: "/api/packs/pack-ignore-click/download",
+        downloadFilename: "猫咪日常-pack-ignore-click.zip",
+        metadataJson: JSON.stringify({ packId: "pack-ignore-click", metadata: { title: "猫咪日常" } }, null, 2),
+        stickers: [],
+        meta: {
+          title: "猫咪日常",
+          author: "EasySticker Studio",
+          version: "v1.2",
+          copyright: "© EasySticker"
+        },
+        extras: {}
+      }
+    };
+
+    const { elements } = loadPublicApp(persistedValue);
+    const summary = elements.get("wechatAiSummary");
+    const exportInfo = elements.get("wechatAiExportInfo");
+    const metadataPreview = elements.get("wechatAiMetadataPreview");
+    const initialSummary = summary?.innerHTML;
+    const initialExportInfo = exportInfo?.innerHTML;
+    const initialMetadata = metadataPreview?.innerHTML;
+
+    const clickEvent = {
+      preventDefault: () => undefined,
+      target: {
+        closest: () => null
+      }
+    } as unknown as { preventDefault: () => void };
+
+    summary?.listeners.get("click")?.(clickEvent);
+    exportInfo?.listeners.get("click")?.(clickEvent);
+    metadataPreview?.listeners.get("click")?.(clickEvent);
+
+    expect(summary?.innerHTML).toBe(initialSummary);
+    expect(exportInfo?.innerHTML).toBe(initialExportInfo);
+    expect(metadataPreview?.innerHTML).toBe(initialMetadata);
+  });
+
+  it("copies export info card content from card button", async () => {
+    const persistedValue = {
+      version: 1,
+      uploadId: "upload-card-copy",
+      prompt: "生成一组猫咪表情",
+      title: "猫咪日常",
+      author: "EasySticker Studio",
+      versionText: "v1.2",
+      copyrightText: "© EasySticker",
+      stickerCount: 8,
+      styles: ["可爱"],
+      hasGenerationAttempted: true,
+      result: {
+        packId: "pack-card-copy",
+        downloadUrl: "/api/packs/pack-card-copy/download",
+        downloadFilename: "猫咪日常-pack-card-copy.zip",
+        stickers: [],
+        meta: {
+          title: "猫咪日常",
+          author: "EasySticker Studio",
+          version: "v1.2",
+          copyright: "© EasySticker"
+        },
+        extras: {}
+      }
+    };
+
+    const { elements, clipboard } = loadPublicApp(persistedValue);
+    const exportInfo = elements.get("wechatAiExportInfo");
+    expect(exportInfo?.innerHTML).toContain("展开内容");
+    expect(exportInfo?.innerHTML).not.toContain("pack-card-copy");
+    await exportInfo?.listeners.get("click")?.({
+      preventDefault: () => undefined,
+      target: {
+        closest: (selector: string) => (selector === '[data-action="copy-export-info-card"]' ? {} : null)
+      }
+    } as unknown as { preventDefault: () => void });
+
+    expect(clipboard.value).toContain("标题：猫咪日常");
+    expect(clipboard.value).toContain("packId：pack-card-copy");
+    expect(clipboard.value).toContain("导出文件：猫咪日常-pack-card-copy.zip");
+    expect(clipboard.value).not.toContain("下载链接：");
+    expect(elements.get("globalNotice")?.textContent).toBe("导出信息已复制");
+    expect(exportInfo?.innerHTML).toContain("展开内容");
+    expect(exportInfo?.innerHTML).not.toContain("pack-card-copy");
+  });
+
+  it("copies export info from action button", async () => {
+    const persistedValue = {
+      version: 1,
+      uploadId: "upload-copy",
+      prompt: "生成一组猫咪表情",
+      title: "猫咪日常",
+      author: "EasySticker Studio",
+      versionText: "v1.2",
+      copyrightText: "© EasySticker",
+      stickerCount: 8,
+      styles: ["可爱"],
+      hasGenerationAttempted: true,
+      result: {
+        packId: "pack-copy",
+        downloadUrl: "/api/packs/pack-copy/download",
+        downloadFilename: "猫咪日常-pack-copy.zip",
+        stickers: [],
+        meta: {
+          title: "猫咪日常",
+          author: "EasySticker Studio",
+          version: "v1.2",
+          copyright: "© EasySticker"
+        },
+        extras: {}
+      }
+    };
+
+    const { elements, clipboard } = loadPublicApp(persistedValue);
+    const exportButton = findChildByText(elements.get("wechatAiActions"), "复制导出信息");
+    await exportButton?.listeners.get("click")?.();
+
+    expect(clipboard.value).toContain("标题：猫咪日常");
+    expect(clipboard.value).toContain("packId：pack-copy");
+    expect(clipboard.value).toContain("下载链接：http://localhost:3000/api/packs/pack-copy/download");
+    expect(elements.get("globalNotice")?.textContent).toBe("导出信息已复制");
+    expect(elements.get("toastNotice")?.textContent).toBe("导出信息已复制");
+    expect(elements.get("toastNotice")?.dataset.visible).toBe("true");
+  });
+
+  it("copies metadata preview from card button", async () => {
+    const persistedValue = {
+      version: 1,
+      uploadId: "upload-meta-card",
+      prompt: "生成一组猫咪表情",
+      title: "猫咪日常",
+      author: "EasySticker Studio",
+      versionText: "v1.2",
+      copyrightText: "© EasySticker",
+      stickerCount: 8,
+      styles: ["可爱"],
+      hasGenerationAttempted: true,
+      result: {
+        packId: "pack-meta-card",
+        downloadUrl: "/api/packs/pack-meta-card/download",
+        downloadFilename: "猫咪日常-pack-meta-card.zip",
+        metadataJson: JSON.stringify({ packId: "pack-meta-card", metadata: { title: "猫咪日常" } }, null, 2),
+        stickers: [],
+        meta: {
+          title: "猫咪日常",
+          author: "EasySticker Studio",
+          version: "v1.2",
+          copyright: "© EasySticker"
+        },
+        extras: {}
+      }
+    };
+
+    const { elements, clipboard } = loadPublicApp(persistedValue);
+    const metadataPreview = elements.get("wechatAiMetadataPreview");
+    expect(metadataPreview?.innerHTML).toContain("展开内容");
+    expect(metadataPreview?.innerHTML).not.toContain("&quot;packId&quot;: &quot;pack-meta-card&quot;");
+    await metadataPreview?.listeners.get("click")?.({
+      preventDefault: () => undefined,
+      target: {
+        closest: (selector: string) => (selector === '[data-action="copy-metadata-preview"]' ? {} : null)
+      }
+    } as unknown as { preventDefault: () => void });
+
+    expect(clipboard.value).toContain('"packId": "pack-meta-card"');
+    expect(clipboard.value).toContain('"title": "猫咪日常"');
+    expect(elements.get("globalNotice")?.textContent).toBe("metadata.json 已复制");
+    expect(metadataPreview?.innerHTML).toContain("展开内容");
+    expect(metadataPreview?.innerHTML).not.toContain("&quot;packId&quot;: &quot;pack-meta-card&quot;");
+  });
+
+  it("copies metadata preview from action button", async () => {
+    const persistedValue = {
+      version: 1,
+      uploadId: "upload-meta",
+      prompt: "生成一组猫咪表情",
+      title: "猫咪日常",
+      author: "EasySticker Studio",
+      versionText: "v1.2",
+      copyrightText: "© EasySticker",
+      stickerCount: 8,
+      styles: ["可爱"],
+      hasGenerationAttempted: true,
+      result: {
+        packId: "pack-meta",
+        downloadUrl: "/api/packs/pack-meta/download",
+        downloadFilename: "猫咪日常-pack-meta.zip",
+        metadataJson: JSON.stringify({ packId: "pack-meta", metadata: { title: "猫咪日常" } }, null, 2),
+        stickers: [],
+        meta: {
+          title: "猫咪日常",
+          author: "EasySticker Studio",
+          version: "v1.2",
+          copyright: "© EasySticker"
+        },
+        extras: {}
+      }
+    };
+
+    const { elements, clipboard } = loadPublicApp(persistedValue);
+    const metadataButton = findChildByText(elements.get("wechatAiActions"), "复制 metadata.json");
+    await metadataButton?.listeners.get("click")?.();
+
+    expect(clipboard.value).toContain('"packId": "pack-meta"');
+    expect(clipboard.value).toContain('"title": "猫咪日常"');
+    expect(elements.get("globalNotice")?.textContent).toBe("metadata.json 已复制");
+    expect(elements.get("toastNotice")?.textContent).toBe("metadata.json 已复制");
+    expect(elements.get("toastNotice")?.dataset.visible).toBe("true");
+  });
+
+  it("clears persisted result when resetting generation state", () => {
+    const persistedValue = {
+      result: {
+        packId: "pack-002",
+        downloadUrl: "/api/packs/pack-002/download"
+      }
+    };
+
+    const { app: pageApp, elements, storage } = loadPublicApp(persistedValue);
+    (pageApp.resetGenerationResult as (options?: { clearPersisted?: boolean }) => void)();
+
+    expect(storage.has("easysticker:last-wechat-pack")).toBe(false);
+    expect(elements.get("generateState")?.textContent).toBe("等待生成");
+    expect(elements.get("wechatAiSummary")?.innerHTML).toContain("生成后在这里查看标题、数量、风格、参考图方式与导出文件");
+    expect(elements.get("wechatAiMetadataPreview")?.innerHTML).toContain("生成后在这里查看 ZIP 中的 metadata.json 内容");
+    expect(elements.get("wechatAiPreview")?.children).toHaveLength(1);
+    expect(elements.get("regenerateSubmit")?.disabled).toBe(true);
+  });
+
+  it("resets inputs, preview and storage with one-click reset", () => {
+    const persistedValue = {
+      version: 1,
+      uploadId: "upload-999",
+      prompt: "旧提示词",
+      title: "旧标题",
+      stickerCount: 16,
+      styles: ["像素风"],
+      hasGenerationAttempted: true,
+      result: {
+        packId: "pack-999",
+        downloadUrl: "/api/packs/pack-999/download",
+        stickers: [],
+        meta: {},
+        extras: {}
+      }
+    };
+
+    const { app: pageApp, elements, storage } = loadPublicApp(persistedValue);
+    (pageApp.resetAllState as () => void)();
+
+    expect(storage.has("easysticker:last-wechat-pack")).toBe(false);
+    expect(elements.get("wechatAiPrompt")?.value).toBe("");
+    expect(elements.get("wechatAiTitle")?.value).toBe("");
+    expect(elements.get("wechatAiAuthor")?.value).toBe("");
+    expect(elements.get("wechatAiVersion")?.value).toBe("");
+    expect(elements.get("wechatAiCopyright")?.value).toBe("");
+    expect(elements.get("wechatAiCount")?.value).toBe("8");
+    expect(elements.get("originalPreview")?.src).toBe("");
+    expect(elements.get("uploadState")?.textContent).toBe("等待上传");
+    expect(elements.get("globalNotice")?.textContent).toContain("已重置当前配置与最近结果");
+    expect(elements.get("wechatAiActions")?.children).toHaveLength(0);
+    expect(elements.get("wechatAiMetadataPreview")?.innerHTML).toContain("生成后在这里查看 ZIP 中的 metadata.json 内容");
+    expect(elements.get("regenerateSubmit")?.disabled).toBe(true);
+  });
+});

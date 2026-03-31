@@ -60,6 +60,11 @@ export function buildApp(config: AppConfig): FastifyInstance {
     prefix: "/"
   });
 
+  app.get("/@vite/client", async (_req, reply) => {
+    reply.header("content-type", "application/javascript; charset=utf-8");
+    return "export {};";
+  });
+
   app.register(registerUploadRoutes, { prefix: "/api" });
   app.register(registerAssetRoutes, { prefix: "/api" });
   app.register(registerPackRoutes, { prefix: "/api" });

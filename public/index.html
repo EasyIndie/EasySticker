@@ -7,56 +7,152 @@
     <link rel="stylesheet" href="/styles.css" />
   </head>
   <body>
-    <main class="container">
-      <header class="header">
+    <main class="page">
+      <header class="hero card">
+        <span class="badge">微信 AI 表情流程</span>
         <h1>EasySticker</h1>
-        <p class="muted">自动化生成并打包表情资源（MVP）</p>
+        <p class="hero-text">上传参考图，补充提示词，一键生成可预览、可下载的微信表情包。</p>
+        <div id="globalNotice" class="notice" aria-live="polite">先上传一张主体清晰的图片。</div>
       </header>
 
-      <section class="card">
-        <h2>上传图片</h2>
-        <form id="uploadForm">
-          <input id="file" name="file" type="file" accept="image/png,image/jpeg" required />
-          <button type="submit">上传</button>
-        </form>
-        <div class="stack">
-          <div class="muted">预览</div>
-          <img id="originalPreview" class="preview" alt="" />
-        </div>
-        <pre id="uploadResult" class="pre"></pre>
-      </section>
+      <section class="flow">
+        <article class="card step-card">
+          <div class="step-index">01</div>
+          <div class="step-head">
+            <h2>上传参考图</h2>
+            <p class="muted">支持 PNG、JPG，建议主体居中、背景简洁。</p>
+          </div>
+          <form id="uploadForm" class="step-body">
+            <label class="upload-panel" for="file">
+              <span class="upload-title"><span class="required-mark">*</span>选择图片</span>
+              <span class="upload-text">点击选择一张参考图，用于生成整套微信表情。</span>
+              <input id="file" name="file" type="file" accept="image/png,image/jpeg" required />
+            </label>
+            <button id="uploadSubmit" type="submit">上传图片</button>
+          </form>
+          <div id="uploadState" class="status-chip" aria-live="polite">等待上传</div>
+          <div class="preview-card">
+            <div class="section-title">原图预览</div>
+            <img id="originalPreview" class="preview" alt="上传参考图预览" />
+          </div>
+        </article>
 
-      <section class="card">
-        <h2>AI 生成微信表情（最小流程）</h2>
-        <form id="wechatAiForm">
-          <label class="inline">
-            referenceAssetId
-            <input id="wechatRefId" type="text" placeholder="默认用处理后/上传后的assetId" />
+        <article class="card step-card">
+          <div class="step-index">02</div>
+          <div class="step-head">
+            <h2>编辑提示词</h2>
+            <p class="muted">可先生成推荐提示词，再按你的需求微调。</p>
+          </div>
+          <div class="step-body prompt-actions">
+            <button id="wechatAiSuggest" type="button" class="secondary">生成推荐提示词</button>
+          </div>
+          <label class="field" for="wechatAiPrompt">
+            <span class="section-title"><span class="required-mark">*</span>提示词</span>
+            <textarea
+              id="wechatAiPrompt"
+              rows="5"
+              placeholder="例如：基于参考图主体，生成一组适用于微信聊天场景的可爱表情，动作自然，背景干净，主体完整。"
+            ></textarea>
           </label>
-          <label class="inline">
-            stickerCount
-            <input id="wechatAiCount" type="number" min="8" max="24" value="8" />
+          <label class="field" for="wechatAiTitle">
+            <span class="section-title"><span class="required-mark">*</span>表情包标题</span>
+            <input id="wechatAiTitle" type="text" placeholder="例如：小猫日常表情包" maxlength="48" />
           </label>
-          <label class="inline">
-            styles
-            <input id="wechatAiStyles" type="text" placeholder="扁平插画,3D卡通,日系Q版" />
+          <div class="config-grid">
+            <label class="field" for="wechatAiAuthor">
+              <span class="section-title"><span class="required-mark">*</span>作者名</span>
+              <input id="wechatAiAuthor" type="text" placeholder="例如：EasySticker Studio" maxlength="48" />
+            </label>
+            <label class="field" for="wechatAiVersion">
+              <span class="section-title">版本信息<span class="optional-mark">可选</span></span>
+              <input id="wechatAiVersion" type="text" placeholder="可选，例如：v1.0 / 2026 春季版" maxlength="48" />
+            </label>
+          </div>
+          <label class="field" for="wechatAiCopyright">
+            <span class="section-title">版权信息<span class="optional-mark">可选</span></span>
+            <input id="wechatAiCopyright" type="text" placeholder="可选，例如：© 2026 EasySticker Studio" maxlength="80" />
           </label>
-          <label class="inline">
-            title
-            <input id="wechatAiTitle" type="text" placeholder="可选" />
+          <div class="config-grid">
+            <label class="field" for="wechatAiCount">
+              <span class="section-title"><span class="required-mark">*</span>贴纸数量</span>
+              <input id="wechatAiCount" type="number" min="8" max="24" step="1" value="8" />
+            </label>
+            <div class="field">
+              <span class="section-title"><span class="required-mark">*</span>风格选择</span>
+              <div id="wechatAiStyleOptions" class="style-options"></div>
+            </div>
+          </div>
+          <div class="field">
+            <span class="section-title">赞赏功能<span class="optional-mark">可选</span></span>
+            <label class="toggle-row" for="wechatAiRewardEnabled">
+              <input id="wechatAiRewardEnabled" type="checkbox" />
+              <span>开启后自动生成赞赏引导图和赞赏感谢图</span>
+            </label>
+          </div>
+          <label id="wechatAiRewardMessageField" class="field" for="wechatAiRewardMessage" hidden>
+            <span class="section-title"><span class="required-mark">*</span>赞赏引导语</span>
+            <input
+              id="wechatAiRewardMessage"
+              type="text"
+              placeholder="例如：喜欢这套表情的话，欢迎赞赏支持创作"
+              maxlength="80"
+            />
           </label>
-          <button id="wechatAiSuggest" type="button">生成提示词</button>
-          <button type="submit">生成并打包</button>
-        </form>
-        <label class="inline">
-          prompt
-          <input id="wechatAiPrompt" type="text" placeholder="在这里编辑提示词" />
-        </label>
-        <div id="wechatAiZipLink" class="stack"></div>
-        <div id="wechatAiPreview" class="grid"></div>
-        <pre id="wechatAiResult" class="pre"></pre>
+          <div id="promptHint" class="muted">系统默认生成 8 张表情，并自动补齐封面、图标和横幅。</div>
+        </article>
+
+        <article class="card step-card">
+          <div class="step-index">03</div>
+          <div class="step-head">
+            <h2>生成表情</h2>
+            <p class="muted">基于上传图和提示词自动生成并打包。</p>
+          </div>
+          <form id="wechatAiForm" class="step-body">
+            <button id="generateSubmit" type="submit">开始生成</button>
+            <button id="regenerateSubmit" type="button" class="secondary" disabled>重新生成</button>
+            <button id="resetSubmit" type="button" class="secondary">一键重置</button>
+          </form>
+          <div id="generateState" class="status-chip" aria-live="polite">等待生成</div>
+        </article>
+
+        <article class="card step-card">
+          <div class="step-index">04</div>
+          <div class="step-head">
+            <h2>预览与下载</h2>
+            <p class="muted">生成后展示部分效果图，并提供 ZIP 下载。</p>
+          </div>
+          <div id="wechatAiFeedback" class="feedback-card" data-tone="idle" aria-live="polite">
+            <div class="section-title">预览状态</div>
+            <p class="muted">等待生成后展示 cover、icon、banner 与表情预览。</p>
+          </div>
+          <section class="export-confirm-panel" aria-labelledby="exportConfirmTitle">
+            <div class="export-confirm-head">
+              <div>
+                <div id="exportConfirmTitle" class="section-title">导出确认面板</div>
+                <p class="muted">下载前集中核对结果概览、导出信息与 metadata.json，确认标题、数量、版本和资源索引无误。</p>
+              </div>
+            </div>
+            <div id="wechatAiSummary" class="summary-card export-confirm-card">
+              <div class="section-title">结果概览</div>
+              <p class="muted">生成后在这里查看标题、数量、风格、参考图方式与导出文件。</p>
+            </div>
+            <div id="wechatAiZipLink" class="download-slot"></div>
+            <div id="wechatAiActions" class="action-row"></div>
+            <div id="wechatAiExportInfo" class="summary-card export-confirm-card">
+              <div class="section-title">导出信息</div>
+              <p class="muted">确认对外展示字段、packId 与 ZIP 文件名，确认后可直接复制。</p>
+            </div>
+            <div id="wechatAiMetadataPreview" class="summary-card export-confirm-card">
+              <div class="section-title">metadata.json</div>
+              <p class="muted">确认 packId、资源映射与扩展资源字段，再继续下载或提审。</p>
+            </div>
+          </section>
+          <div id="wechatAiExtras" class="asset-grid"></div>
+          <div id="wechatAiPreview" class="grid"></div>
+        </article>
       </section>
     </main>
+    <div id="toastNotice" class="toast-notice" data-tone="info" data-visible="false" aria-live="assertive"></div>
 
     <script src="/app.js"></script>
   </body>
