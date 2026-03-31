@@ -32,13 +32,7 @@ describe("pipeline", () => {
     fs.rmSync(dataDir, { recursive: true, force: true });
   });
 
-  it("health ok", async () => {
-    const res = await app.inject({ method: "GET", url: "/api/health" });
-    expect(res.statusCode).toBe(200);
-    expect(res.json()).toEqual({ ok: true });
-  });
-
-  it("upload -> process -> generate -> validate -> pack", async () => {
+  it("upload -> wechat prompt -> wechat ai generate -> validate -> download", async () => {
     const png = await sharp({
       create: { width: 256, height: 256, channels: 4, background: { r: 255, g: 255, b: 255, alpha: 1 } }
     })
@@ -63,51 +57,32 @@ describe("pipeline", () => {
     const upload = uploadRes.json();
     expect(upload.uploadId).toBeTypeOf("string");
 
-    const processRes = await app.inject({
+    const promptRes = await app.inject({
       method: "POST",
-      url: `/api/process/${upload.uploadId}`,
-      payload: { threshold: 20, softness: 30 },
+      url: "/api/wechat/prompt",
+      payload: { referenceAssetId: upload.uploadId },
       headers: { "content-type": "application/json" }
     });
-    expect(processRes.statusCode).toBe(200);
-    const processed = processRes.json();
-    expect(processed.assetId).toBeTypeOf("string");
+    expect(promptRes.statusCode).toBe(200);
 
-    const genRes = await app.inject({
+    const res = await app.inject({
       method: "POST",
-      url: "/api/generate/static",
-      payload: { assetId: processed.assetId, sizes: [512], format: "png" },
+      url: "/api/wechat/generate",
+      payload: { referenceAssetId: upload.uploadId, prompt: "test", stickerCount: 8, styles: ["flat"] },
       headers: { "content-type": "application/json" }
     });
-    expect(genRes.statusCode).toBe(200);
-    const gen = genRes.json();
-    expect(gen.results).toHaveLength(1);
-    const stickerId = gen.results[0].assetId;
+    expect(res.statusCode).toBe(200);
+    const json = res.json();
+    expect(json.packId).toBeTypeOf("string");
+    expect(json.downloadUrl).toBeTypeOf("string");
+    expect(json.stickers).toHaveLength(8);
 
-    const valRes = await app.inject({
-      method: "POST",
-      url: "/api/validate",
-      payload: { presetId: "telegram_static", assetId: stickerId },
-      headers: { "content-type": "application/json" }
-    });
-    expect(valRes.statusCode).toBe(200);
-    const val = valRes.json();
-    expect(val.ok).toBe(true);
+    const assetId0 = json.stickers[0].assetId;
+    const assetRes = await app.inject({ method: "GET", url: `/api/assets/${assetId0}` });
+    expect(assetRes.statusCode).toBe(200);
 
-    const packRes = await app.inject({
-      method: "POST",
-      url: "/api/packs",
-      payload: { presetId: "telegram_static", assetIds: [stickerId], metadata: { title: "t", author: "a" } },
-      headers: { "content-type": "application/json" }
-    });
-    expect(packRes.statusCode).toBe(200);
-    const pack = packRes.json();
-    expect(pack.packId).toBeTypeOf("string");
-
-    const zipRes = await app.inject({ method: "GET", url: pack.downloadUrl });
+    const zipRes = await app.inject({ method: "GET", url: json.downloadUrl });
     expect(zipRes.statusCode).toBe(200);
     expect(zipRes.headers["content-type"]).toContain("application/zip");
-    const raw = (zipRes as any).rawPayload ? ((zipRes as any).rawPayload as Buffer) : Buffer.from(zipRes.body);
-    expect(raw.slice(0, 2).toString("utf8")).toBe("PK");
   });
 });

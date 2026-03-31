@@ -11,14 +11,10 @@ import staticPlugin from "@fastify/static";
 import swagger from "@fastify/swagger";
 import swaggerUi from "@fastify/swagger-ui";
 import { buildLogger } from "./lib/logger";
-import { registerHealthRoutes } from "./routes/health";
 import { registerUploadRoutes } from "./routes/uploads";
 import { registerAssetRoutes } from "./routes/assets";
-import { registerProcessRoutes } from "./routes/process";
-import { registerGenerateRoutes } from "./routes/generate";
-import { registerValidateRoutes } from "./routes/validate";
 import { registerPackRoutes } from "./routes/packs";
-import { registerPublishRoutes } from "./routes/publish";
+import { registerWeChatAiRoutes } from "./routes/wechatAi";
 
 export type AppConfig = {
   host: string;
@@ -64,14 +60,10 @@ export function buildApp(config: AppConfig): FastifyInstance {
     prefix: "/"
   });
 
-  app.register(registerHealthRoutes, { prefix: "/api" });
   app.register(registerUploadRoutes, { prefix: "/api" });
   app.register(registerAssetRoutes, { prefix: "/api" });
-  app.register(registerProcessRoutes, { prefix: "/api" });
-  app.register(registerGenerateRoutes, { prefix: "/api" });
-  app.register(registerValidateRoutes, { prefix: "/api" });
   app.register(registerPackRoutes, { prefix: "/api" });
-  app.register(registerPublishRoutes, { prefix: "/api" });
+  app.register(registerWeChatAiRoutes, { prefix: "/api" });
 
   return app;
 }
