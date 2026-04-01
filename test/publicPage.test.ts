@@ -39,6 +39,7 @@ class FakeElement {
   type: string;
   alt: string;
   clicked: boolean;
+  focused: boolean;
   files?: { 0?: { name: string }; length: number };
   classList: { add: (...tokens: string[]) => void };
   listeners: Map<string, (event?: { preventDefault: () => void }) => void | Promise<void>>;
@@ -64,6 +65,7 @@ class FakeElement {
     this.type = "";
     this.alt = "";
     this.clicked = false;
+    this.focused = false;
     this.files = { length: 0 };
     this.listeners = new Map();
     this.classList = {
@@ -116,6 +118,11 @@ class FakeElement {
     return undefined;
   }
 
+  focus() {
+    this.focused = true;
+    return undefined;
+  }
+
   reset() {
     this.value = "";
     this.checked = false;
@@ -129,6 +136,7 @@ function createAppSandbox(persistedValue?: Record<string, unknown>) {
     "uploadForm",
     "uploadSubmit",
     "uploadState",
+    "originalPreviewPlaceholder",
     "originalPreview",
     "wechatAiForm",
     "generateSubmit",
@@ -157,6 +165,23 @@ function createAppSandbox(persistedValue?: Record<string, unknown>) {
     "promptHint",
     "globalNotice",
     "toastNotice",
+    "generateErrorSummary",
+    "generateErrorList",
+    "uploadHint",
+    "wechatAiPromptError",
+    "wechatAiTitleHint",
+    "wechatAiTitleError",
+    "wechatAiAuthorHint",
+    "wechatAiAuthorError",
+    "wechatAiVersionHint",
+    "wechatAiCopyrightHint",
+    "wechatAiCountHint",
+    "wechatAiCountError",
+    "wechatAiStyleHint",
+    "wechatAiStyleError",
+    "wechatAiRewardEnabledHint",
+    "wechatAiRewardHint",
+    "wechatAiRewardMessageError",
     "file"
   ];
 
@@ -265,6 +290,12 @@ function findChildByText(parent: FakeElement | undefined, text: string) {
   return parent?.children.find((child) => child.textContent === text);
 }
 
+function getErrorSummaryTexts(elements: Map<string, FakeElement>) {
+  return elements
+    .get("generateErrorList")
+    ?.children.map((child) => child.children[0]?.textContent ?? child.textContent);
+}
+
 describe("public page", () => {
   const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), "easysticker-public-"));
   const app = buildApp({ host: "127.0.0.1", port: 0, dataDir, logLevel: "silent" });
@@ -305,7 +336,26 @@ describe("public page", () => {
     expect(html).toContain('id="wechatAiMetadataPreview"');
     expect(html).toContain('id="wechatAiActions"');
     expect(html).toContain('id="toastNotice"');
+    expect(html).toContain('id="generateErrorSummary"');
+    expect(html).toContain('id="generateErrorList"');
+    expect(html).toContain('id="wechatAiPromptError"');
+    expect(html).toContain('id="wechatAiTitleHint"');
+    expect(html).toContain('id="wechatAiTitleError"');
+    expect(html).toContain('id="wechatAiStyleHint"');
+    expect(html).toContain('id="wechatAiStyleError"');
     expect(html).toContain("导出确认面板");
+    expect(html).toContain("打开组件库文档页");
+    expect(html).toContain('href="/components.html"');
+    expect(html).toContain('href="/design-spec.html"');
+    expect(html).toContain('href="/compatibility-report.html"');
+    expect(html).toContain('href="/performance-report.html"');
+    expect(html).toContain('id="uploadHint"');
+    expect(html).toContain('aria-describedby="uploadHint"');
+    expect(html).toContain('id="wechatAiVersionHint"');
+    expect(html).toContain('id="wechatAiCopyrightHint"');
+    expect(html).toContain('id="wechatAiRewardEnabledHint"');
+    expect(html).toContain("建议上传主体清晰、边缘完整的 PNG 或 JPG");
+    expect(html).toContain("建议在提示词中补充主体、情绪、动作和背景限制");
     expect(html).toContain('<span class="required-mark">*</span>选择图片');
     expect(html).toContain('<span class="required-mark">*</span>提示词');
     expect(html).toContain('<span class="required-mark">*</span>表情包标题');
@@ -318,6 +368,10 @@ describe("public page", () => {
     expect(html).toContain('<span class="required-mark">*</span>赞赏引导语');
     expect(html.indexOf('class="export-confirm-panel"')).toBeLessThan(html.indexOf('id="wechatAiSummary"'));
     expect(html).toContain("结果概览、导出信息与 metadata.json");
+    expect(html).toContain("令牌驱动的页面层与组件规范");
+    expect(html).toContain("A11y Error Summary");
+    expect(html).toContain("Compatibility Report");
+    expect(html).toContain("Performance Report");
     expect(html).not.toContain("<pre");
     expect(html).not.toContain("referenceAssetId");
     expect(html).not.toContain("stickerCount");
@@ -393,6 +447,84 @@ describe("public page", () => {
     expect(res.body).toContain("生成失败后可重新生成");
     expect(res.body).toContain("easysticker:last-wechat-pack");
     expect(res.body).toContain("restorePersistedPackResult");
+    expect(res.body).toContain("generateErrorSummary");
+    expect(res.body).toContain("FIELD_A11Y_CONFIGS");
+    expect(res.body).toContain("syncGenerateErrorSummary");
+    expect(res.body).toContain("jumpToInvalidField");
+    expect(res.body).toContain("error-summary-link");
+    expect(res.body).toContain("建议在提示词中补充主体、情绪、动作和背景限制");
+  });
+
+  it("serves the component library documentation page", async () => {
+    const res = await app.inject({ method: "GET", url: "/components.html" });
+    expect(res.statusCode).toBe(200);
+    expect(res.headers["content-type"]).toContain("text/html");
+
+    const html = res.body;
+    expect(html).toContain("EasySticker 组件库文档页");
+    expect(html).toContain("Design Tokens");
+    expect(html).toContain("基础令牌与语义映射");
+    expect(html).toContain("无障碍策略");
+    expect(html).toContain("错误说明容器");
+    expect(html).toContain("导出确认卡");
+    expect(html).toContain('href="/"');
+    expect(html).toContain('href="/design-spec.html"');
+    expect(html).toContain('href="/compatibility-report.html"');
+    expect(html).toContain('href="/performance-report.html"');
+    expect(html).toContain("role=\"main\"");
+  });
+
+  it("serves the design spec page", async () => {
+    const res = await app.inject({ method: "GET", url: "/design-spec.html" });
+    expect(res.statusCode).toBe(200);
+    expect(res.headers["content-type"]).toContain("text/html");
+
+    const html = res.body;
+    expect(html).toContain("EasySticker 设计规范页");
+    expect(html).toContain("设计原则");
+    expect(html).toContain("令牌使用约束");
+    expect(html).toContain("帮助文案策略");
+    expect(html).toContain("新增页面扩展规则");
+    expect(html).toContain('href="/compatibility-report.html"');
+    expect(html).toContain('href="/performance-report.html"');
+    expect(html).toContain("role=\"main\"");
+  });
+
+  it("serves the compatibility report page", async () => {
+    const res = await app.inject({ method: "GET", url: "/compatibility-report.html" });
+    expect(res.statusCode).toBe(200);
+    expect(res.headers["content-type"]).toContain("text/html");
+
+    const html = res.body;
+    expect(html).toContain("EasySticker 兼容性测试报告页");
+    expect(html).toContain("兼容性矩阵");
+    expect(html).toContain("桌面 Chromium 内核");
+    expect(html).toContain("A11y Checks");
+    expect(html).toContain("已知边界与后续建议");
+    expect(html).toContain('href="/design-spec.html"');
+    expect(html).toContain('href="/performance-report.html"');
+    expect(html).toContain("摘要跳转字段");
+    expect(html).toContain("性能基线/对比报告页");
+    expect(html).toContain("五页互通");
+    expect(html).toContain("一键跳转到对应字段");
+    expect(html).toContain("role=\"main\"");
+  });
+
+  it("serves the performance report page", async () => {
+    const res = await app.inject({ method: "GET", url: "/performance-report.html" });
+    expect(res.statusCode).toBe(200);
+    expect(res.headers["content-type"]).toContain("text/html");
+
+    const html = res.body;
+    expect(html).toContain("EasySticker 性能基线/对比报告页");
+    expect(html).toContain("性能基线指标");
+    expect(html).toContain("本轮改造对比");
+    expect(html).toContain("本机实时采样");
+    expect(html).toContain("getEntriesByType(\"navigation\")");
+    expect(html).toContain("错误修复路径");
+    expect(html).toContain("支持回跳");
+    expect(html).toContain('href="/compatibility-report.html"');
+    expect(html).toContain("role=\"main\"");
   });
 
   it("serves a noop vite client shim for embedded preview environments", async () => {
@@ -635,6 +767,12 @@ describe("public page", () => {
     expect(fetchCalls).toHaveLength(0);
     expect(elements.get("globalNotice")?.textContent).toBe("请填写表情包标题。");
     expect(titleEl["aria-invalid"]).toBe("true");
+    expect(titleEl["aria-describedby"]).toContain("wechatAiTitleHint");
+    expect(titleEl["aria-describedby"]).toContain("wechatAiTitleError");
+    expect(elements.get("wechatAiTitleError")?.textContent).toBe("请填写表情包标题。");
+    expect(elements.get("generateErrorSummary")?.hidden).toBe(false);
+    expect(elements.get("generateErrorSummary")?.focused).toBe(true);
+    expect(getErrorSummaryTexts(elements)).toEqual(["表情包标题：请填写表情包标题。"]);
 
     titleEl.value = "新的标题";
     authorEl.value = "";
@@ -642,6 +780,7 @@ describe("public page", () => {
     expect(fetchCalls).toHaveLength(0);
     expect(elements.get("globalNotice")?.textContent).toBe("请填写作者名。");
     expect(authorEl["aria-invalid"]).toBe("true");
+    expect(getErrorSummaryTexts(elements)).toEqual(["作者名：请填写作者名。"]);
 
     authorEl.value = "新的作者";
     elements.get("wechatAiRewardEnabled")!.checked = true;
@@ -651,6 +790,86 @@ describe("public page", () => {
     expect(elements.get("globalNotice")?.textContent).toBe("开启赞赏功能后，请填写赞赏引导语。");
     const rewardMessageEl = elements.get("wechatAiRewardMessage")! as FakeElement & Record<string, string>;
     expect(rewardMessageEl["aria-invalid"]).toBe("true");
+    expect(rewardMessageEl["aria-describedby"]).toContain("wechatAiRewardHint");
+    expect(rewardMessageEl["aria-describedby"]).toContain("wechatAiRewardMessageError");
+    expect(elements.get("wechatAiRewardMessageError")?.textContent).toBe("开启赞赏功能后，请填写赞赏引导语。");
+    expect(getErrorSummaryTexts(elements)).toEqual([
+      "赞赏引导语：开启赞赏功能后，请填写赞赏引导语。"
+    ]);
+  });
+
+  it("jumps from error summary items to the related field", async () => {
+    const persistedValue = {
+      version: 1,
+      uploadId: "upload-summary-jump",
+      prompt: "生成一组猫咪表情",
+      title: "",
+      author: "EasySticker Studio",
+      stickerCount: 8,
+      styles: ["可爱"],
+      hasGenerationAttempted: true,
+      result: {
+        packId: "pack-summary-jump",
+        downloadUrl: "/api/packs/pack-summary-jump/download",
+        stickers: [],
+        meta: {},
+        extras: {}
+      }
+    };
+
+    const { app: pageApp, elements, fetchCalls } = loadPublicApp(persistedValue);
+    await (pageApp.generateWechatPack as () => Promise<void>)();
+
+    expect(fetchCalls).toHaveLength(0);
+    const errorJumpButton = elements.get("generateErrorList")?.children[0]?.children[0];
+    expect(errorJumpButton?.textContent).toBe("表情包标题：请填写表情包标题。");
+
+    await errorJumpButton?.listeners.get("click")?.();
+
+    expect(elements.get("wechatAiTitle")?.focused).toBe(true);
+  });
+
+  it("aggregates multiple validation errors into the a11y summary container", async () => {
+    const persistedValue = {
+      version: 1,
+      uploadId: "upload-aggregate",
+      prompt: "",
+      title: "",
+      author: "",
+      stickerCount: 8,
+      styles: ["可爱"],
+      hasGenerationAttempted: true,
+      result: {
+        packId: "pack-aggregate",
+        downloadUrl: "/api/packs/pack-aggregate/download",
+        stickers: [],
+        meta: { count: 8, styles: ["可爱"] },
+        extras: {}
+      }
+    };
+
+    const { app: pageApp, elements, fetchCalls } = loadPublicApp(persistedValue);
+    const promptEl = elements.get("wechatAiPrompt")! as FakeElement & Record<string, string>;
+    const titleEl = elements.get("wechatAiTitle")! as FakeElement & Record<string, string>;
+    const authorEl = elements.get("wechatAiAuthor")! as FakeElement & Record<string, string>;
+    promptEl.value = "";
+    titleEl.value = "";
+    authorEl.value = "";
+
+    await (pageApp.generateWechatPack as () => Promise<void>)();
+
+    expect(fetchCalls).toHaveLength(0);
+    expect(elements.get("globalNotice")?.textContent).toBe("请先填写提示词。");
+    expect(elements.get("generateState")?.textContent).toBe("待处理 3 项输入问题");
+    expect(elements.get("generateErrorSummary")?.hidden).toBe(false);
+    expect(getErrorSummaryTexts(elements)).toEqual([
+      "提示词：请先填写提示词。",
+      "表情包标题：请填写表情包标题。",
+      "作者名：请填写作者名。"
+    ]);
+    expect(promptEl["aria-describedby"]).toContain("promptHint");
+    expect(promptEl["aria-describedby"]).toContain("wechatAiPromptError");
+    expect(elements.get("wechatAiPromptError")?.textContent).toBe("请先填写提示词。");
   });
 
   it("renders all restored sticker previews instead of truncating to six", () => {

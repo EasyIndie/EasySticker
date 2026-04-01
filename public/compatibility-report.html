@@ -1,0 +1,134 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>EasySticker 兼容性测试报告</title>
+    <meta name="theme-color" content="#07c160" />
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <a href="#compatibilityMain" class="skip-link">跳到主要内容</a>
+    <main id="compatibilityMain" class="page docs-page" role="main">
+      <header class="hero card">
+        <div class="hero-topline">
+          <span class="badge badge-neutral">Compatibility Report</span>
+          <nav class="hero-actions" aria-label="兼容性报告导航">
+            <a class="hero-link" href="/">返回生成页</a>
+            <a class="hero-link" href="/components.html">查看组件库</a>
+            <a class="hero-link" href="/design-spec.html">查看设计规范</a>
+            <a class="hero-link" href="/performance-report.html">查看性能报告</a>
+          </nav>
+        </div>
+        <h1>EasySticker 兼容性测试报告页</h1>
+        <p class="hero-text">汇总当前页面在响应式布局、可访问性基线、静态资源与自动化测试覆盖范围上的前端兼容性检查结果。</p>
+        <div class="notice" data-tone="info">
+          当前报告基于仓库内静态页面实现、自动化测试用例与设计基线整理，不等同于浏览器云真机全量回归结果。
+        </div>
+      </header>
+
+      <section class="report-grid" aria-label="总体结论">
+        <article class="report-card card">
+          <div class="section-title">Overall</div>
+          <h2>总体结论</h2>
+          <p class="muted">首页、组件库文档页、设计规范页与兼容性报告页均复用同一套样式令牌和静态资源加载方式，适合继续扩展多页面信息架构。</p>
+          <div class="report-status" data-tone="success">自动化测试通过后可作为当前前端基线版本。</div>
+        </article>
+        <article class="report-card card">
+          <div class="section-title">Scope</div>
+          <h2>覆盖范围</h2>
+          <ul class="spec-list">
+            <li>静态页面可访问性结构：main、跳转链接、导航、错误摘要。</li>
+            <li>表单帮助文案：aria-describedby、aria-invalid、错误信息回连与摘要跳转字段。</li>
+            <li>响应式布局：980px 主容器与 720px 以下单列回落。</li>
+            <li>资源页互链：生成页、组件库、设计规范、兼容性报告与性能报告五页互通。</li>
+          </ul>
+        </article>
+      </section>
+
+      <section class="docs-card card" aria-labelledby="matrixTitle">
+        <div class="section-title">Matrix</div>
+        <h2 id="matrixTitle">兼容性矩阵</h2>
+        <div class="table-scroll">
+          <table class="report-table">
+            <thead>
+              <tr>
+                <th>检查项</th>
+                <th>基线环境</th>
+                <th>当前结论</th>
+                <th>说明</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>桌面 Chromium 内核</td>
+                <td>Chrome / Edge 新版</td>
+                <td><span class="report-status report-status-inline" data-tone="success">通过</span></td>
+                <td>静态页面结构、按钮状态、预览容器与表单错误摘要基于标准 DOM API 实现。</td>
+              </tr>
+              <tr>
+                <td>桌面 Safari</td>
+                <td>Safari 17+</td>
+                <td><span class="report-status report-status-inline" data-tone="success">通过基线</span></td>
+                <td>样式采用原生 CSS 特性与渐进增强策略，避免依赖实验性选择器。</td>
+              </tr>
+              <tr>
+                <td>移动端 WebKit / Chromium</td>
+                <td>iOS Safari / Android Chrome</td>
+                <td><span class="report-status report-status-inline" data-tone="success">通过基线</span></td>
+                <td>720px 以下统一切换为单列布局，文档导航与按钮支持整行展示。</td>
+              </tr>
+              <tr>
+                <td>键盘操作</td>
+                <td>Tab / Shift+Tab / Enter</td>
+                <td><span class="report-status report-status-inline" data-tone="success">通过</span></td>
+                <td>跳转链接、样式芯片、按钮与链接均保留清晰 focus ring。</td>
+              </tr>
+              <tr>
+                <td>减少动态效果</td>
+                <td>prefers-reduced-motion</td>
+                <td><span class="report-status report-status-inline" data-tone="success">通过</span></td>
+                <td>动画与过渡在 reduced motion 模式下显著缩短，降低视觉负担。</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="docs-grid" aria-label="测试明细">
+        <article class="docs-card card">
+          <div class="section-title">A11y Checks</div>
+          <h2>无障碍检查</h2>
+          <ul class="spec-list">
+            <li>必填字段保留错误节点，并在校验失败时自动补齐 aria-describedby。</li>
+            <li>错误摘要容器使用 role="alert" 与 aria-live="assertive" 聚合问题，并支持一键跳转到对应字段。</li>
+            <li>帮助文案覆盖上传、提示词、版本、版权与赞赏开关，减少理解成本。</li>
+            <li>下载、复制与折叠操作保留可见的键盘焦点样式。</li>
+          </ul>
+        </article>
+        <article class="docs-card card">
+          <div class="section-title">Responsive Checks</div>
+          <h2>响应式检查</h2>
+          <ul class="spec-list">
+            <li>首页预览区、资源区、文档页网格均在窄屏回落为单列结构。</li>
+            <li>hero 导航在小屏宽度下自动纵向堆叠，避免链接溢出。</li>
+            <li>下载按钮与文档链接在移动端可扩展为整行宽度，保证点击区域。</li>
+            <li>资源卡、预览卡与报告表格容器提供统一边框和间距节奏。</li>
+          </ul>
+        </article>
+      </section>
+
+      <section class="docs-card card" aria-labelledby="riskTitle">
+        <div class="section-title">Risks</div>
+        <h2 id="riskTitle">已知边界与后续建议</h2>
+        <ul class="spec-list">
+          <li>当前兼容性结论以自动化测试和代码基线为主，尚未覆盖真机截图比对。</li>
+          <li>后续若引入更复杂动画、拖拽上传或图表组件，需要补充专项兼容性用例。</li>
+          <li>建议在 CI 中补充页面快照或视觉回归测试，持续验证多页面导航和文案变更。</li>
+          <li>性能相关的资源体积、交互耗时与 DOM 复杂度请结合性能基线/对比报告页持续跟踪。</li>
+          <li>若未来支持国际化，需要验证文案变长后的换行、按钮宽度与表格布局表现。</li>
+        </ul>
+      </section>
+    </main>
+  </body>
+</html>
