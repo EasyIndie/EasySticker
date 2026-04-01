@@ -22,6 +22,8 @@ const wechatAiRewardEnabled = document.getElementById("wechatAiRewardEnabled");
 const wechatAiRewardMessageField = document.getElementById("wechatAiRewardMessageField");
 const wechatAiRewardMessage = document.getElementById("wechatAiRewardMessage");
 const wechatAiStyleOptions = document.getElementById("wechatAiStyleOptions");
+const wechatAiCountDec = document.getElementById("wechatAiCountDec");
+const wechatAiCountInc = document.getElementById("wechatAiCountInc");
 const wechatAiSummary = document.getElementById("wechatAiSummary");
 const wechatAiExportInfo = document.getElementById("wechatAiExportInfo");
 const wechatAiMetadataPreview = document.getElementById("wechatAiMetadataPreview");
@@ -343,6 +345,19 @@ function syncRewardFields() {
   }
 }
 
+function setCountValue(next) {
+  const val = Math.max(MIN_STICKER_COUNT, Math.min(MAX_STICKER_COUNT, Number(next || DEFAULT_STICKER_COUNT)));
+  wechatAiCount.value = String(val);
+  setFieldInvalid(wechatAiCount, false);
+  setPromptHint(currentStyles);
+  if (wechatAiCountDec) {
+    wechatAiCountDec.disabled = val <= MIN_STICKER_COUNT;
+  }
+  if (wechatAiCountInc) {
+    wechatAiCountInc.disabled = val >= MAX_STICKER_COUNT;
+  }
+}
+
 function renderStyleOptions(styles = DEFAULT_STYLE_OPTIONS) {
   availableStyles = Array.isArray(styles) && styles.length ? [...new Set(styles.filter(Boolean))] : [...DEFAULT_STYLE_OPTIONS];
   currentStyles = currentStyles.filter((item) => availableStyles.includes(item));
@@ -357,6 +372,7 @@ function renderStyleOptions(styles = DEFAULT_STYLE_OPTIONS) {
     button.className = "style-chip";
     button.dataset.selected = currentStyles.includes(style) ? "true" : "false";
     button.setAttribute("aria-pressed", currentStyles.includes(style) ? "true" : "false");
+    button.setAttribute("aria-describedby", "wechatAiStyleChipHelp wechatAiStyleHint");
     button.textContent = style;
     button.addEventListener("click", () => {
       if (currentStyles.includes(style)) {
@@ -1563,12 +1579,79 @@ wechatAiCount.addEventListener("change", () => {
   setPromptHint(currentStyles);
 });
 
+wechatAiCount.addEventListener("keydown", (event) => {
+  const key = event?.key;
+  if (key === "ArrowUp") {
+    event.preventDefault?.();
+    setCountValue(Number(wechatAiCount.value || DEFAULT_STICKER_COUNT) + 1);
+  } else if (key === "ArrowDown") {
+    event.preventDefault?.();
+    setCountValue(Number(wechatAiCount.value || DEFAULT_STICKER_COUNT) - 1);
+  }
+});
+
+wechatAiCount.addEventListener("input", () => {
+  setCountValue(Number(wechatAiCount.value || DEFAULT_STICKER_COUNT));
+});
+
+wechatAiCountDec?.addEventListener("click", () => {
+  setCountValue(Number(wechatAiCount.value || DEFAULT_STICKER_COUNT) - 1);
+});
+
+wechatAiCountInc?.addEventListener("click", () => {
+  setCountValue(Number(wechatAiCount.value || DEFAULT_STICKER_COUNT) + 1);
+});
+
 wechatAiRewardEnabled.addEventListener("change", () => {
   syncRewardFields();
   setPromptHint(currentStyles);
   renderExtraAssets(lastPackResult?.extras ?? {}, lastPackResult ? "success" : "idle");
 });
 
+wechatAiStyleOptions.addEventListener("focus", (event) => {
+  if (event?.target === wechatAiStyleOptions) {
+    const chips = Array.from(wechatAiStyleOptions.querySelectorAll(".style-chip"));
+    const firstSelected = chips.find((btn) => btn.dataset.selected === "true");
+    (firstSelected || chips[0])?.focus?.();
+  }
+});
+
+wechatAiStyleOptions.addEventListener("keydown", (event) => {
+  const key = event?.key;
+  const chips = Array.from(wechatAiStyleOptions.querySelectorAll(".style-chip"));
+  if (!chips.length) return;
+  const currentIndex = Math.max(
+    0,
+    chips.findIndex((btn) => btn === document.activeElement)
+  );
+  let nextIndex = currentIndex;
+  if (key === "ArrowRight" || key === "ArrowDown") {
+    event.preventDefault?.();
+    nextIndex = currentIndex + 1 >= chips.length ? 0 : currentIndex + 1;
+    chips[nextIndex]?.focus?.();
+  } else if (key === "ArrowLeft" || key === "ArrowUp") {
+    event.preventDefault?.();
+    nextIndex = currentIndex - 1 < 0 ? chips.length - 1 : currentIndex - 1;
+    chips[nextIndex]?.focus?.();
+  } else if (key === "Home") {
+    event.preventDefault?.();
+    chips[0]?.focus?.();
+  } else if (key === "End") {
+    event.preventDefault?.();
+    chips[chips.length - 1]?.focus?.();
+  } else if (key === "Enter" || key === " ") {
+    event.preventDefault?.();
+    const active = chips[currentIndex];
+    active?.click?.();
+  }
+});
+
+wechatAiForm.addEventListener("keydown", async (event) => {
+  if (event?.ctrlKey && event?.key === "Enter") {
+    event.preventDefault?.();
+    await generateWechatPack();
+  }
+});
 wechatAiRewardMessage.addEventListener("input", () => {
   currentRewardMessage = wechatAiRewardMessage.value.trim();
   setFieldInvalid(wechatAiRewardMessage, false);
