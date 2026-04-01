@@ -57,7 +57,11 @@ export function buildApp(config: AppConfig): FastifyInstance {
 
   app.register(staticPlugin, {
     root: path.join(process.cwd(), "public"),
-    prefix: "/"
+    prefix: "/",
+    cacheControl: true,
+    maxAge: "3600",
+    immutable: false,
+    decorateReply: false
   });
 
   app.get("/@vite/client", async (_req, reply) => {

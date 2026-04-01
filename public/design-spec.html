@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>EasySticker 设计规范</title>
+    <meta name="theme-color" content="#07c160" />
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <a href="#designSpecMain" class="skip-link">跳到主要内容</a>
+    <main id="designSpecMain" class="page docs-page" role="main">
+      <header class="hero card">
+        <div class="hero-topline">
+          <span class="badge badge-neutral">Design Spec</span>
+          <nav class="hero-actions" aria-label="设计规范导航">
+            <a class="hero-link" href="/">返回生成页</a>
+            <a class="hero-link" href="/components.html">查看组件库</a>
+            <a class="hero-link" href="/compatibility-report.html">查看兼容性报告</a>
+            <a class="hero-link" href="/performance-report.html">查看性能报告</a>
+          </nav>
+        </div>
+        <h1>EasySticker 设计规范页</h1>
+        <p class="hero-text">沉淀首页流程、视觉层级、表单帮助文案与交互反馈规则，确保后续新增页面仍然遵循同一套令牌和可访问性约束。</p>
+        <div class="notice" data-tone="info">
+          该页面聚焦规范定义，不替代自动化验证结果；兼容性结论与性能基线统一收敛到专项报告页。
+        </div>
+      </header>
+
+      <section class="docs-grid" aria-label="规范概览">
+        <article class="docs-card card">
+          <div class="section-title">Principles</div>
+          <h2>设计原则</h2>
+          <ul class="spec-list">
+            <li>以单页四步流程为核心，优先保证上传、编辑、生成、下载的线性可理解性。</li>
+            <li>优先使用语义令牌，不在业务组件里直接写死颜色、间距或圆角。</li>
+            <li>帮助文案与错误文案分层管理，字段解释通过 aria-describedby 与控件绑定。</li>
+            <li>结果摘要默认折叠，兼顾扫描效率与高密度信息展示。</li>
+          </ul>
+        </article>
+        <article class="docs-card card">
+          <div class="section-title">Layout</div>
+          <h2>布局基线</h2>
+          <ul class="spec-list">
+            <li>页面主容器最大宽度 980px，外边距居中，移动端统一回落到单列栅格。</li>
+            <li>主流程卡片使用 16px 内边距、14px 圆角与中等阴影，保证层级稳定。</li>
+            <li>预览区、资源区与文档区共享同一套卡片容器模式，避免视觉碎片化。</li>
+            <li>操作区按钮按主操作、次操作、信息跳转三层优先级排列。</li>
+          </ul>
+        </article>
+      </section>
+
+      <section class="docs-card card" aria-labelledby="tokenUsageTitle">
+        <div class="section-title">Token Usage</div>
+        <h2 id="tokenUsageTitle">令牌使用约束</h2>
+        <div class="token-grid">
+          <article class="token-card">
+            <div class="token-swatch token-swatch-primary"></div>
+            <div class="token-meta">
+              <span class="token-name">Action Tokens</span>
+              <span class="token-value">--color-primary / --color-primary-soft / --color-primary-border</span>
+              <span class="token-value">用于主按钮、选中态样式芯片与成功路径强调。</span>
+            </div>
+          </article>
+          <article class="token-card">
+            <div class="token-swatch token-swatch-info"></div>
+            <div class="token-meta">
+              <span class="token-name">Info Tokens</span>
+              <span class="token-value">--color-info / --color-info-soft / --color-info-border</span>
+              <span class="token-value">用于信息面板、导出确认区、聚焦与辅助说明。</span>
+            </div>
+          </article>
+          <article class="token-card">
+            <div class="token-swatch token-swatch-danger"></div>
+            <div class="token-meta">
+              <span class="token-name">Danger Tokens</span>
+              <span class="token-value">--color-danger / --color-danger-soft / --color-danger-border</span>
+              <span class="token-value">用于错误摘要、字段校验、失败状态与风险提示。</span>
+            </div>
+          </article>
+          <article class="token-card">
+            <div class="token-swatch token-swatch-surface"></div>
+            <div class="token-meta">
+              <span class="token-name">Surface Tokens</span>
+              <span class="token-value">--color-surface-primary / secondary / tertiary / elevated</span>
+              <span class="token-value">用于页面背景、卡片分层、棋盘预览承载与文档容器。</span>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <section class="docs-grid" aria-label="表单与反馈规范">
+        <article class="docs-card card">
+          <div class="section-title">Form Help</div>
+          <h2>帮助文案策略</h2>
+          <ul class="spec-list">
+            <li>上传控件说明文件格式、主体建议与作用域，降低错误上传概率。</li>
+            <li>提示词帮助文案强调主体、情绪、动作与背景限制四项核心信息。</li>
+            <li>版本、版权与赞赏开关均提供场景化说明，减少字段用途歧义。</li>
+            <li>必填字段错误文案使用明确动作词，例如“请填写”“请至少选择”。</li>
+          </ul>
+        </article>
+        <article class="docs-card card">
+          <div class="section-title">Feedback</div>
+          <h2>反馈层级</h2>
+          <ul class="spec-list">
+            <li>顶部 notice 用于当前阶段主提示，toast-notice 用于短时操作结果反馈。</li>
+            <li>status-chip 展示流程状态，error-summary 聚合阻断性输入问题。</li>
+            <li>summary-card、export-info 与 metadata 面板用于下载前的二次确认。</li>
+            <li>预览卡和资源卡在空态、加载态、错误态复用统一描述句式。</li>
+          </ul>
+        </article>
+      </section>
+
+      <section class="docs-card card" aria-labelledby="pageExtensionTitle">
+        <div class="section-title">Extension Rules</div>
+        <h2 id="pageExtensionTitle">新增页面扩展规则</h2>
+        <ul class="spec-list">
+          <li>新增页面先复用 hero、card、notice、docs-grid、token-card 等基础结构。</li>
+          <li>若出现新状态色，先在 styles.css 增加语义 token，再扩展组件 tone。</li>
+          <li>新增表单字段时，同步补充 hint、error 容器、aria-describedby 与测试断言。</li>
+          <li>新增文档页与报告页时，导航需保证从首页、组件库页和目标页之间可互相跳转。</li>
+          <li>新增性能或质量报告时，建议同时补充基线说明、对比区间与可复现的采样口径。</li>
+        </ul>
+      </section>
+    </main>
+  </body>
+</html>

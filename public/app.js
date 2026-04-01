@@ -29,6 +29,9 @@ const wechatAiFeedback = document.getElementById("wechatAiFeedback");
 const promptHint = document.getElementById("promptHint");
 const globalNotice = document.getElementById("globalNotice");
 const toastNotice = document.getElementById("toastNotice");
+const generateErrorSummary = document.getElementById("generateErrorSummary");
+const generateErrorList = document.getElementById("generateErrorList");
+const originalPreviewPlaceholder = document.getElementById("originalPreviewPlaceholder");
 
 const DEFAULT_STICKER_COUNT = 8;
 const MIN_STICKER_COUNT = 8;
@@ -84,6 +87,51 @@ const PLACEHOLDER_STATE_TEXT = {
   success: "本次结果未返回该资源"
 };
 const STICKER_PREVIEW_SPEC = "240 × 240";
+const FIELD_A11Y_CONFIGS = {
+  prompt: {
+    key: "prompt",
+    target: wechatAiPrompt,
+    label: "提示词",
+    errorId: "wechatAiPromptError",
+    baseDescribedBy: ["promptHint"]
+  },
+  title: {
+    key: "title",
+    target: wechatAiTitle,
+    label: "表情包标题",
+    errorId: "wechatAiTitleError",
+    baseDescribedBy: ["wechatAiTitleHint"]
+  },
+  author: {
+    key: "author",
+    target: wechatAiAuthor,
+    label: "作者名",
+    errorId: "wechatAiAuthorError",
+    baseDescribedBy: ["wechatAiAuthorHint"]
+  },
+  count: {
+    key: "count",
+    target: wechatAiCount,
+    label: "贴纸数量",
+    errorId: "wechatAiCountError",
+    baseDescribedBy: ["wechatAiCountHint"]
+  },
+  styles: {
+    key: "styles",
+    target: wechatAiStyleOptions,
+    label: "风格选择",
+    errorId: "wechatAiStyleError",
+    baseDescribedBy: ["wechatAiStyleHint"],
+    focusTarget: wechatAiStyleOptions
+  },
+  rewardMessage: {
+    key: "rewardMessage",
+    target: wechatAiRewardMessage,
+    label: "赞赏引导语",
+    errorId: "wechatAiRewardMessageError",
+    baseDescribedBy: ["wechatAiRewardHint"]
+  }
+};
 
 let currentUploadId = null;
 let currentStyles = [];
@@ -99,6 +147,8 @@ let isSummaryCollapsed = true;
 let isExportInfoCollapsed = true;
 let isMetadataPreviewCollapsed = true;
 let toastTimer = null;
+const flashTimers = new Map();
+const validationErrors = new Map();
 const CONFIRM_CARD_CONFIGS = {
   summary: {
     element: wechatAiSummary,
@@ -181,11 +231,106 @@ const CONFIRM_CARD_STATE = {
   }
 };
 
+function getFieldConfig(target) {
+  if (!target?.id) return null;
+  return Object.values(FIELD_A11Y_CONFIGS).find((config) => config.target?.id === target.id) ?? null;
+}
+
+function syncFieldDescribedBy(config, invalid) {
+  if (!config?.target?.setAttribute) return;
+  const describedBy = [...config.baseDescribedBy, ...(invalid ? [config.errorId] : [])].filter(Boolean).join(" ");
+  if (describedBy) {
+    config.target.setAttribute("aria-describedby", describedBy);
+  } else {
+    config.target.removeAttribute?.("aria-describedby");
+  }
+}
+
+function syncGenerateErrorSummary() {
+  if (!generateErrorSummary || !generateErrorList) return;
+  generateErrorList.innerHTML = "";
+
+  if (!validationErrors.size) {
+    generateErrorSummary.hidden = true;
+    return;
+  }
+
+  for (const item of validationErrors.values()) {
+    const line = document.createElement("li");
+    const jumpButton = document.createElement("button");
+    jumpButton.type = "button";
+    jumpButton.className = "error-summary-link";
+    jumpButton.dataset.fieldKey = item.key;
+    jumpButton.textContent = `${item.label}：${item.message}`;
+    jumpButton.addEventListener("click", () => {
+      jumpToInvalidField(item.key);
+    });
+    line.appendChild(jumpButton);
+    generateErrorList.appendChild(line);
+  }
+
+  generateErrorSummary.hidden = false;
+  if (typeof generateErrorSummary.focus === "function") {
+    generateErrorSummary.focus();
+  }
+}
+
+function jumpToInvalidField(fieldKey) {
+  if (!fieldKey) return;
+  const config = FIELD_A11Y_CONFIGS[fieldKey];
+  const focusTarget = config?.focusTarget ?? config?.target;
+  const flashTarget = config?.target?.closest?.(".field") ?? config?.target;
+
+  if (typeof focusTarget?.scrollIntoView === "function") {
+    const prefersReducedMotion = Boolean(window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches);
+    try {
+      focusTarget.scrollIntoView({
+        behavior: prefersReducedMotion ? "auto" : "smooth",
+        block: "center"
+      });
+    } catch {
+      focusTarget.scrollIntoView();
+    }
+  }
+  if (typeof focusTarget?.focus === "function") {
+    focusTarget.focus();
+  }
+
+  if (flashTarget?.dataset) {
+    const prev = flashTimers.get(fieldKey);
+    if (prev) clearTimeout(prev);
+    flashTarget.dataset.flash = "true";
+    flashTimers.set(
+      fieldKey,
+      setTimeout(() => {
+        flashTarget.dataset.flash = "false";
+      }, 1200)
+    );
+  }
+}
+
+function initializeFieldAccessibility() {
+  for (const config of Object.values(FIELD_A11Y_CONFIGS)) {
+    syncFieldDescribedBy(config, false);
+    config.target.setAttribute?.("aria-invalid", "false");
+  }
+}
+
 function setPromptHint(styles = []) {
   const count = Number(wechatAiCount.value || DEFAULT_STICKER_COUNT);
   promptHint.textContent = Array.isArray(styles) && styles.length
-    ? `已加载推荐风格：${styles.join("、")}。当前生成 ${count} 张表情${currentRewardEnabled ? "，并附带赞赏引导图和感谢图" : ""}。`
-    : `当前生成 ${count} 张表情，并自动补齐封面、图标和横幅${currentRewardEnabled ? "，以及赞赏引导图和感谢图" : ""}。`;
+    ? `已加载推荐风格：${styles.join("、")}。建议在提示词中补充主体、情绪、动作和背景限制。当前生成 ${count} 张表情${currentRewardEnabled ? "，并附带赞赏引导图和感谢图" : ""}。`
+    : `建议在提示词中补充主体、情绪、动作和背景限制。当前生成 ${count} 张表情，并自动补齐封面、图标和横幅${currentRewardEnabled ? "，以及赞赏引导图和感谢图" : ""}。`;
+}
+
+function syncOriginalPreviewSlot() {
+  const hasSrc = Boolean(originalPreview?.src && String(originalPreview.src).trim());
+  if (originalPreviewPlaceholder) {
+    originalPreviewPlaceholder.hidden = hasSrc ? true : false;
+  }
+  if (originalPreview) {
+    originalPreview.hidden = hasSrc ? false : true;
+  }
 }
 
 function syncRewardFields() {
@@ -211,6 +356,7 @@ function renderStyleOptions(styles = DEFAULT_STYLE_OPTIONS) {
     button.type = "button";
     button.className = "style-chip";
     button.dataset.selected = currentStyles.includes(style) ? "true" : "false";
+    button.setAttribute("aria-pressed", currentStyles.includes(style) ? "true" : "false");
     button.textContent = style;
     button.addEventListener("click", () => {
       if (currentStyles.includes(style)) {
@@ -385,6 +531,7 @@ function restorePersistedPackResult() {
 
     if (restored.uploadId) {
       originalPreview.src = buildAssetUrl(restored.uploadId);
+      syncOriginalPreviewSlot();
       setStatus(uploadState, "已恢复参考图", "success");
     }
 
@@ -438,8 +585,9 @@ function showToast(text, tone = "info") {
   }, 2200);
 }
 
-function setFieldInvalid(target, invalid) {
+function setFieldInvalid(target, invalid, message = "", { syncSummary = true } = {}) {
   if (!target) return;
+  const config = getFieldConfig(target);
   const container = target.className?.includes?.("style-options") ? target : target.closest?.(".field") || target;
   if (container?.dataset) {
     container.dataset.invalid = invalid ? "true" : "false";
@@ -447,15 +595,36 @@ function setFieldInvalid(target, invalid) {
   if (target.setAttribute) {
     target.setAttribute("aria-invalid", invalid ? "true" : "false");
   }
+
+  if (config) {
+    const errorNode = document.getElementById(config.errorId);
+    if (errorNode) {
+      errorNode.hidden = !invalid;
+      errorNode.textContent = invalid ? message : "";
+    }
+    syncFieldDescribedBy(config, invalid);
+
+    if (invalid && message) {
+      validationErrors.set(config.key, { key: config.key, label: config.label, message });
+    } else {
+      validationErrors.delete(config.key);
+    }
+  }
+
+  if (syncSummary) {
+    syncGenerateErrorSummary();
+  }
 }
 
 function clearGenerateValidation() {
-  setFieldInvalid(wechatAiPrompt, false);
-  setFieldInvalid(wechatAiTitle, false);
-  setFieldInvalid(wechatAiAuthor, false);
-  setFieldInvalid(wechatAiCount, false);
-  setFieldInvalid(wechatAiRewardMessage, false);
-  setFieldInvalid(wechatAiStyleOptions, false);
+  validationErrors.clear();
+  setFieldInvalid(wechatAiPrompt, false, "", { syncSummary: false });
+  setFieldInvalid(wechatAiTitle, false, "", { syncSummary: false });
+  setFieldInvalid(wechatAiAuthor, false, "", { syncSummary: false });
+  setFieldInvalid(wechatAiCount, false, "", { syncSummary: false });
+  setFieldInvalid(wechatAiRewardMessage, false, "", { syncSummary: false });
+  setFieldInvalid(wechatAiStyleOptions, false, "", { syncSummary: false });
+  syncGenerateErrorSummary();
 }
 
 function validateGenerateInputs() {
@@ -466,50 +635,44 @@ function validateGenerateInputs() {
   const author = wechatAiAuthor.value.trim();
   const rewardMessage = wechatAiRewardMessage.value.trim();
   const stickerCount = Number(wechatAiCount.value || DEFAULT_STICKER_COUNT);
+  const errors = [];
 
   if (!prompt) {
-    setFieldInvalid(wechatAiPrompt, true);
-    setNotice("请先填写提示词。", "error");
-    setStatus(generateState, "缺少提示词", "error");
-    return false;
+    errors.push({ target: wechatAiPrompt, message: "请先填写提示词。" });
   }
 
   if (!title) {
-    setFieldInvalid(wechatAiTitle, true);
-    setNotice("请填写表情包标题。", "error");
-    setStatus(generateState, "缺少标题", "error");
-    return false;
+    errors.push({ target: wechatAiTitle, message: "请填写表情包标题。" });
   }
 
   if (!author) {
-    setFieldInvalid(wechatAiAuthor, true);
-    setNotice("请填写作者名。", "error");
-    setStatus(generateState, "缺少作者", "error");
-    return false;
+    errors.push({ target: wechatAiAuthor, message: "请填写作者名。" });
   }
 
   if (!Number.isInteger(stickerCount) || stickerCount < MIN_STICKER_COUNT || stickerCount > MAX_STICKER_COUNT) {
-    setFieldInvalid(wechatAiCount, true);
-    setNotice(`贴纸数量需在 ${MIN_STICKER_COUNT}-${MAX_STICKER_COUNT} 张之间。`, "error");
-    setStatus(generateState, "数量不合法", "error");
-    return false;
+    errors.push({ target: wechatAiCount, message: `贴纸数量需在 ${MIN_STICKER_COUNT}-${MAX_STICKER_COUNT} 张之间。` });
   }
 
   if (!currentStyles.length) {
-    setFieldInvalid(wechatAiStyleOptions, true);
-    setNotice("请至少选择一种风格。", "error");
-    setStatus(generateState, "缺少风格", "error");
-    return false;
+    errors.push({ target: wechatAiStyleOptions, message: "请至少选择一种风格。" });
   }
 
   if (currentRewardEnabled && !rewardMessage) {
-    setFieldInvalid(wechatAiRewardMessage, true);
-    setNotice("开启赞赏功能后，请填写赞赏引导语。", "error");
-    setStatus(generateState, "缺少引导语", "error");
-    return false;
+    errors.push({ target: wechatAiRewardMessage, message: "开启赞赏功能后，请填写赞赏引导语。" });
   }
 
-  return true;
+  if (!errors.length) {
+    syncGenerateErrorSummary();
+    return true;
+  }
+
+  for (const item of errors) {
+    setFieldInvalid(item.target, true, item.message, { syncSummary: false });
+  }
+  syncGenerateErrorSummary();
+  setNotice(errors[0].message, "error");
+  setStatus(generateState, errors.length === 1 ? "待处理 1 项输入问题" : `待处理 ${errors.length} 项输入问题`, "error");
+  return false;
 }
 
 function setSummary(title, description) {
@@ -940,6 +1103,8 @@ function createPreviewCard(sticker, tone = "success") {
   if (hasImage) {
     media.src = sticker.url;
     media.alt = `聊天场景贴纸 ${sticker.label} 预览`;
+    media.loading = "lazy";
+    media.decoding = "async";
   } else {
     media.classList.add("asset-placeholder");
     media.textContent = PLACEHOLDER_STATE_TEXT[tone] ?? PLACEHOLDER_STATE_TEXT.idle;
@@ -1000,6 +1165,8 @@ function renderExtraAssets(extras = {}, tone = "idle") {
     if (assetId && tone === "success") {
       media.src = buildAssetUrl(assetId);
       media.alt = item.alt;
+      media.loading = "lazy";
+      media.decoding = "async";
     } else {
       media.classList.add("asset-placeholder");
       media.textContent = PLACEHOLDER_STATE_TEXT[tone] ?? PLACEHOLDER_STATE_TEXT.idle;
@@ -1028,6 +1195,7 @@ function resetGenerationResult({ clearPersisted = true } = {}) {
     clearPersistedPackResult();
   }
   syncRegenerateButton();
+  syncOriginalPreviewSlot();
 }
 
 function resetAllState() {
@@ -1050,6 +1218,7 @@ function resetAllState() {
   wechatAiRewardMessage.value = "";
   syncRewardFields();
   originalPreview.removeAttribute("src");
+  syncOriginalPreviewSlot();
 
   renderStyleOptions(DEFAULT_STYLE_OPTIONS);
   resetGenerationResult({ clearPersisted: true });
@@ -1339,6 +1508,7 @@ uploadForm.addEventListener("submit", async (event) => {
 
     if (json?.original?.url) {
       originalPreview.src = json.original.url;
+      syncOriginalPreviewSlot();
     }
 
     setStatus(uploadState, "上传成功", "success");
@@ -1429,6 +1599,7 @@ resetSubmit.addEventListener("click", () => {
   resetAllState();
 });
 
+initializeFieldAccessibility();
 renderStyleOptions(DEFAULT_STYLE_OPTIONS);
 syncRewardFields();
 resetGenerationResult({ clearPersisted: false });
