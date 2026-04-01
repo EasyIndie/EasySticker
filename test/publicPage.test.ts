@@ -154,6 +154,8 @@ function createAppSandbox(persistedValue?: Record<string, unknown>) {
     "wechatAiVersion",
     "wechatAiCopyright",
     "wechatAiCount",
+    "wechatAiCountDec",
+    "wechatAiCountInc",
     "wechatAiRewardEnabled",
     "wechatAiRewardMessageField",
     "wechatAiRewardMessage",
@@ -465,12 +467,17 @@ describe("public page", () => {
     expect(html).toContain("Design Tokens");
     expect(html).toContain("基础令牌与语义映射");
     expect(html).toContain("无障碍策略");
+    expect(html).toContain("键盘操作速查表");
+    expect(html).toContain('data-include="/partials/keyboard-cheatsheet.html"');
+    expect(html).toContain('<script src="/include.js"></script>');
     expect(html).toContain("错误说明容器");
     expect(html).toContain("导出确认卡");
     expect(html).toContain('href="/"');
     expect(html).toContain('href="/design-spec.html"');
     expect(html).toContain('href="/compatibility-report.html"');
     expect(html).toContain('href="/performance-report.html"');
+    expect(html).toContain('data-lang-switch="zh"');
+    expect(html).toContain('data-lang-switch="en"');
     expect(html).toContain("role=\"main\"");
   });
 
@@ -485,6 +492,7 @@ describe("public page", () => {
     expect(html).toContain("令牌使用约束");
     expect(html).toContain("帮助文案策略");
     expect(html).toContain("新增页面扩展规则");
+    expect(html).toContain("键盘操作速查表");
     expect(html).toContain('href="/compatibility-report.html"');
     expect(html).toContain('href="/performance-report.html"');
     expect(html).toContain("role=\"main\"");
@@ -507,6 +515,10 @@ describe("public page", () => {
     expect(html).toContain("性能基线/对比报告页");
     expect(html).toContain("五页互通");
     expect(html).toContain("一键跳转到对应字段");
+    expect(html).toContain('data-include="/partials/keyboard-cheatsheet.html"');
+    expect(html).toContain('<script src="/include.js"></script>');
+    expect(html).toContain('data-lang-switch="zh"');
+    expect(html).toContain('data-lang-switch="en"');
     expect(html).toContain("role=\"main\"");
   });
 

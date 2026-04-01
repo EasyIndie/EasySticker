@@ -18,6 +18,8 @@
             <a class="hero-link" href="/components.html">查看组件库</a>
             <a class="hero-link" href="/compatibility-report.html">查看兼容性报告</a>
             <a class="hero-link" href="/performance-report.html">查看性能报告</a>
+            <button class="hero-link" type="button" data-lang-switch="zh" aria-label="切换到中文">中文</button>
+            <button class="hero-link" type="button" data-lang-switch="en" aria-label="Switch to English">EN</button>
           </nav>
         </div>
         <h1>EasySticker 设计规范页</h1>
@@ -110,6 +112,16 @@
             <li>预览卡和资源卡在空态、加载态、错误态复用统一描述句式。</li>
           </ul>
         </article>
+      </section>
+
+      <section class="docs-card card" aria-labelledby="keyboardTitle">
+        <div class="section-title">Keyboard</div>
+        <h2 id="keyboardTitle">键盘操作速查表（简版）</h2>
+        <ul class="spec-list">
+          <li>风格芯片：左右/上下箭头移动焦点；Home/End 快速跳首/跳尾；Enter/空格切换选中；至少保留 1 种风格。</li>
+          <li>生成快捷键：Ctrl + Enter 在生成表单内快速触发生成（遵循必填校验）。</li>
+          <li>跳到主要内容：Tab 聚焦左上角“跳到主要内容”后按 Enter 跳转到主区域。</li>
+        </ul>
       </section>
 
       <section class="docs-card card" aria-labelledby="pageExtensionTitle">

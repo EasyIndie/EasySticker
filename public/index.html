@@ -127,15 +127,19 @@
           <div class="config-grid">
             <label class="field" for="wechatAiCount">
               <span class="section-title"><span class="required-mark">*</span>贴纸数量</span>
-              <input
-                id="wechatAiCount"
-                type="number"
-                min="8"
-                max="24"
-                step="1"
-                value="8"
-                aria-describedby="wechatAiCountHint"
-              />
+              <div class="stepper-row">
+                <button id="wechatAiCountDec" type="button" class="stepper-button" aria-label="减少贴纸数量">−</button>
+                <input
+                  id="wechatAiCount"
+                  type="number"
+                  min="8"
+                  max="24"
+                  step="1"
+                  value="8"
+                  aria-describedby="wechatAiCountHint"
+                />
+                <button id="wechatAiCountInc" type="button" class="stepper-button" aria-label="增加贴纸数量">＋</button>
+              </div>
               <div id="wechatAiCountHint" class="field-hint">推荐 8-24 张，系统会额外补齐封面、图标和横幅资源。</div>
               <div id="wechatAiCountError" class="field-error" hidden></div>
             </label>
@@ -149,6 +153,7 @@
                 aria-describedby="wechatAiStyleHint"
                 tabindex="-1"
               ></div>
+              <div id="wechatAiStyleChipHelp" class="sr-only">左右/上下箭头移动焦点，Home/End 快速跳首/跳尾，Enter 或空格切换选中，至少保留 1 种风格。</div>
               <div id="wechatAiStyleHint" class="field-hint">至少保留 1 种风格，系统会按选中风格组合推荐提示词。</div>
               <div id="wechatAiStyleError" class="field-error" hidden></div>
             </div>
