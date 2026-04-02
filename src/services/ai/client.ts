@@ -30,9 +30,9 @@ function isRetryable(err: any) {
 
 export function buildMinimalClient(provider: AiProvider, opts?: Partial<Options>) {
   const options: Options = {
-    timeoutMs: Number(process.env.AI_TIMEOUT_MS ?? 15000),
-    retryMax: Number(process.env.AI_RETRY_MAX ?? 2),
-    retryBaseMs: Number(process.env.AI_RETRY_BASE_MS ?? 400),
+    timeoutMs: Number(process.env.AI_TIMEOUT_MS ?? 60000), // 增加到 60s
+    retryMax: Number(process.env.AI_RETRY_MAX ?? 3),       // 增加到 3 次
+    retryBaseMs: Number(process.env.AI_RETRY_BASE_MS ?? 1000), // 初始退避增加到 1s
     ...(opts ?? {})
   };
 
@@ -43,9 +43,12 @@ export function buildMinimalClient(provider: AiProvider, opts?: Partial<Options>
         try {
           const out = await withTimeout(options.timeoutMs, () => provider.generateImage(input));
           return out;
-        } catch (err) {
+        } catch (err: any) {
           if (attempt >= options.retryMax || !isRetryable(err)) throw err;
-          const backoff = Math.floor(options.retryBaseMs * Math.pow(2, attempt));
+          // 如果是 429，增加更多的退避时间
+          const status = typeof err?.statusCode === "number" ? err.statusCode : 0;
+          const multiplier = status === 429 ? 3 : 1;
+          const backoff = Math.floor(options.retryBaseMs * Math.pow(2, attempt)) * multiplier;
           await sleep(backoff);
           attempt++;
         }
