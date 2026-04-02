@@ -146,7 +146,16 @@ function createAppSandbox(persistedValue?: Record<string, unknown>) {
     "generateState",
     "wechatAiZipLink",
     "wechatAiActions",
-    "wechatAiExtras",
+    "sectionCover",
+    "wechatAiCover",
+    "sectionIcon",
+    "wechatAiIcon",
+    "sectionBanner",
+    "wechatAiBanner",
+    "sectionRewardGuide",
+    "wechatAiRewardGuide",
+    "sectionRewardThanks",
+    "wechatAiRewardThanks",
     "wechatAiPreview",
     "wechatAiSuggest",
     "wechatAiPrompt",
@@ -332,7 +341,6 @@ describe("public page", () => {
     expect(html).toContain('id="wechatAiStyleOptions"');
     expect(html).toContain('id="regenerateSubmit"');
     expect(html).toContain('id="resetSubmit"');
-    expect(html).toContain('id="wechatAiExtras"');
     expect(html).toContain('id="wechatAiFeedback"');
     expect(html).toContain('id="wechatAiSummary"');
     expect(html).toContain('id="wechatAiExportInfo"');
@@ -627,7 +635,7 @@ describe("public page", () => {
     })();
 
     expect(state.currentUploadId).toBe("upload-123");
-    expect(state.currentStyles).toEqual(["可爱", "简洁"]);
+    expect(state.currentStyles).toEqual(["可爱"]); // 已经改为单选，只会恢复第一个
     expect(state.hasGenerationAttempted).toBe(true);
     expect(state.lastPackResult.packId).toBe("pack-001");
     expect(elements.get("wechatAiPrompt")?.value).toBe("生成一组猫咪表情");
@@ -643,7 +651,7 @@ describe("public page", () => {
     expect(elements.get("uploadState")?.textContent).toBe("已恢复参考图");
     expect(elements.get("generateState")?.textContent).toBe("已恢复最近结果");
     expect(elements.get("globalNotice")?.textContent).toContain("已恢复最近一次生成结果");
-    expect(elements.get("promptHint")?.textContent).toContain("可爱、简洁");
+    expect(elements.get("promptHint")?.textContent).toContain("可爱"); // 改为了单选，只包含一个
     expect(elements.get("promptHint")?.textContent).toContain("12 张");
     expect(elements.get("wechatAiSummary")?.innerHTML).toContain("结果概览");
     expect(elements.get("wechatAiSummary")?.innerHTML).toContain("展开内容");
@@ -676,19 +684,19 @@ describe("public page", () => {
       "240 × 240",
       "用于展示聊天场景贴纸与序号资源。 当前序号：001"
     ]);
-    expect(elements.get("wechatAiExtras")?.children).toHaveLength(5);
+    expect(elements.get("wechatAiCover")?.children).toHaveLength(1);
     expect(elements.get("regenerateSubmit")?.disabled).toBe(false);
-    expect(elements.get("wechatAiExtras")?.children[0]?.children[0]?.children.map((child) => child.textContent)).toEqual([
+    expect(elements.get("wechatAiCover")?.children[0]?.children[0]?.children.map((child) => child.textContent)).toEqual([
       "Cover 预览",
       "240 × 240",
       "用于表情包封面展示。"
     ]);
-    expect(elements.get("wechatAiExtras")?.children[3]?.children[0]?.children.map((child) => child.textContent)).toEqual([
+    expect(elements.get("wechatAiRewardGuide")?.children[0]?.children[0]?.children.map((child) => child.textContent)).toEqual([
       "赞赏引导图",
       "750 × 400",
       "用于展示赞赏引导语。 当前文案：喜欢的话欢迎赞赏支持"
     ]);
-    expect(elements.get("wechatAiExtras")?.children[4]?.children[0]?.children.map((child) => child.textContent)).toEqual([
+    expect(elements.get("wechatAiRewardThanks")?.children[0]?.children[0]?.children.map((child) => child.textContent)).toEqual([
       "赞赏感谢图",
       "750 × 400",
       "用于赞赏完成后的感谢反馈。 当前文案：喜欢的话欢迎赞赏支持"
@@ -921,24 +929,29 @@ describe("public page", () => {
   it("renders extra asset placeholders as title size description blocks", () => {
     const { elements } = loadPublicApp();
 
-    expect(elements.get("wechatAiExtras")?.children).toHaveLength(3);
-    expect(elements.get("wechatAiExtras")?.children[0]?.children[0]?.children.map((child) => child.textContent)).toEqual([
+    expect(elements.get("wechatAiCover")?.children).toHaveLength(1);
+    expect(elements.get("wechatAiIcon")?.children).toHaveLength(1);
+    expect(elements.get("wechatAiBanner")?.children).toHaveLength(1);
+    expect(elements.get("wechatAiRewardGuide")?.children).toHaveLength(0);
+    
+    expect(elements.get("wechatAiCover")?.children[0]?.children[0]?.children.map((child) => child.textContent)).toEqual([
       "Cover 预览",
       "240 × 240",
       "用于表情包封面展示。 等待生成后展示。"
     ]);
-    expect(elements.get("wechatAiExtras")?.children[0]?.children[1]?.textContent).toBe("等待生成");
+    expect(elements.get("wechatAiCover")?.children[0]?.children[1]?.textContent).toBe("等待生成");
 
     elements.get("wechatAiRewardEnabled")!.checked = true;
     elements.get("wechatAiRewardEnabled")?.listeners.get("change")?.();
 
-    expect(elements.get("wechatAiExtras")?.children).toHaveLength(5);
-    expect(elements.get("wechatAiExtras")?.children[3]?.children[0]?.children.map((child) => child.textContent)).toEqual([
+    expect(elements.get("wechatAiRewardGuide")?.children).toHaveLength(1);
+    expect(elements.get("wechatAiRewardThanks")?.children).toHaveLength(1);
+    expect(elements.get("wechatAiRewardGuide")?.children[0]?.children[0]?.children.map((child) => child.textContent)).toEqual([
       "赞赏引导图",
       "750 × 400",
       "用于展示赞赏引导语。 等待生成后展示。"
     ]);
-    expect(elements.get("wechatAiExtras")?.children[3]?.children[1]?.textContent).toBe("等待生成");
+    expect(elements.get("wechatAiRewardGuide")?.children[0]?.children[1]?.textContent).toBe("等待生成");
   });
 
   it("renders sticker preview placeholder as title size description with unified media state", () => {
