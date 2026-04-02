@@ -3,6 +3,7 @@ import { HttpAiProvider } from "./providers/http";
 import { MockAiProvider } from "./providers/mock";
 import { PicsumAiProvider } from "./providers/picsum";
 import { HfAiProvider } from "./providers/hf";
+import { DoubaoAiProvider } from "./providers/doubao";
 
 export function getAiProvider() {
   const kind = process.env.AI_PROVIDER ?? "mock";
@@ -15,6 +16,13 @@ export function getAiProvider() {
   if (kind === "picsum") {
     const base = process.env.PICSUM_BASE_URL || "https://picsum.photos";
     return new PicsumAiProvider(base);
+  }
+  if (kind === "doubao") {
+    const baseUrl = process.env.ARK_BASE_URL || "https://ark.cn-beijing.volces.com/api/v3";
+    const apiKey = process.env.ARK_API_KEY;
+    const model = process.env.ARK_MODEL || "doubao-seedream-5-0-260128";
+    if (!apiKey) throw createHttpError(500, "ARK_API_KEY is required for AI_PROVIDER=doubao");
+    return new DoubaoAiProvider(baseUrl, apiKey, model);
   }
   if (kind === "hf") {
     const endpoint = process.env.AI_HTTP_ENDPOINT;

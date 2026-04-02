@@ -40,6 +40,8 @@ describe("pipeline", () => {
   const app = buildApp({ host: "127.0.0.1", port: 0, dataDir, logLevel: "silent" });
 
   beforeAll(async () => {
+    // 强制在测试中使用 mock 提供商，避免真实 API 导致超时
+    process.env.AI_PROVIDER = "mock";
     await app.ready();
   });
 
@@ -164,7 +166,7 @@ describe("pipeline", () => {
     expect(zipRes.headers["content-type"]).toContain("application/zip");
     expect(zipRes.headers["content-disposition"]).toContain('filename="');
     expect(zipRes.headers["content-disposition"]).toContain("filename*=");
-  });
+  }, 120000);
 
   it("wechat ai generate via http provider with base64 reference", async () => {
     const hits: any[] = [];
@@ -253,5 +255,5 @@ describe("pipeline", () => {
       process.env.AI_HTTP_REFERENCE_MODE = prevMode;
       await new Promise<void>((resolve, reject) => server.close((err) => (err ? reject(err) : resolve())));
     }
-  });
+  }, 120000);
 });

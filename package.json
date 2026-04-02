@@ -11,7 +11,7 @@
     "build": "tsup",
     "start": "node --env-file=.env dist/server.js",
     "mock-ai": "node scripts/mock-ai-server.mjs",
-    "test": "npm run build && vitest run"
+    "test": "npm run build && node --env-file=.env ./node_modules/.bin/vitest run"
   },
   "dependencies": {
     "@fastify/multipart": "^9.0.3",
