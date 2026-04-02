@@ -9,6 +9,7 @@ import { uploadsDir } from "../../lib/paths";
 import { validateAsset, validateAssetList } from "../platform/validate";
 import { buildZipPack } from "../pack/service";
 import { getAiProvider } from "../ai";
+import { buildMinimalClient } from "../ai/client";
 
 export type WeChatAiGenerateRequest = {
   referenceAssetId: string;
@@ -70,6 +71,7 @@ export async function generateWeChatAssetsAndPack(app: FastifyInstance, req: WeC
   if (!req.prompt) throw createHttpError(400, "missing prompt");
 
   const provider = getAiProvider();
+  const client = buildMinimalClient(provider);
   const reference = findAssetFile(app, req.referenceAssetId);
   if (!reference) throw createHttpError(404, "reference asset not found");
   const referenceBytes = fs.readFileSync(reference.filePath);
@@ -81,7 +83,7 @@ export async function generateWeChatAssetsAndPack(app: FastifyInstance, req: WeC
   const stickerAssetIds: string[] = [];
   for (let i = 0; i < count; i++) {
     const style = styles[i % styles.length]!;
-    const out = await provider.generateImage({
+    const out = await client.generateImage({
       prompt: `${req.prompt}\n风格：${style}`,
       negativePrompt: undefined,
       style,
