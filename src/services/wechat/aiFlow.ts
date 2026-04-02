@@ -39,6 +39,7 @@ function saveAssetPng(app: FastifyInstance, bytes: Buffer, assetId: string) {
 
 async function toStickerPng(input: Buffer, size: number) {
   const buf = await sharp(input)
+    .toFormat("png")
     .ensureAlpha()
     .resize(size, size, { fit: "contain", background: { r: 0, g: 0, b: 0, alpha: 0 } })
     .png({ compressionLevel: 9, adaptiveFiltering: true, palette: true })
@@ -64,7 +65,12 @@ export async function getWeChatPromptTemplate(referenceAssetId: string) {
   };
 }
 
-export async function generateWeChatAssetsAndPack(app: FastifyInstance, req: WeChatAiGenerateRequest) {
+export async function generateWeChatAssetsAndPack(
+  app: FastifyInstance,
+  req: WeChatAiGenerateRequest,
+  emit?: (event: string, data: unknown) => void,
+  isCanceled?: () => boolean
+) {
   const count = Math.max(8, Math.min(24, Math.floor(req.stickerCount ?? 8)));
   const styles = (req.styles?.filter(Boolean) ?? []).length ? (req.styles!.filter(Boolean) as string[]) : ["默认"];
   if (!req.referenceAssetId) throw createHttpError(400, "missing referenceAssetId");
@@ -80,9 +86,12 @@ export async function generateWeChatAssetsAndPack(app: FastifyInstance, req: WeC
   const referenceUrl = baseUrl ? `${baseUrl.replace(/\/+$/, "")}/api/assets/${req.referenceAssetId}` : undefined;
   const referenceMode = process.env.AI_HTTP_REFERENCE_MODE ?? "base64";
 
+  emit?.("start", { count, styles, referenceMode });
   const stickerAssetIds: string[] = [];
   for (let i = 0; i < count; i++) {
+    if (isCanceled?.()) throw createHttpError(499, "生成任务已取消");
     const style = styles[i % styles.length]!;
+    emit?.("progress", { phase: "stickers", current: i + 1, total: count });
     const out = await client.generateImage({
       prompt: `${req.prompt}\n风格：${style}`,
       negativePrompt: undefined,
@@ -100,6 +109,8 @@ export async function generateWeChatAssetsAndPack(app: FastifyInstance, req: WeC
     const id = nanoid();
     saveAssetPng(app, sticker, id);
     stickerAssetIds.push(id);
+    const label = String(i + 1).padStart(3, "0");
+    emit?.("sticker", { label, assetId: id, url: `/api/assets/${id}` });
   }
 
   const stickersValidation = await validateAssetList(app, "wechat_stickers", stickerAssetIds);
@@ -115,41 +126,50 @@ export async function generateWeChatAssetsAndPack(app: FastifyInstance, req: WeC
   const primaryStickerBytes = await fs.promises.readFile(path.join(uploadsDir(app), `${stickerAssetIds[0]}.png`));
 
   if (req.includeCover) {
+    if (isCanceled?.()) throw createHttpError(499, "生成任务已取消");
     const cover = await toStickerPng(primaryStickerBytes, 240);
     coverAssetId = nanoid();
     saveAssetPng(app, cover, coverAssetId);
     const v = await validateAsset(app, "wechat_cover", coverAssetId);
     if (!v.ok) throw createHttpError(400, "wechat cover validation failed");
+    emit?.("extra", { key: "coverAssetId", assetId: coverAssetId, url: `/api/assets/${coverAssetId}` });
   }
 
   if (req.includeIcon) {
+    if (isCanceled?.()) throw createHttpError(499, "生成任务已取消");
     const icon = await toStickerPng(primaryStickerBytes, 50);
     iconAssetId = nanoid();
     saveAssetPng(app, icon, iconAssetId);
     const v = await validateAsset(app, "wechat_icon", iconAssetId);
     if (!v.ok) throw createHttpError(400, "wechat icon validation failed");
+    emit?.("extra", { key: "iconAssetId", assetId: iconAssetId, url: `/api/assets/${iconAssetId}` });
   }
 
   if (req.includeBanner) {
+    if (isCanceled?.()) throw createHttpError(499, "生成任务已取消");
     const banner = await toBannerPng(primaryStickerBytes);
     bannerAssetId = nanoid();
     saveAssetPng(app, banner, bannerAssetId);
     const v = await validateAsset(app, "wechat_banner", bannerAssetId);
     if (!v.ok) throw createHttpError(400, "wechat banner validation failed");
+    emit?.("extra", { key: "bannerAssetId", assetId: bannerAssetId, url: `/api/assets/${bannerAssetId}` });
   }
 
   if (req.enableReward) {
+    if (isCanceled?.()) throw createHttpError(499, "生成任务已取消");
     const rewardGuide = await toBannerPng(primaryStickerBytes);
     rewardGuideAssetId = nanoid();
     saveAssetPng(app, rewardGuide, rewardGuideAssetId);
     const rewardGuideValidation = await validateAsset(app, "wechat_reward_guide", rewardGuideAssetId);
     if (!rewardGuideValidation.ok) throw createHttpError(400, "wechat reward guide validation failed");
+    emit?.("extra", { key: "rewardGuideAssetId", assetId: rewardGuideAssetId, url: `/api/assets/${rewardGuideAssetId}` });
 
     const rewardThanks = await toBannerPng(primaryStickerBytes);
     rewardThanksAssetId = nanoid();
     saveAssetPng(app, rewardThanks, rewardThanksAssetId);
     const rewardThanksValidation = await validateAsset(app, "wechat_reward_thanks", rewardThanksAssetId);
     if (!rewardThanksValidation.ok) throw createHttpError(400, "wechat reward thanks validation failed");
+    emit?.("extra", { key: "rewardThanksAssetId", assetId: rewardThanksAssetId, url: `/api/assets/${rewardThanksAssetId}` });
   }
 
   const assets = stickerAssetIds.map((assetId, idx) => ({
@@ -168,7 +188,7 @@ export async function generateWeChatAssetsAndPack(app: FastifyInstance, req: WeC
     metadata: req.metadata
   });
 
-  return {
+  const result = {
     packId,
     downloadUrl: `/api/packs/${packId}/download`,
     downloadFilename,
@@ -188,4 +208,6 @@ export async function generateWeChatAssetsAndPack(app: FastifyInstance, req: WeC
     },
     extras: { coverAssetId, iconAssetId, bannerAssetId, rewardGuideAssetId, rewardThanksAssetId }
   };
+  emit?.("done", result);
+  return result;
 }

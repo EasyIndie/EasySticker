@@ -21,6 +21,21 @@ function multipartPayload(field: string, filename: string, contentType: string, 
 }
 
 describe("pipeline", () => {
+  function parseSseEvents(body: string) {
+    const normalized = body.replace(/\r\n/g, "\n");
+    const blocks = normalized.split("\n\n").filter((b) => b.trim());
+    return blocks.map((block) => {
+      let event = "message";
+      let dataText = "";
+      for (const line of block.split("\n")) {
+        if (line.startsWith("event:")) event = line.slice(6).trim();
+        if (line.startsWith("data:")) dataText += (dataText ? "\n" : "") + line.slice(5).trim();
+      }
+      const data = dataText ? JSON.parse(dataText) : null;
+      return { event, data };
+    });
+  }
+
   const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), "easysticker-"));
   const app = buildApp({ host: "127.0.0.1", port: 0, dataDir, logLevel: "silent" });
 
@@ -66,9 +81,9 @@ describe("pipeline", () => {
     });
     expect(promptRes.statusCode).toBe(200);
 
-    const res = await app.inject({
+    const startRes = await app.inject({
       method: "POST",
-      url: "/api/wechat/generate",
+      url: "/api/wechat/generate/start",
       payload: {
         referenceAssetId: upload.uploadId,
         prompt: "test",
@@ -88,8 +103,24 @@ describe("pipeline", () => {
       },
       headers: { "content-type": "application/json" }
     });
-    expect(res.statusCode).toBe(200);
-    const json = res.json();
+    expect(startRes.statusCode).toBe(200);
+    const startJson = startRes.json();
+    expect(typeof startJson.taskId).toBe("string");
+    const streamRes = await app.inject({
+      method: "GET",
+      url: `/api/wechat/generate/stream?taskId=${encodeURIComponent(startJson.taskId)}`
+    });
+    expect(streamRes.statusCode).toBe(200);
+    const events = parseSseEvents(streamRes.body);
+    let done: any = null;
+    for (let i = events.length - 1; i >= 0; i--) {
+      if (events[i]?.event === "done") {
+        done = events[i]?.data;
+        break;
+      }
+    }
+    expect(done).toBeTruthy();
+    const json = done;
     expect(json.packId).toBeTypeOf("string");
     expect(json.downloadUrl).toBeTypeOf("string");
     expect(json.downloadFilename).toBe(`cute-cat-pack-${json.packId}.zip`);
@@ -188,14 +219,29 @@ describe("pipeline", () => {
       expect(uploadRes.statusCode).toBe(200);
       const upload = uploadRes.json();
 
-      const genRes = await app.inject({
+      const startRes = await app.inject({
         method: "POST",
-        url: "/api/wechat/generate",
+        url: "/api/wechat/generate/start",
         payload: { referenceAssetId: upload.uploadId, prompt: "http-test", stickerCount: 8, styles: ["flat"] },
         headers: { "content-type": "application/json" }
       });
-      expect(genRes.statusCode).toBe(200);
-      const json = genRes.json();
+      expect(startRes.statusCode).toBe(200);
+      const startJson = startRes.json();
+      const streamRes = await app.inject({
+        method: "GET",
+        url: `/api/wechat/generate/stream?taskId=${encodeURIComponent(startJson.taskId)}`
+      });
+      expect(streamRes.statusCode).toBe(200);
+      const events = parseSseEvents(streamRes.body);
+      let done: any = null;
+      for (let i = events.length - 1; i >= 0; i--) {
+        if (events[i]?.event === "done") {
+          done = events[i]?.data;
+          break;
+        }
+      }
+      expect(done).toBeTruthy();
+      const json = done;
       expect(json.meta.referenceMode).toBe("base64");
       expect(hits.length).toBeGreaterThan(0);
       expect(typeof hits[0].referenceImageBase64).toBe("string");
