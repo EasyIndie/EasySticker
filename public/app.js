@@ -6,6 +6,7 @@ const wechatAiForm = document.getElementById("wechatAiForm");
 const generateSubmit = document.getElementById("generateSubmit");
 const regenerateSubmit = document.getElementById("regenerateSubmit");
 const resetSubmit = document.getElementById("resetSubmit");
+const cancelGenerate = document.getElementById("cancelGenerate");
 const generateState = document.getElementById("generateState");
 const wechatAiZipLink = document.getElementById("wechatAiZipLink");
 const wechatAiActions = document.getElementById("wechatAiActions");
@@ -142,6 +143,9 @@ let currentRewardEnabled = false;
 let currentRewardMessage = "";
 let hasGenerationAttempted = false;
 let lastPackResult = null;
+let currentTaskId = null;
+let sseAbortController = null;
+let cancelRequested = false;
 let summaryResult = null;
 let exportInfoResult = null;
 let metadataPreviewResult = null;
@@ -1085,14 +1089,19 @@ function getPreviewCardContent(sticker, tone) {
 function createPreviewCard(sticker, tone = "success") {
   const card = document.createElement("article");
   card.className = "preview-item";
-  card.dataset.tone = tone;
+  
+  // 如果有真实图片数据，当前卡片就应该被视为 success 状态展示图片
+  const isRealSticker = Boolean(sticker?.url);
+  const cardTone = isRealSticker ? "success" : tone;
+  
+  card.dataset.tone = cardTone;
 
-  if (tone !== "success") {
+  if (cardTone !== "success") {
     card.classList.add("preview-item-empty");
   }
 
-  const content = getPreviewCardContent(sticker, tone);
-  const hasImage = tone === "success" && Boolean(sticker?.url);
+  const content = getPreviewCardContent(sticker, cardTone);
+  const hasImage = isRealSticker;
 
   const head = document.createElement("div");
   head.className = "preview-head";
@@ -1142,6 +1151,10 @@ function syncRegenerateButton() {
 function setGenerateButtonsBusy(busy) {
   setBusy(generateSubmit, busy, "生成中...");
   setBusy(regenerateSubmit, busy, "重新生成中...");
+  if (cancelGenerate) {
+    cancelGenerate.hidden = busy ? false : true;
+    cancelGenerate.disabled = busy ? false : true;
+  }
   if (!busy) {
     syncRegenerateButton();
   }
@@ -1198,6 +1211,7 @@ function resetGenerationResult({ clearPersisted = true } = {}) {
   wechatAiZipLink.innerHTML = "";
   wechatAiActions.innerHTML = "";
   clearGenerateValidation();
+  wechatAiPreview.innerHTML = "";
   renderPreview([], "idle");
   renderExtraAssets({}, "idle");
   setFeedback("等待生成后展示 cover、icon、banner 与表情预览。", "idle");
@@ -1330,15 +1344,43 @@ function renderActions(result) {
 }
 
 function renderPreview(stickers, tone = "success") {
-  wechatAiPreview.innerHTML = "";
-
   if (!stickers.length) {
-    wechatAiPreview.appendChild(createPreviewCard(null, tone === "success" ? "idle" : tone));
+    const desiredTone = tone === "success" ? "idle" : tone;
+    wechatAiPreview.innerHTML = "";
+    wechatAiPreview.appendChild(createPreviewCard(null, desiredTone));
     return;
   }
 
-  for (const sticker of stickers) {
-    wechatAiPreview.appendChild(createPreviewCard(sticker, tone));
+  // 增量 append：仅为新增的贴纸追加卡片
+  const existingCount = wechatAiPreview.children.length;
+  const needClearPlaceholder = existingCount === 1 && wechatAiPreview.firstChild?.dataset?.tone !== "success";
+  if (needClearPlaceholder) {
+    wechatAiPreview.innerHTML = "";
+    const fragFactory = document.createDocumentFragment?.bind(document);
+    if (fragFactory) {
+      const frag = fragFactory();
+      for (let i = 0; i < stickers.length; i++) {
+        frag.appendChild(createPreviewCard(stickers[i], tone));
+      }
+      wechatAiPreview.appendChild(frag);
+    } else {
+      for (let i = 0; i < stickers.length; i++) {
+        wechatAiPreview.appendChild(createPreviewCard(stickers[i], tone));
+      }
+    }
+    return;
+  }
+  const fragFactory = document.createDocumentFragment?.bind(document);
+  if (fragFactory) {
+    const frag = fragFactory();
+    for (let i = existingCount; i < stickers.length; i++) {
+      frag.appendChild(createPreviewCard(stickers[i], tone));
+    }
+    wechatAiPreview.appendChild(frag);
+  } else {
+    for (let i = existingCount; i < stickers.length; i++) {
+      wechatAiPreview.appendChild(createPreviewCard(stickers[i], tone));
+    }
   }
 }
 
@@ -1427,69 +1469,187 @@ async function generateWechatPack() {
   renderMetadataPreview(null, "loading");
 
   try {
-    const json = await requestJson("/api/wechat/generate", {
+    const payload = {
+      referenceAssetId: currentUploadId,
+      prompt,
+      styles: currentStyles.length ? currentStyles : undefined,
+      stickerCount,
+      enableReward: currentRewardEnabled,
+      includeCover: true,
+      includeIcon: true,
+      includeBanner: true,
+      metadata:
+        title || author || version || copyright || rewardMessage
+          ? {
+              ...(title ? { title } : {}),
+              ...(author ? { author } : {}),
+              ...(version ? { version } : {}),
+              ...(copyright ? { copyright } : {}),
+              ...(rewardMessage ? { rewardMessage } : {})
+            }
+          : undefined
+    };
+
+    const stickers = [];
+    const extras = {};
+    let totalCount = stickerCount;
+
+    cancelRequested = false;
+    sseAbortController = new AbortController();
+    const startRes = await fetch("/api/wechat/generate/start", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        referenceAssetId: currentUploadId,
-        prompt,
-        styles: currentStyles.length ? currentStyles : undefined,
-        stickerCount,
-        enableReward: currentRewardEnabled,
-        includeCover: true,
-        includeIcon: true,
-        includeBanner: true,
-        metadata:
-          title || author || version || copyright || rewardMessage
-            ? {
-                ...(title ? { title } : {}),
-                ...(author ? { author } : {}),
-                ...(version ? { version } : {}),
-                ...(copyright ? { copyright } : {}),
-                ...(rewardMessage ? { rewardMessage } : {})
-              }
-            : undefined
-      })
+      body: JSON.stringify(payload)
     });
+    const startJson = await startRes.json();
+    if (!startRes.ok || !startJson?.taskId) throw new Error("生成失败，请稍后重试。");
+    currentTaskId = startJson.taskId;
 
-    const stickers = Array.isArray(json?.stickers) ? json.stickers : [];
-    currentRewardEnabled = Boolean(json?.meta?.rewardEnabled ?? currentRewardEnabled);
-    currentRewardMessage = json?.meta?.rewardMessage ?? rewardMessage;
-    wechatAiRewardEnabled.checked = currentRewardEnabled;
-    wechatAiRewardMessage.value = currentRewardMessage;
-    syncRewardFields();
-    lastPackResult = json;
-    renderPreview(stickers, "success");
-    renderExtraAssets(json?.extras ?? {}, "success");
-    renderDownload(json?.packId, json?.downloadUrl, json?.downloadFilename);
-    renderActions(json);
-    persistLastGeneratedResult(json);
-    setStatus(generateState, "生成完成", "success");
-    setNotice("表情包已生成完成，可以先预览，再下载 ZIP。", "success");
-    setFeedback(
-      currentRewardEnabled
-        ? "已生成 cover、icon、banner、赞赏引导图、赞赏感谢图与表情预览，可继续重新生成当前方案。"
-        : "已生成 cover、icon、banner 与表情预览，可继续重新生成当前方案。",
-      "success"
-    );
-    renderSummary(json);
-    renderExportInfo(json);
-    renderMetadataPreview(json);
-  } catch (error) {
-    if (lastPackResult) {
-      renderActions(lastPackResult);
-      renderExportInfo(lastPackResult);
-      renderMetadataPreview(lastPackResult);
-    } else {
-      renderMetadataPreview(null, "error");
+    const decoder = new TextDecoder();
+    let buffer = "";
+    let lastEventId = 0;
+    let completed = false;
+    const maxRetries = 3;
+    const baseBackoff = 500;
+
+    const handleEvent = (eventName, data) => {
+      if (eventName === "start") {
+        totalCount = Number(data?.count || stickerCount);
+        setStatus(generateState, `生成中 (0/${totalCount})`, "loading");
+        return;
+      }
+      if (eventName === "progress") {
+        if (data?.phase === "stickers") {
+          const current = Number(data?.current || 0);
+          setStatus(generateState, `生成中 (${current}/${totalCount})`, "loading");
+        }
+        return;
+      }
+      if (eventName === "sticker") {
+        stickers.push({ label: data.label, assetId: data.assetId, url: data.url });
+        renderPreview(stickers, "loading");
+        setStatus(generateState, `生成中 (${stickers.length}/${totalCount})`, "loading");
+        return;
+      }
+      if (eventName === "extra") {
+        if (data?.key) extras[data.key] = data.assetId ?? null;
+        renderExtraAssets(extras, "loading");
+        return;
+      }
+      if (eventName === "done") {
+        const json = data;
+        currentRewardEnabled = Boolean(json?.meta?.rewardEnabled ?? currentRewardEnabled);
+        currentRewardMessage = json?.meta?.rewardMessage ?? rewardMessage;
+        wechatAiRewardEnabled.checked = currentRewardEnabled;
+        wechatAiRewardMessage.value = currentRewardMessage;
+        syncRewardFields();
+        lastPackResult = json;
+        renderPreview(stickers, "success");
+        renderExtraAssets(json?.extras ?? {}, "success");
+        renderDownload(json?.packId, json?.downloadUrl, json?.downloadFilename);
+        renderActions(json);
+        persistLastGeneratedResult(json);
+        setStatus(generateState, "生成完成", "success");
+        setNotice("表情包已生成完成，可以先预览，再下载 ZIP。", "success");
+        setFeedback(
+          currentRewardEnabled
+            ? "已生成 cover、icon、banner、赞赏引导图、赞赏感谢图与表情预览，可继续重新生成当前方案。"
+            : "已生成 cover、icon、banner 与表情预览，可继续重新生成当前方案。",
+          "success"
+        );
+        renderSummary(json);
+        renderExportInfo(json);
+        renderMetadataPreview(json);
+      }
+      if (eventName === "error") {
+        const msg = String(data?.message || "");
+        if (msg.includes("取消")) {
+          cancelRequested = true;
+          setStatus(generateState, "已取消", "error");
+          setNotice("已取消本次生成。", "error");
+          setFeedback("本次生成已取消，可直接点击重新生成再次尝试。", "error");
+          setGenerateButtonsBusy(false);
+          return;
+        }
+        const err = new Error(msg || "生成失败，请稍后重试。");
+        err.isServerError = true;
+        throw err;
+      }
+    };
+
+    for (let attempt = 0; attempt <= maxRetries && !completed && !cancelRequested; attempt++) {
+      const headers = { accept: "text/event-stream" };
+      if (lastEventId > 0) headers["Last-Event-ID"] = String(lastEventId);
+      const res = await fetch(`/api/wechat/generate/stream?taskId=${encodeURIComponent(currentTaskId)}`, {
+        method: "GET",
+        headers,
+        signal: sseAbortController.signal
+      });
+      if (!res.ok) throw new Error("生成失败，请稍后重试。");
+      const reader = res.body?.getReader?.();
+      if (!reader) throw new Error("生成失败，请稍后重试。");
+      try {
+        while (true) {
+          const { value, done } = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, { stream: true }).replace(/\r\n/g, "\n");
+          let idx;
+          while ((idx = buffer.indexOf("\n\n")) !== -1) {
+            const chunk = buffer.slice(0, idx);
+            buffer = buffer.slice(idx + 2);
+            if (!chunk.trim()) continue;
+            let eventName = "message";
+            let dataText = "";
+            let idText = "";
+            for (const line of chunk.split("\n")) {
+              if (line.startsWith("id:")) idText = line.slice(3).trim();
+              if (line.startsWith("event:")) eventName = line.slice(6).trim();
+              if (line.startsWith("data:")) dataText += (dataText ? "\n" : "") + line.slice(5).trim();
+            }
+            if (!dataText) continue;
+            if (idText) {
+              const n = Number(idText);
+              if (Number.isFinite(n)) lastEventId = n;
+            }
+            const data = JSON.parse(dataText);
+            handleEvent(eventName, data);
+            if (eventName === "done") completed = true;
+          }
+        }
+      } catch (e) {
+        if (cancelRequested) break;
+        if (e.isServerError) throw e;
+        
+        if (!completed && attempt < maxRetries) {
+          setStatus(generateState, "网络波动，正在重连...", "loading");
+          const backoff = baseBackoff * Math.pow(2, attempt);
+          await new Promise((r) => setTimeout(r, backoff));
+          continue;
+        } else {
+          throw e;
+        }
+      }
     }
-    setStatus(generateState, "生成失败", "error");
-    setNotice(error instanceof Error ? error.message : "生成失败，请稍后重试。", "error");
-    renderPreview([], "error");
-    renderExtraAssets({}, "error");
-    setFeedback("本次生成失败，可直接点击重新生成再次尝试。", "error");
-    setSummary("结果概览", "生成失败，请调整提示词或稍后重试。");
-    renderExportInfo(lastPackResult);
+  } catch (error) {
+    if (cancelRequested) {
+      // 保留已渲染的部分结果，不清空
+      setGenerateButtonsBusy(false);
+    } else {
+      if (lastPackResult) {
+        renderActions(lastPackResult);
+        renderExportInfo(lastPackResult);
+        renderMetadataPreview(lastPackResult);
+      } else {
+        renderMetadataPreview(null, "error");
+      }
+      setStatus(generateState, "生成失败", "error");
+      setNotice(error instanceof Error ? error.message : "生成失败，请稍后重试。", "error");
+      renderPreview([], "error");
+      renderExtraAssets({}, "error");
+      setFeedback("本次生成失败，可直接点击重新生成再次尝试。", "error");
+      setSummary("结果概览", "生成失败，请调整提示词或稍后重试。");
+      renderExportInfo(lastPackResult);
+    }
   } finally {
     setGenerateButtonsBusy(false);
   }
@@ -1606,6 +1766,24 @@ wechatAiRewardEnabled.addEventListener("change", () => {
   syncRewardFields();
   setPromptHint(currentStyles);
   renderExtraAssets(lastPackResult?.extras ?? {}, lastPackResult ? "success" : "idle");
+});
+
+cancelGenerate?.addEventListener("click", async () => {
+  try {
+    if (currentTaskId) {
+      await fetch("/api/wechat/generate/cancel", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ taskId: currentTaskId })
+      });
+    }
+    cancelRequested = true;
+    sseAbortController?.abort?.();
+  } catch {
+    // ignore
+  } finally {
+    setGenerateButtonsBusy(false);
+  }
 });
 
 wechatAiStyleOptions.addEventListener("focus", (event) => {

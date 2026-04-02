@@ -141,6 +141,7 @@ function createAppSandbox(persistedValue?: Record<string, unknown>) {
     "wechatAiForm",
     "generateSubmit",
     "regenerateSubmit",
+    "cancelGenerate",
     "resetSubmit",
     "generateState",
     "wechatAiZipLink",
