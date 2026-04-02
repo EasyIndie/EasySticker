@@ -10,8 +10,17 @@ const cancelGenerate = document.getElementById("cancelGenerate");
 const generateState = document.getElementById("generateState");
 const wechatAiZipLink = document.getElementById("wechatAiZipLink");
 const wechatAiActions = document.getElementById("wechatAiActions");
-const wechatAiExtras = document.getElementById("wechatAiExtras");
 const wechatAiPreview = document.getElementById("wechatAiPreview");
+const sectionCover = document.getElementById("sectionCover");
+const wechatAiCover = document.getElementById("wechatAiCover");
+const sectionIcon = document.getElementById("sectionIcon");
+const wechatAiIcon = document.getElementById("wechatAiIcon");
+const sectionBanner = document.getElementById("sectionBanner");
+const wechatAiBanner = document.getElementById("wechatAiBanner");
+const sectionRewardGuide = document.getElementById("sectionRewardGuide");
+const wechatAiRewardGuide = document.getElementById("wechatAiRewardGuide");
+const sectionRewardThanks = document.getElementById("sectionRewardThanks");
+const wechatAiRewardThanks = document.getElementById("wechatAiRewardThanks");
 const wechatAiSuggest = document.getElementById("wechatAiSuggest");
 const wechatAiPrompt = document.getElementById("wechatAiPrompt");
 const wechatAiTitle = document.getElementById("wechatAiTitle");
@@ -366,7 +375,9 @@ function renderStyleOptions(styles = DEFAULT_STYLE_OPTIONS) {
   availableStyles = Array.isArray(styles) && styles.length ? [...new Set(styles.filter(Boolean))] : [...DEFAULT_STYLE_OPTIONS];
   currentStyles = currentStyles.filter((item) => availableStyles.includes(item));
   if (!currentStyles.length) {
-    currentStyles = [...availableStyles];
+    currentStyles = [availableStyles[0]]; // 默认选择第一个风格
+  } else if (currentStyles.length > 1) {
+    currentStyles = [currentStyles[0]]; // 强制单选
   }
 
   wechatAiStyleOptions.innerHTML = "";
@@ -374,18 +385,14 @@ function renderStyleOptions(styles = DEFAULT_STYLE_OPTIONS) {
     const button = document.createElement("button");
     button.type = "button";
     button.className = "style-chip";
-    button.dataset.selected = currentStyles.includes(style) ? "true" : "false";
-    button.setAttribute("aria-pressed", currentStyles.includes(style) ? "true" : "false");
+    const isSelected = currentStyles.includes(style);
+    button.dataset.selected = isSelected ? "true" : "false";
+    button.setAttribute("aria-pressed", isSelected ? "true" : "false");
     button.setAttribute("aria-describedby", "wechatAiStyleChipHelp wechatAiStyleHint");
     button.textContent = style;
     button.addEventListener("click", () => {
-      if (currentStyles.includes(style)) {
-        if (currentStyles.length > 1) {
-          currentStyles = currentStyles.filter((item) => item !== style);
-        }
-      } else {
-        currentStyles = [...currentStyles, style];
-      }
+      // 单选逻辑：点击任何项都直接变为唯一选中项
+      currentStyles = [style];
       setFieldInvalid(wechatAiStyleOptions, false);
       renderStyleOptions(availableStyles);
       setPromptHint(currentStyles);
@@ -1161,7 +1168,12 @@ function setGenerateButtonsBusy(busy) {
 }
 
 function renderExtraAssets(extras = {}, tone = "idle") {
-  wechatAiExtras.innerHTML = "";
+  // 清空所有额外资源容器
+  wechatAiCover.innerHTML = "";
+  wechatAiIcon.innerHTML = "";
+  wechatAiBanner.innerHTML = "";
+  wechatAiRewardGuide.innerHTML = "";
+  wechatAiRewardThanks.innerHTML = "";
 
   for (const item of getExtraAssetDefs(extras)) {
     const assetId = extras?.[item.key];
@@ -1203,7 +1215,24 @@ function renderExtraAssets(extras = {}, tone = "idle") {
 
     card.appendChild(head);
     card.appendChild(media);
-    wechatAiExtras.appendChild(card);
+
+    // 将卡片添加到对应的容器中，并显示区块
+    if (item.key === "coverAssetId") {
+      wechatAiCover.appendChild(card);
+      if (assetId) sectionCover.hidden = false;
+    } else if (item.key === "iconAssetId") {
+      wechatAiIcon.appendChild(card);
+      if (assetId) sectionIcon.hidden = false;
+    } else if (item.key === "bannerAssetId") {
+      wechatAiBanner.appendChild(card);
+      if (assetId) sectionBanner.hidden = false;
+    } else if (item.key === "rewardGuideAssetId") {
+      wechatAiRewardGuide.appendChild(card);
+      if (assetId) sectionRewardGuide.hidden = false;
+    } else if (item.key === "rewardThanksAssetId") {
+      wechatAiRewardThanks.appendChild(card);
+      if (assetId) sectionRewardThanks.hidden = false;
+    }
   }
 }
 
@@ -1212,8 +1241,17 @@ function resetGenerationResult({ clearPersisted = true } = {}) {
   wechatAiActions.innerHTML = "";
   clearGenerateValidation();
   wechatAiPreview.innerHTML = "";
+  
+  // 隐藏所有额外资源区块
+  sectionCover.hidden = true;
+  sectionIcon.hidden = true;
+  sectionBanner.hidden = true;
+  sectionRewardGuide.hidden = true;
+  sectionRewardThanks.hidden = true;
+
   renderPreview([], "idle");
   renderExtraAssets({}, "idle");
+
   setFeedback("等待生成后展示 cover、icon、banner 与表情预览。", "idle");
   setSummary("结果概览", "生成后在这里查看标题、数量、风格、参考图方式与导出文件。");
   renderExportInfo(null);
@@ -1457,6 +1495,14 @@ async function generateWechatPack() {
   setStatus(generateState, "生成中...", "loading");
   setNotice("正在生成微信表情并打包，请稍候...", "info");
   wechatAiZipLink.innerHTML = "";
+  
+  // 隐藏所有额外资源区块，准备新的流式生成
+  sectionCover.hidden = true;
+  sectionIcon.hidden = true;
+  sectionBanner.hidden = true;
+  sectionRewardGuide.hidden = true;
+  sectionRewardThanks.hidden = true;
+
   renderPreview([], "loading");
   renderExtraAssets({}, "loading");
   setFeedback(

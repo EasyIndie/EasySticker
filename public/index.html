@@ -153,8 +153,8 @@
                 aria-describedby="wechatAiStyleHint"
                 tabindex="-1"
               ></div>
-              <div id="wechatAiStyleChipHelp" class="sr-only">左右/上下箭头移动焦点，Home/End 快速跳首/跳尾，Enter 或空格切换选中，至少保留 1 种风格。</div>
-              <div id="wechatAiStyleHint" class="field-hint">至少保留 1 种风格，系统会按选中风格组合推荐提示词。</div>
+              <div id="wechatAiStyleChipHelp" class="sr-only">左右/上下箭头移动焦点，Home/End 快速跳首/跳尾，Enter 或空格切换选中风格。</div>
+              <div id="wechatAiStyleHint" class="field-hint">请选择 1 种生成风格，系统会按选中风格推荐提示词。</div>
               <div id="wechatAiStyleError" class="field-error" hidden></div>
             </div>
           </div>
@@ -232,8 +232,43 @@
               <p class="muted">确认 packId、资源映射与扩展资源字段，再继续下载或提审。</p>
             </div>
           </section>
-          <div id="wechatAiExtras" class="asset-grid"></div>
-          <div id="wechatAiPreview" class="grid"></div>
+          <div id="previewSectionsContainer">
+            <!-- 表情主图区 -->
+            <div class="preview-section" id="sectionPrimary">
+              <div class="section-title">表情主图</div>
+              <div id="wechatAiPreview" class="grid"></div>
+            </div>
+
+            <!-- Cover 封面图区 -->
+            <div class="preview-section" id="sectionCover" hidden>
+              <div class="section-title">表情封面图 (Cover)</div>
+              <div id="wechatAiCover" class="asset-grid"></div>
+            </div>
+
+            <!-- Icon 图标区 -->
+            <div class="preview-section" id="sectionIcon" hidden>
+              <div class="section-title">聊天面板图标 (Icon)</div>
+              <div id="wechatAiIcon" class="asset-grid"></div>
+            </div>
+
+            <!-- Banner 横幅区 -->
+            <div class="preview-section" id="sectionBanner" hidden>
+              <div class="section-title">详情页横幅 (Banner)</div>
+              <div id="wechatAiBanner" class="asset-grid"></div>
+            </div>
+
+            <!-- 赞赏引导图区 -->
+            <div class="preview-section" id="sectionRewardGuide" hidden>
+              <div class="section-title">赞赏引导图</div>
+              <div id="wechatAiRewardGuide" class="asset-grid"></div>
+            </div>
+
+            <!-- 赞赏感谢图区 -->
+            <div class="preview-section" id="sectionRewardThanks" hidden>
+              <div class="section-title">赞赏感谢图</div>
+              <div id="wechatAiRewardThanks" class="asset-grid"></div>
+            </div>
+          </div>
         </article>
       </section>
 

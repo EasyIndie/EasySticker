@@ -86,14 +86,26 @@ export async function generateWeChatAssetsAndPack(
   const referenceUrl = baseUrl ? `${baseUrl.replace(/\/+$/, "")}/api/assets/${req.referenceAssetId}` : undefined;
   const referenceMode = process.env.AI_HTTP_REFERENCE_MODE ?? "base64";
 
+  // 定义一组常见的表情包情绪和动作，用于动态注入到每张贴纸的 Prompt 中，让大模型生成多样化的内容
+  const emotions = [
+    "开心，大笑，挥手打招呼", "点赞，竖起大拇指", "比心，双手比心", "害羞，捂脸",
+    "感谢，双手合十", "哭泣，流泪", "生气，双手抱胸", "疑问，头上带有问号",
+    "睡觉，打呼噜", "奋斗，头绑发带加油", "震惊，下巴掉下来", "无奈，摊手",
+    "期待，星星眼", "庆祝，撒花", "拒绝，双手打叉", "吃瓜，拿爆米花",
+    "叹气，扶额", "庆祝，举起酒杯", "思考，手托下巴", "疲惫，瘫倒",
+    "偷笑，捂嘴", "抱抱，张开双臂", "冷汗，流汗", "期待，搓手"
+  ];
+
   emit?.("start", { count, styles, referenceMode });
   const stickerAssetIds: string[] = [];
   for (let i = 0; i < count; i++) {
     if (isCanceled?.()) throw createHttpError(499, "生成任务已取消");
     const style = styles[i % styles.length]!;
+    const emotion = emotions[i % emotions.length]; // 依次取出一个情绪
+    
     emit?.("progress", { phase: "stickers", current: i + 1, total: count });
     const out = await client.generateImage({
-      prompt: `${req.prompt}\n风格：${style}`,
+      prompt: `${req.prompt}\n当前表情主题与动作：${emotion}\n风格：${style}`,
       negativePrompt: undefined,
       style,
       width: 1024,
@@ -123,11 +135,29 @@ export async function generateWeChatAssetsAndPack(
   let bannerAssetId: string | undefined;
   let rewardGuideAssetId: string | undefined;
   let rewardThanksAssetId: string | undefined;
-  const primaryStickerBytes = await fs.promises.readFile(path.join(uploadsDir(app), `${stickerAssetIds[0]}.png`));
+
+  // 辅助函数：调用大模型生成专属的额外资源图
+  const generateExtraImage = async (customPrompt: string) => {
+    return await client.generateImage({
+      prompt: `${req.prompt}\n${customPrompt}\n风格：${styles[0]}`,
+      negativePrompt: undefined,
+      style: styles[0],
+      width: 1024,
+      height: 1024,
+      referenceImageTransport: referenceMode as "base64" | "url" | "assetId" | "multipart",
+      referenceImageBase64:
+        referenceMode === "base64" || referenceMode === "multipart" ? referenceBase64 : undefined,
+      referenceImageUrl: referenceMode === "url" ? referenceUrl : undefined,
+      referenceImageMime: "image/png",
+      referenceImageAssetId: referenceMode === "assetId" ? req.referenceAssetId : undefined
+    });
+  };
 
   if (req.includeCover) {
     if (isCanceled?.()) throw createHttpError(499, "生成任务已取消");
-    const cover = await toStickerPng(primaryStickerBytes, 240);
+    emit?.("progress", { phase: "extras", label: "表情封面图" });
+    const out = await generateExtraImage("当前要求：生成一张能代表整套表情包的高质量主封面，构图饱满，主体居中。");
+    const cover = await toStickerPng(out.bytes, 240);
     coverAssetId = nanoid();
     saveAssetPng(app, cover, coverAssetId);
     const v = await validateAsset(app, "wechat_cover", coverAssetId);
@@ -137,7 +167,9 @@ export async function generateWeChatAssetsAndPack(
 
   if (req.includeIcon) {
     if (isCanceled?.()) throw createHttpError(499, "生成任务已取消");
-    const icon = await toStickerPng(primaryStickerBytes, 50);
+    emit?.("progress", { phase: "extras", label: "聊天面板图标" });
+    const out = await generateExtraImage("当前要求：生成一个极简的头像图标，主要突出角色面部特征，大头贴特写。");
+    const icon = await toStickerPng(out.bytes, 50);
     iconAssetId = nanoid();
     saveAssetPng(app, icon, iconAssetId);
     const v = await validateAsset(app, "wechat_icon", iconAssetId);
@@ -147,7 +179,9 @@ export async function generateWeChatAssetsAndPack(
 
   if (req.includeBanner) {
     if (isCanceled?.()) throw createHttpError(499, "生成任务已取消");
-    const banner = await toBannerPng(primaryStickerBytes);
+    emit?.("progress", { phase: "extras", label: "详情页横幅" });
+    const out = await generateExtraImage("当前要求：这是一张宽屏横幅插画，适合作为详情页背景，角色处于画面右侧，左侧留白。");
+    const banner = await toBannerPng(out.bytes);
     bannerAssetId = nanoid();
     saveAssetPng(app, banner, bannerAssetId);
     const v = await validateAsset(app, "wechat_banner", bannerAssetId);
@@ -157,14 +191,19 @@ export async function generateWeChatAssetsAndPack(
 
   if (req.enableReward) {
     if (isCanceled?.()) throw createHttpError(499, "生成任务已取消");
-    const rewardGuide = await toBannerPng(primaryStickerBytes);
+    emit?.("progress", { phase: "extras", label: "赞赏引导图" });
+    const outGuide = await generateExtraImage("当前要求：这是一张赞赏引导图横幅，角色做出期待、可怜或感谢的动作，右侧留出空白区域。");
+    const rewardGuide = await toBannerPng(outGuide.bytes);
     rewardGuideAssetId = nanoid();
     saveAssetPng(app, rewardGuide, rewardGuideAssetId);
     const rewardGuideValidation = await validateAsset(app, "wechat_reward_guide", rewardGuideAssetId);
     if (!rewardGuideValidation.ok) throw createHttpError(400, "wechat reward guide validation failed");
     emit?.("extra", { key: "rewardGuideAssetId", assetId: rewardGuideAssetId, url: `/api/assets/${rewardGuideAssetId}` });
 
-    const rewardThanks = await toBannerPng(primaryStickerBytes);
+    if (isCanceled?.()) throw createHttpError(499, "生成任务已取消");
+    emit?.("progress", { phase: "extras", label: "赞赏感谢图" });
+    const outThanks = await generateExtraImage("当前要求：这是一张感谢打赏的横幅插画，角色非常开心、欢呼撒花，横幅比例。");
+    const rewardThanks = await toBannerPng(outThanks.bytes);
     rewardThanksAssetId = nanoid();
     saveAssetPng(app, rewardThanks, rewardThanksAssetId);
     const rewardThanksValidation = await validateAsset(app, "wechat_reward_thanks", rewardThanksAssetId);
