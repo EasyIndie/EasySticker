@@ -60,7 +60,7 @@ describe("pipeline", () => {
         defaultProvider: "mock",
         providers: {
           ...originalConfig.ai.providers,
-          mock: { name: "本地模拟" }
+          mock: { type: "mock", name: "本地模拟" }
         }
       }
     });
@@ -222,6 +222,7 @@ describe("pipeline", () => {
         providers: {
           ...originalConfig.ai.providers,
           http: {
+            type: "http",
             endpoint: `http://127.0.0.1:${port}`
           }
         }
