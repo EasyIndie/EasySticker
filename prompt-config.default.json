@@ -1,4 +1,45 @@
 {
+  "server": {
+    "host": "0.0.0.0",
+    "port": 3000,
+    "dataDir": "data",
+    "logLevel": "info",
+    "taskTtlMs": 3600000,
+    "taskGcIntervalMs": 600000
+  },
+  "ai": {
+    "defaultProvider": "mock",
+    "referenceMode": "base64",
+    "publicBaseUrl": "",
+    "imageSize": {
+      "width": 1024,
+      "height": 1024
+    },
+    "settings": {
+      "timeoutMs": 60000,
+      "retryMax": 3,
+      "retryBaseMs": 1000
+    },
+    "providers": {
+      "mock": {},
+      "picsum":{},
+      "doubao": {
+        "baseUrl": "https://ark.cn-beijing.volces.com/api/v3",
+        "model": "doubao-seedream-5-0-260128",
+        "apiKey": "<your-api-key>"
+      },
+      "hf": {
+        "baseUrl": "https://api-inference.huggingface.co/v1",
+        "model": "deepseek-3.5-7b-instruct",
+        "apiKey": "<your-api-key>"
+      },
+      "http": {
+        "baseUrl": "http://localhost:8000/v1",
+        "model": "deepseek-3.5-7b-instruct",
+        "apiKey": "<your-api-key>"
+      }
+    }
+  },
   "global": {
     "prompt": "基于参考图的主体形象，生成微信聊天场景可用的表情贴纸。要求：可爱有趣，主体居中，背景透明，避免水印，可适当添加文字，字数不超过4个，使用简体中文",
     "negativePrompt": "文字、水印、二维码、品牌logo、复杂背景、低清晰度、锯齿、模糊",

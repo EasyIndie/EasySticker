@@ -2,6 +2,35 @@ import fs from "node:fs";
 import path from "node:path";
 
 export interface PromptConfig {
+  ai: {
+    defaultProvider: string;
+    publicBaseUrl?: string;
+    referenceMode?: "base64" | "url" | "assetId" | "multipart";
+    imageSize?: {
+      width: number;
+      height: number;
+    };
+    settings?: {
+      timeoutMs?: number;
+      retryMax?: number;
+      retryBaseMs?: number;
+    };
+    providers: Record<string, {
+      baseUrl?: string;
+      endpoint?: string;
+      apiKey?: string;
+      model?: string;
+      [key: string]: any;
+    }>;
+  };
+  server?: {
+    host?: string;
+    port?: number;
+    dataDir?: string;
+    logLevel?: string;
+    taskTtlMs?: number;
+    taskGcIntervalMs?: number;
+  };
   global: {
     prompt: string;
     negativePrompt: string;
@@ -40,6 +69,25 @@ export function loadPromptConfig(): PromptConfig {
     console.error("Failed to load default prompt config:", error);
     // 降级为硬编码的默认值
     config = {
+      ai: {
+        defaultProvider: "mock",
+        referenceMode: "base64",
+        imageSize: { width: 256, height: 256 },
+        settings: {
+          timeoutMs: 60000,
+          retryMax: 3,
+          retryBaseMs: 1000
+        },
+        providers: {}
+      },
+      server: {
+        host: "0.0.0.0",
+        port: 3000,
+        dataDir: "data",
+        logLevel: "info",
+        taskTtlMs: 3600000,
+        taskGcIntervalMs: 600000
+      },
       global: {
         prompt: "基于参考图的主体形象，生成微信聊天场景可用的表情贴纸。要求：可爱有趣，主体居中，背景透明，避免水印，可适当添加文字，字数不超过4个，使用简体中文",
         negativePrompt: "文字、水印、二维码、品牌logo、复杂背景、低清晰度、锯齿、模糊",
@@ -73,6 +121,30 @@ export function loadPromptConfig(): PromptConfig {
       const customConfig = JSON.parse(customContent);
       
       // 深度合并用户配置
+      if (customConfig.ai) {
+        config.ai = {
+          defaultProvider: customConfig.ai.defaultProvider ?? config.ai?.defaultProvider ?? "mock",
+          publicBaseUrl: customConfig.ai.publicBaseUrl ?? config.ai?.publicBaseUrl,
+          referenceMode: customConfig.ai.referenceMode ?? config.ai?.referenceMode ?? "base64",
+          imageSize: customConfig.ai.imageSize ?? config.ai?.imageSize ?? { width: 256, height: 256 },
+          settings: {
+            ...config.ai?.settings,
+            ...customConfig.ai.settings
+          },
+          providers: {
+            ...(config.ai?.providers || {}),
+            ...(customConfig.ai.providers || {})
+          }
+        };
+      }
+
+      if (customConfig.server) {
+        config.server = {
+          ...config.server,
+          ...customConfig.server
+        };
+      }
+
       if (customConfig.global) {
         config.global = {
           ...config.global,

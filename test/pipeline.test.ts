@@ -2,7 +2,8 @@ import fs from "node:fs";
 import http from "node:http";
 import os from "node:os";
 import path from "node:path";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import * as promptConfigModule from "../src/services/wechat/promptConfig";
 import sharp from "sharp";
 import { buildApp } from "../src/app";
 
@@ -196,13 +197,21 @@ describe("pipeline", () => {
     const address = server.address();
     const port = typeof address === "object" && address ? address.port : 0;
 
-    const prevProvider = process.env.AI_PROVIDER;
-    const prevEndpoint = process.env.AI_HTTP_ENDPOINT;
-    const prevMode = process.env.AI_HTTP_REFERENCE_MODE;
-
-    process.env.AI_PROVIDER = "http";
-    process.env.AI_HTTP_ENDPOINT = `http://127.0.0.1:${port}`;
-    process.env.AI_HTTP_REFERENCE_MODE = "base64";
+    const originalConfig = promptConfigModule.loadPromptConfig();
+    vi.spyOn(promptConfigModule, "loadPromptConfig").mockReturnValue({
+      ...originalConfig,
+      ai: {
+        ...originalConfig.ai,
+        defaultProvider: "http",
+        referenceMode: "base64",
+        providers: {
+          ...originalConfig.ai.providers,
+          http: {
+            endpoint: `http://127.0.0.1:${port}`
+          }
+        }
+      }
+    });
 
     try {
       const png = await sharp({
@@ -224,7 +233,7 @@ describe("pipeline", () => {
       const startRes = await app.inject({
         method: "POST",
         url: "/api/wechat/generate/start",
-        payload: { referenceAssetId: upload.uploadId, prompt: "http-test", stickerCount: 8, styles: ["flat"] },
+        payload: { referenceAssetId: upload.uploadId, prompt: "http-test", provider: "http", stickerCount: 8, styles: ["flat"] },
         headers: { "content-type": "application/json" }
       });
       expect(startRes.statusCode).toBe(200);
@@ -250,9 +259,7 @@ describe("pipeline", () => {
       expect(hits[0].referenceImageBase64.length).toBeGreaterThan(10);
       expect(hits[0].referenceImageUrl).toBeUndefined();
     } finally {
-      process.env.AI_PROVIDER = prevProvider;
-      process.env.AI_HTTP_ENDPOINT = prevEndpoint;
-      process.env.AI_HTTP_REFERENCE_MODE = prevMode;
+      vi.restoreAllMocks();
       await new Promise<void>((resolve, reject) => server.close((err) => (err ? reject(err) : resolve())));
     }
   }, 120000);

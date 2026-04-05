@@ -11,6 +11,8 @@ import {
   ensureTaskGc
 } from "../services/wechat/tasks";
 
+import { loadPromptConfig } from "../services/wechat/promptConfig";
+
 const promptSchema = z.object({
   referenceAssetId: z.string().min(1)
 });
@@ -18,6 +20,7 @@ const promptSchema = z.object({
 const generateSchema = z.object({
   referenceAssetId: z.string().min(1),
   prompt: z.string().min(1),
+  provider: z.string().optional(),
   styles: z.array(z.string().min(1)).optional(),
   stickerCount: z.number().int().min(8).max(24).optional(),
   enableReward: z.boolean().optional(),
@@ -36,7 +39,9 @@ const generateSchema = z.object({
 });
 
 export async function registerWeChatAiRoutes(app: FastifyInstance) {
-  ensureTaskGc(Number(process.env.TASK_TTL_MS ?? 10 * 60 * 1000), Number(process.env.TASK_GC_INTERVAL_MS ?? 60 * 1000));
+  const config = loadPromptConfig();
+  const serverConfig = config.server || {};
+  ensureTaskGc(serverConfig.taskTtlMs ?? 10 * 60 * 1000, serverConfig.taskGcIntervalMs ?? 60 * 1000);
   app.post("/wechat/prompt", async (req, reply) => {
     const parsed = promptSchema.safeParse(req.body);
     if (!parsed.success) {
