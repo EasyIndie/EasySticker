@@ -10,18 +10,19 @@ export async function registerConfigRoutes(app: FastifyInstance) {
 
     const providers = promptConfig.ai?.providers || {};
     for (const [id, config] of Object.entries(providers)) {
-      if ((id === "mock" || id === "picsum") && isProd) continue;
+      const type = config.type || id;
+      if ((type === "mock" || type === "picsum") && isProd) continue;
       
       let name = config.name || id;
       let isValid = true;
       
-      if (id === "doubao") {
+      if (type === "doubao") {
         if (!config.name) name = "豆包大模型 (Ark)";
-        isValid = !!config.apiKey;
-      } else if (id === "hf") {
+        isValid = typeof config.apiKey === "string" && config.apiKey.length > 0;
+      } else if (type === "hf") {
         if (!config.name) name = "HuggingFace Inference";
-        isValid = !!config.endpoint && !!config.apiKey;
-      } else if (id === "http") {
+        isValid = !!config.endpoint && typeof config.apiKey === "string" && config.apiKey.length > 0;
+      } else if (type === "http") {
         if (!config.name) name = "通用 HTTP 服务";
         isValid = !!config.endpoint;
       }

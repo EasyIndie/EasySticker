@@ -22,24 +22,31 @@
     },
     "providers": {
       "mock": {
+        "type": "mock",
         "name": "本地模拟 (Mock - 无需配置 Key)"
       },
       "picsum": {
+        "type": "picsum",
         "name": "随机图片 (Picsum)"
       },
       "doubao": {
+        "type": "doubao",
+        "name": "豆包大模型 (Ark)",
         "baseUrl": "https://ark.cn-beijing.volces.com/api/v3",
         "model": "doubao-seedream-5-0-260128",
-        "apiKey": "<your-api-key>"
+        "apiKey": ""
       },
       "hf": {
-        "baseUrl": "https://api-inference.huggingface.co/v1",
+        "type": "hf",
+        "name": "HuggingFace",
+        "endpoint": "https://api-inference.huggingface.co/v1",
         "model": "deepseek-3.5-7b-instruct",
-        "apiKey": "<your-api-key>"
+        "apiKey": ""
       },
       "http": {
-        "endpoint": "http://localhost:8000/v1",
-        "apiKey": "<your-api-key>"
+        "type": "http",
+        "name": "通用 HTTP 服务",
+        "endpoint": ""
       }
     }
   },
