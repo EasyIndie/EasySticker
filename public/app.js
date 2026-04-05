@@ -1592,7 +1592,7 @@ async function generateWechatPack() {
             : "已生成 cover、icon、banner 与表情预览，可继续重新生成当前方案。",
           "success"
         );
-        renderSummary(json);
+
         renderExportInfo(json);
         renderMetadataPreview(json);
       }
