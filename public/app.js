@@ -1,5 +1,5 @@
 const uploadForm = document.getElementById("uploadForm");
-const uploadSubmit = document.getElementById("uploadSubmit");
+const fileInput = document.getElementById("file");
 const uploadState = document.getElementById("uploadState");
 const originalPreview = document.getElementById("originalPreview");
 const wechatAiForm = document.getElementById("wechatAiForm");
@@ -34,7 +34,6 @@ const wechatAiRewardMessage = document.getElementById("wechatAiRewardMessage");
 const wechatAiStyleOptions = document.getElementById("wechatAiStyleOptions");
 const wechatAiCountDec = document.getElementById("wechatAiCountDec");
 const wechatAiCountInc = document.getElementById("wechatAiCountInc");
-const wechatAiSummary = document.getElementById("wechatAiSummary");
 const wechatAiExportInfo = document.getElementById("wechatAiExportInfo");
 const wechatAiMetadataPreview = document.getElementById("wechatAiMetadataPreview");
 const wechatAiFeedback = document.getElementById("wechatAiFeedback");
@@ -155,38 +154,25 @@ let lastPackResult = null;
 let currentTaskId = null;
 let sseAbortController = null;
 let cancelRequested = false;
-let summaryResult = null;
 let exportInfoResult = null;
 let metadataPreviewResult = null;
-let isSummaryCollapsed = true;
 let isExportInfoCollapsed = true;
 let isMetadataPreviewCollapsed = true;
 let toastTimer = null;
 const flashTimers = new Map();
 const validationErrors = new Map();
 const CONFIRM_CARD_CONFIGS = {
-  summary: {
-    element: wechatAiSummary,
-    title: "结果概览",
-    description: "确认本次生成范围、风格与导出文件，再继续下载或重新生成。",
-    toggleAction: "toggle-summary",
-    toggleButtonClass: "ghost-button summary-toggle-button panel-toggle-button",
-    collapsedPlaceholder: "已默认折叠，展开后查看标题、作者、版本、版权、贴纸数量、风格、参考图方式与导出文件。",
-    getExpandedContent(result) {
-      return buildDetailGridMarkup(getSummaryData(result));
-    }
-  },
   exportInfo: {
     element: wechatAiExportInfo,
-    title: "导出信息",
-    description: "确认对外展示字段、packId 与 ZIP 文件名，确认后可直接复制。",
+    title: "结果概览与导出信息",
+    description: "确认生成范围、风格与导出信息，确认后可直接复制。",
     toggleAction: "toggle-export-info",
     toggleButtonClass: "ghost-button export-info-toggle-button panel-toggle-button",
-    copyAction: "copy-export-info-card",
+    copyAction: "copy-export-info",
     copyButtonClass: "ghost-button export-info-copy-button",
     copyLabel: "复制导出信息",
     copySuccess: "导出信息已复制",
-    collapsedPlaceholder: "已默认折叠，展开后查看标题、作者、版本、版权、packId 与导出文件。",
+    collapsedPlaceholder: "已默认折叠，展开后查看完整信息。",
     getExpandedContent(result) {
       return buildDetailGridMarkup(getExportInfoData(result).items);
     },
@@ -214,16 +200,6 @@ const CONFIRM_CARD_CONFIGS = {
   }
 };
 const CONFIRM_CARD_STATE = {
-  summary: {
-    getResult: () => summaryResult,
-    setResult: (result) => {
-      summaryResult = result;
-    },
-    getCollapsed: () => isSummaryCollapsed,
-    setCollapsed: (value) => {
-      isSummaryCollapsed = value;
-    }
-  },
   exportInfo: {
     getResult: () => exportInfoResult,
     setResult: (result) => {
@@ -420,10 +396,14 @@ function clearPersistedPackResult() {
 }
 
 function sanitizePersistedPackResult(raw) {
-  if (!raw || typeof raw !== "object") return null;
+  if (!raw || typeof raw !== "object") {
+    console.log("sanitize failed: not object", raw);
+    return null;
+  }
 
   const result = raw.result;
   if (!result || typeof result !== "object" || typeof result.packId !== "string" || typeof result.downloadUrl !== "string") {
+    console.log("sanitize failed: result invalid", result);
     return null;
   }
 
@@ -535,6 +515,7 @@ function restorePersistedPackResult() {
 
     const restored = sanitizePersistedPackResult(JSON.parse(rawText));
     if (!restored) {
+      console.log("sanitizePersistedPackResult returned null");
       clearPersistedPackResult();
       return false;
     }
@@ -568,15 +549,17 @@ function restorePersistedPackResult() {
     renderExtraAssets(restored.result.extras, "success");
     renderDownload(restored.result.packId, restored.result.downloadUrl, restored.result.downloadFilename);
     renderActions(restored.result);
-    renderSummary(restored.result);
     renderExportInfo(restored.result);
     renderMetadataPreview(restored.result);
-    setFeedback("已从本地恢复最近一次生成结果，可直接预览、下载或重新生成。", "success");
+    const exportConfirmPanel = document.getElementById("exportConfirmPanel");
+    if (exportConfirmPanel) exportConfirmPanel.hidden = false;
     setStatus(generateState, "已恢复最近结果", "success");
+    setFeedback("已从本地恢复最近一次生成结果，可直接预览、下载或重新生成。", "success");
     setNotice("已恢复最近一次生成结果，可继续下载或重新生成。", "success");
     syncRegenerateButton();
     return true;
-  } catch {
+  } catch (e) {
+    console.error("restorePersistedPackResult error:", e);
     clearPersistedPackResult();
     return false;
   }
@@ -704,33 +687,51 @@ function validateGenerateInputs() {
   return false;
 }
 
-function setSummary(title, description) {
-  renderConfirmCardPlaceholder("summary", description, { title });
-}
-
 function buildConfirmCardMarkup({ title, description, actions = "", content = "" }) {
   return `
     <div class="summary-card-head">
       <div class="summary-card-copy">
-        <div class="section-title">${escapeHtml(title)}</div>
-        <p class="muted">${escapeHtml(description)}</p>
+        <div class="section-title">${title}</div>
+        <p class="muted">${description}</p>
       </div>
-      ${actions ? `<div class="summary-card-actions">${actions}</div>` : ""}
+      ${actions}
     </div>
     ${content}
   `;
 }
 
-function setExportInfo(message) {
-  renderConfirmCardPlaceholder("exportInfo", message);
+function setExportInfo(title, description) {
+  renderConfirmCardPlaceholder("exportInfo", description, { title });
 }
 
 function setMetadataPreview(message) {
   renderConfirmCardPlaceholder("metadata", message);
 }
 
-function buildConfirmCardActions(config, collapsed) {
+const COPY_ICON_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>`;
+
+function buildConfirmCardActions(key, config, collapsed) {
   const actions = [];
+  
+  if (config.copyAction) {
+    actions.push(`
+      <button
+        type="button"
+        class="${config.copyButtonClass}"
+        data-action="${config.copyAction}"
+        title="${config.copyLabel}"
+        aria-label="${config.copyLabel}"
+        onclick="(function(e){
+          e.preventDefault();
+          e.stopPropagation();
+          copyText(document.getElementById('${config.element.id}').dataset.copyContent || '')
+            .then(() => setNotice('${config.copySuccess}', 'success'))
+            .catch((err) => setNotice('复制失败：' + err.message, 'error'));
+        })(event)"
+      >${COPY_ICON_SVG}</button>
+    `);
+  }
+  
   if (config.toggleAction) {
     actions.push(`
       <button
@@ -739,16 +740,6 @@ function buildConfirmCardActions(config, collapsed) {
         data-action="${config.toggleAction}"
         aria-expanded="${collapsed ? "false" : "true"}"
       >${collapsed ? "展开内容" : "收起内容"}</button>
-    `);
-  }
-
-  if (config.copyAction) {
-    actions.push(`
-      <button
-        type="button"
-        class="${config.copyButtonClass}"
-        data-action="${config.copyAction}"
-      >${config.copyLabel}</button>
     `);
   }
 
@@ -770,6 +761,9 @@ function renderConfirmCardPlaceholder(key, message, { title } = {}) {
 function renderConfirmCard(key, result, { resetCollapsed = true } = {}) {
   const config = CONFIRM_CARD_CONFIGS[key];
   const state = CONFIRM_CARD_STATE[key];
+  const element = config?.element;
+  if (!element) return;
+
   if (!result) {
     renderConfirmCardPlaceholder(key, "");
     return;
@@ -781,14 +775,20 @@ function renderConfirmCard(key, result, { resetCollapsed = true } = {}) {
   }
 
   const collapsed = state.getCollapsed();
-  config.element.innerHTML = buildConfirmCardMarkup({
-    title: config.title,
-    description: config.description,
-    actions: buildConfirmCardActions(config, collapsed),
-    content: collapsed
-      ? `<p class="muted summary-card-placeholder">${config.collapsedPlaceholder}</p>`
-      : config.getExpandedContent(result)
-  });
+  element.dataset.copyContent = config.getCopyText ? config.getCopyText(result) : "";
+
+  try {
+    element.innerHTML = buildConfirmCardMarkup({
+      title: config.title,
+      description: config.description,
+      actions: buildConfirmCardActions(key, config, collapsed),
+      content: collapsed
+        ? `<p class="muted summary-card-placeholder">${config.collapsedPlaceholder}</p>`
+        : config.getExpandedContent(result)
+    });
+  } catch (err) {
+    console.error(`Failed to render confirm card ${key}:`, err);
+  }
 }
 
 function toggleConfirmCard(key) {
@@ -822,7 +822,13 @@ async function handleConfirmCardClick(key, event) {
   if (!copyButton || !state.getResult()) return;
 
   try {
-    await copyConfirmCardContent(key);
+    const element = document.getElementById(config.element.id);
+    if (element) {
+      await copyText(element.dataset.copyContent || "");
+      setNotice(config.copySuccess, "success");
+    } else {
+      await copyConfirmCardContent(key);
+    }
   } catch (error) {
     setNotice(error instanceof Error ? error.message : "复制失败，请稍后重试。", "error");
   }
@@ -845,44 +851,9 @@ function buildDetailGridMarkup(items) {
   `;
 }
 
-function getSummaryData(result) {
-  const count = result?.stickers?.length ?? result?.meta?.count ?? DEFAULT_STICKER_COUNT;
-  const styles = Array.isArray(result?.meta?.styles) && result.meta.styles.length ? result.meta.styles.join("、") : "默认";
-  const referenceMode = result?.meta?.referenceMode ?? "base64";
-  const filename = result?.downloadFilename ?? `${result?.packId ?? "pack"}.zip`;
-  const title = result?.meta?.title ?? "未命名表情包";
-  const author = result?.meta?.author ?? "未填写";
-  const version = result?.meta?.version ?? "未填写";
-  const copyright = result?.meta?.copyright ?? "未填写";
-  const rewardEnabled = result?.meta?.rewardEnabled ? "已开启" : "未开启";
-  const rewardMessage = result?.meta?.rewardMessage ?? "未填写";
-
-  return [
-    { label: "标题", value: title },
-    { label: "作者", value: author },
-    { label: "版本", value: version },
-    { label: "版权", value: copyright },
-    { label: "贴纸数量", value: `${count} 张` },
-    { label: "赞赏功能", value: rewardEnabled },
-    ...(result?.meta?.rewardEnabled ? [{ label: "赞赏引导语", value: rewardMessage }] : []),
-    { label: "风格", value: styles },
-    { label: "参考图方式", value: referenceMode },
-    { label: "导出文件", value: filename }
-  ];
-}
-
-function renderSummary(result, { resetCollapsed = true } = {}) {
-  if (!result) {
-    setSummary("结果概览", "生成后在这里查看标题、数量、风格、参考图方式与导出文件。");
-    return;
-  }
-
-  renderConfirmCard("summary", result, { resetCollapsed });
-}
-
 function renderExportInfo(result, { resetCollapsed = true } = {}) {
   if (!result) {
-    setExportInfo("生成后在这里集中确认标题、作者、版本、版权、packId 与导出文件。");
+    setExportInfo("结果概览与导出信息", "生成后在这里查看标题、数量、风格、参考图方式与导出文件。");
     return;
   }
 
@@ -890,10 +861,11 @@ function renderExportInfo(result, { resetCollapsed = true } = {}) {
 }
 
 function setFeedback(text, tone = "idle") {
+  if (!wechatAiFeedback) return;
   wechatAiFeedback.dataset.tone = tone;
   wechatAiFeedback.innerHTML = `
     <div class="section-title">预览状态</div>
-    <p class="muted">${text}</p>
+    <p class="muted">${escapeHtml(text)}</p>
   `;
 }
 
@@ -915,6 +887,9 @@ function getExportInfoData(result) {
   const filename = result?.downloadFilename ?? `${packId}.zip`;
   const rewardEnabled = result?.meta?.rewardEnabled ? "已开启" : "未开启";
   const rewardMessage = result?.meta?.rewardMessage ?? "未填写";
+  const count = result?.stickers?.length ?? result?.meta?.count ?? DEFAULT_STICKER_COUNT;
+  const styles = Array.isArray(result?.meta?.styles) && result.meta.styles.length ? result.meta.styles.join("、") : "默认";
+  const referenceMode = result?.meta?.referenceMode ?? "base64";
 
   return {
     title,
@@ -930,8 +905,11 @@ function getExportInfoData(result) {
       { label: "作者", value: author },
       { label: "版本", value: version },
       { label: "版权", value: copyright },
+      { label: "贴纸数量", value: `${count} 张` },
       { label: "赞赏功能", value: rewardEnabled },
       ...(result?.meta?.rewardEnabled ? [{ label: "赞赏引导语", value: rewardMessage }] : []),
+      { label: "风格", value: styles },
+      { label: "参考图方式", value: referenceMode },
       { label: "packId", value: packId },
       { label: "导出文件", value: filename }
     ]
@@ -1194,22 +1172,22 @@ function renderExtraAssets(extras = {}, tone = "idle") {
   for (const item of getExtraAssetDefs(extras)) {
     const assetId = extras?.[item.key];
     const card = document.createElement("article");
-    card.className = `asset-card${item.wide ? " asset-card-wide" : ""}`;
+    card.className = `preview-item${item.wide ? " preview-item-wide" : ""}`;
     card.dataset.tone = tone;
 
     const head = document.createElement("div");
-    head.className = "asset-head";
+    head.className = "preview-head";
 
     const title = document.createElement("div");
-    title.className = "asset-title";
+    title.className = "preview-title";
     title.textContent = item.title;
 
     const spec = document.createElement("div");
-    spec.className = "asset-spec";
+    spec.className = "preview-spec";
     spec.textContent = item.spec;
 
     const description = document.createElement("p");
-    description.className = "asset-description";
+    description.className = "preview-description";
     description.textContent = getExtraAssetDescription(item, assetId, tone, extras?.[`${item.key}_prompt`]);
     description.style.whiteSpace = "pre-wrap";
 
@@ -1218,7 +1196,7 @@ function renderExtraAssets(extras = {}, tone = "idle") {
     head.appendChild(description);
 
     const media = document.createElement(assetId && tone === "success" ? "img" : "div");
-    media.className = `asset-media${item.wide ? " asset-media-wide" : ""}`;
+    media.className = `preview-media${item.wide ? " preview-media-wide" : ""}`;
 
     if (assetId && tone === "success") {
       media.src = buildAssetUrl(assetId);
@@ -1226,9 +1204,9 @@ function renderExtraAssets(extras = {}, tone = "idle") {
       media.loading = "lazy";
       media.decoding = "async";
       media.onerror = () => {
-        media.outerHTML = `<div class="asset-media${item.wide ? " asset-media-wide" : ""} asset-placeholder">${PLACEHOLDER_STATE_TEXT.error}</div>`;
+        media.outerHTML = `<div class="preview-media${item.wide ? " preview-media-wide" : ""} asset-placeholder">${PLACEHOLDER_STATE_TEXT.error}</div>`;
         card.dataset.tone = "error";
-        const desc = card.querySelector(".asset-description");
+        const desc = card.querySelector(".preview-description");
         if (desc) desc.textContent = "生成失败后可重新生成。";
       };
     } else {
@@ -1242,10 +1220,16 @@ function renderExtraAssets(extras = {}, tone = "idle") {
     // 将卡片添加到对应的容器中，并显示区块
     if (item.key === "coverAssetId") {
       wechatAiCover.appendChild(card);
-      if (assetId) sectionCover.hidden = false;
+      if (assetId) {
+        const sectionCoverIcon = document.getElementById("sectionCoverIcon");
+        if (sectionCoverIcon) sectionCoverIcon.hidden = false;
+      }
     } else if (item.key === "iconAssetId") {
       wechatAiIcon.appendChild(card);
-      if (assetId) sectionIcon.hidden = false;
+      if (assetId) {
+        const sectionCoverIcon = document.getElementById("sectionCoverIcon");
+        if (sectionCoverIcon) sectionCoverIcon.hidden = false;
+      }
     } else if (item.key === "bannerAssetId") {
       wechatAiBanner.appendChild(card);
       if (assetId) sectionBanner.hidden = false;
@@ -1261,23 +1245,24 @@ function renderExtraAssets(extras = {}, tone = "idle") {
 
 function resetGenerationResult({ clearPersisted = true } = {}) {
   wechatAiZipLink.innerHTML = "";
-  wechatAiActions.innerHTML = "";
   clearGenerateValidation();
   wechatAiPreview.innerHTML = "";
   
   // 隐藏所有额外资源区块
-  sectionCover.hidden = true;
-  sectionIcon.hidden = true;
+  const sectionCoverIcon = document.getElementById("sectionCoverIcon");
+  if (sectionCoverIcon) sectionCoverIcon.hidden = true;
   sectionBanner.hidden = true;
   sectionRewardGuide.hidden = true;
   sectionRewardThanks.hidden = true;
+  
+  const exportConfirmPanel = document.getElementById("exportConfirmPanel");
+  if (exportConfirmPanel) exportConfirmPanel.hidden = true;
 
   renderPreview([], "idle");
   renderExtraAssets({}, "idle");
 
   setFeedback("等待生成后展示 cover、icon、banner 与表情预览。", "idle");
-  setSummary("结果概览", "生成后在这里查看标题、数量、风格、参考图方式与导出文件。");
-  renderExportInfo(null);
+  setExportInfo("结果概览与导出信息", "生成后在这里查看标题、数量、风格、参考图方式与导出文件。");
   renderMetadataPreview(null);
   setStatus(generateState, "等待生成", "idle");
   hasGenerationAttempted = false;
@@ -1321,6 +1306,39 @@ function resetAllState() {
 function renderDownload(packId, downloadUrl, filename) {
   if (!downloadUrl) return;
   const resolvedFilename = filename || `${packId}.zip`;
+  
+  wechatAiZipLink.innerHTML = "";
+  
+  // 复制链接按钮
+  const copyLinkBtn = document.createElement("button");
+  copyLinkBtn.type = "button";
+  copyLinkBtn.className = "ghost-button icon-text-button";
+  copyLinkBtn.innerHTML = `${COPY_ICON_SVG} <span>复制链接</span>`;
+  copyLinkBtn.addEventListener("click", async () => {
+    try {
+      const downloadHref = new URL(downloadUrl, window.location.origin).toString();
+      await copyText(downloadHref);
+      setNotice("下载链接已复制", "success");
+    } catch (error) {
+      setNotice("复制失败，请稍后重试。", "error");
+    }
+  });
+  
+  // 复制 packId 按钮
+  const copyPackIdBtn = document.createElement("button");
+  copyPackIdBtn.type = "button";
+  copyPackIdBtn.className = "ghost-button icon-text-button";
+  copyPackIdBtn.innerHTML = `${COPY_ICON_SVG} <span>复制 packId</span>`;
+  copyPackIdBtn.addEventListener("click", async () => {
+    try {
+      await copyText(packId);
+      setNotice("packId 已复制", "success");
+    } catch (error) {
+      setNotice("复制失败，请稍后重试。", "error");
+    }
+  });
+
+  // 主下载按钮
   const link = document.createElement("a");
   link.href = downloadUrl;
   link.className = "download-button";
@@ -1350,67 +1368,33 @@ function renderDownload(packId, downloadUrl, filename) {
       setNotice(error instanceof Error ? error.message : "下载失败，请稍后重试。", "error");
     }
   });
-  wechatAiZipLink.innerHTML = "";
+  
+  wechatAiZipLink.appendChild(copyLinkBtn);
+  wechatAiZipLink.appendChild(copyPackIdBtn);
   wechatAiZipLink.appendChild(link);
 }
 
 function renderActions(result) {
-  wechatAiActions.innerHTML = "";
-  if (!result?.packId || !result?.downloadUrl) return;
-
-  const downloadHref = new URL(result.downloadUrl, window.location.origin).toString();
-  const actions = [
-    {
-      action: "copy-export-info",
-      label: "复制导出信息",
-      text: buildExportInfoText(result),
-      success: "导出信息已复制"
-    },
-    {
-      action: "copy-metadata-json",
-      label: "复制 metadata.json",
-      text: buildMetadataPreviewText(result),
-      success: "metadata.json 已复制"
-    },
-    {
-      action: "copy-download-link",
-      label: "复制下载链接",
-      text: downloadHref,
-      success: "下载链接已复制"
-    },
-    {
-      action: "copy-pack-id",
-      label: "复制 packId",
-      text: result.packId,
-      success: "packId 已复制"
-    }
-  ];
-
-  for (const action of actions) {
-    const button = document.createElement("button");
-    button.type = "button";
-    button.className = "ghost-button";
-    button.dataset.action = action.action;
-    button.textContent = action.label;
-    button.addEventListener("click", async () => {
-      try {
-        await copyText(action.text);
-        setNotice(action.success, "success");
-      } catch (error) {
-        setNotice(error instanceof Error ? error.message : "复制失败，请稍后重试。", "error");
-      }
-    });
-    wechatAiActions.appendChild(button);
-  }
+  // 原有的 actions 逻辑已移除，功能转移到 confirm card 和 download slot 中
 }
 
 function renderPreview(stickers, tone = "success") {
+  const sectionPrimary = document.getElementById("sectionPrimary");
+  
   if (!stickers.length) {
+    if (tone === "idle") {
+      sectionPrimary.hidden = true;
+      wechatAiPreview.innerHTML = "";
+      return;
+    }
+    sectionPrimary.hidden = false;
     const desiredTone = tone === "success" ? "idle" : tone;
     wechatAiPreview.innerHTML = "";
     wechatAiPreview.appendChild(createPreviewCard(null, desiredTone));
     return;
   }
+
+  sectionPrimary.hidden = false;
 
   // 增量 append：仅为新增的贴纸追加卡片
   const existingCount = wechatAiPreview.children.length;
@@ -1520,11 +1504,14 @@ async function generateWechatPack() {
   wechatAiZipLink.innerHTML = "";
   
   // 隐藏所有额外资源区块，准备新的流式生成
-  sectionCover.hidden = true;
-  sectionIcon.hidden = true;
+  const sectionCoverIcon = document.getElementById("sectionCoverIcon");
+  if (sectionCoverIcon) sectionCoverIcon.hidden = true;
   sectionBanner.hidden = true;
   sectionRewardGuide.hidden = true;
   sectionRewardThanks.hidden = true;
+  
+  const exportConfirmPanel = document.getElementById("exportConfirmPanel");
+  if (exportConfirmPanel) exportConfirmPanel.hidden = true;
 
   renderPreview([], "loading");
   renderExtraAssets({}, "loading");
@@ -1534,7 +1521,7 @@ async function generateWechatPack() {
       : "正在生成 cover、icon、banner 与表情预览。",
     "loading"
   );
-  setSummary("结果概览", "正在生成中，请稍候。");
+  setExportInfo("结果概览与导出信息", "正在生成中，请稍候。");
   renderMetadataPreview(null, "loading");
 
   try {
@@ -1618,6 +1605,10 @@ async function generateWechatPack() {
         lastPackResult = json;
         renderPreview(stickers, "success");
         renderExtraAssets(json?.extras ?? {}, "success");
+        
+        const exportConfirmPanel = document.getElementById("exportConfirmPanel");
+        if (exportConfirmPanel) exportConfirmPanel.hidden = false;
+        
         renderDownload(json?.packId, json?.downloadUrl, json?.downloadFilename);
         renderActions(json);
         persistLastGeneratedResult(json);
@@ -1711,6 +1702,8 @@ async function generateWechatPack() {
         renderActions(lastPackResult);
         renderExportInfo(lastPackResult);
         renderMetadataPreview(lastPackResult);
+        const exportConfirmPanel = document.getElementById("exportConfirmPanel");
+        if (exportConfirmPanel) exportConfirmPanel.hidden = false;
       } else {
         renderMetadataPreview(null, "error");
       }
@@ -1719,26 +1712,21 @@ async function generateWechatPack() {
       renderPreview([], "error");
       renderExtraAssets({}, "error");
       setFeedback("本次生成失败，可直接点击重新生成再次尝试。", "error");
-      setSummary("结果概览", "生成失败，请调整提示词或稍后重试。");
-      renderExportInfo(lastPackResult);
+      setExportInfo("结果概览与导出信息", "生成失败，请调整提示词或稍后重试。");
     }
   } finally {
     setGenerateButtonsBusy(false);
   }
 }
 
-uploadForm.addEventListener("submit", async (event) => {
-  event.preventDefault();
-
-  const fileEl = document.getElementById("file");
-  const file = fileEl.files?.[0];
+async function handleFileUpload() {
+  const file = fileInput.files?.[0];
   if (!file) {
     setNotice("请选择一张图片后再上传。", "error");
     setStatus(uploadState, "缺少图片", "error");
     return;
   }
 
-  setBusy(uploadSubmit, true, "上传中...");
   setStatus(uploadState, "上传中...", "loading");
   setNotice("正在上传参考图...", "info");
   resetGenerationResult();
@@ -1761,7 +1749,7 @@ uploadForm.addEventListener("submit", async (event) => {
 
     setStatus(uploadState, "上传成功", "success");
     setNotice("参考图已上传，正在为你准备推荐提示词。", "success");
-    setSummary("结果概览", "参考图已就绪，下一步补充提示词并生成表情包。");
+    setExportInfo("结果概览与导出信息", "参考图已就绪，下一步补充提示词并生成表情包。");
 
     try {
       await suggestPrompt({ silent: true });
@@ -1778,9 +1766,17 @@ uploadForm.addEventListener("submit", async (event) => {
     setStatus(uploadState, "上传失败", "error");
     setNotice(error instanceof Error ? error.message : "上传失败，请稍后重试。", "error");
     syncRegenerateButton();
-  } finally {
-    setBusy(uploadSubmit, false);
   }
+}
+
+fileInput?.addEventListener("change", async () => {
+  if (fileInput.files?.length > 0) {
+    await handleFileUpload();
+  }
+});
+
+uploadForm.addEventListener("submit", (event) => {
+  event.preventDefault();
 });
 
 wechatAiSuggest.addEventListener("click", async () => {
@@ -1914,10 +1910,6 @@ wechatAiForm.addEventListener("submit", async (event) => {
 
 regenerateSubmit.addEventListener("click", async () => {
   await generateWechatPack();
-});
-
-wechatAiSummary.addEventListener("click", (event) => {
-  handleConfirmCardClick("summary", event);
 });
 
 wechatAiMetadataPreview.addEventListener("click", async (event) => {
