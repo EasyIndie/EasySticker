@@ -30,9 +30,9 @@ function isRetryable(err: any) {
 
 export function buildMinimalClient(provider: AiProvider, opts?: Partial<Options>) {
   const options: Options = {
-    timeoutMs: Number(process.env.AI_TIMEOUT_MS ?? 60000), // 增加到 60s
-    retryMax: Number(process.env.AI_RETRY_MAX ?? 3),       // 增加到 3 次
-    retryBaseMs: Number(process.env.AI_RETRY_BASE_MS ?? 1000), // 初始退避增加到 1s
+    timeoutMs: Number(process.env.AI_REQUEST_TIMEOUT_MS ?? 60000), // 增加到 60s
+    retryMax: Number(process.env.AI_REQUEST_RETRY_MAX ?? 3),       // 增加到 3 次
+    retryBaseMs: Number(process.env.AI_REQUEST_RETRY_BASE_MS ?? 1000), // 初始退避增加到 1s
     ...(opts ?? {})
   };
 

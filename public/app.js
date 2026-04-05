@@ -45,10 +45,10 @@ const generateErrorSummary = document.getElementById("generateErrorSummary");
 const generateErrorList = document.getElementById("generateErrorList");
 const originalPreviewPlaceholder = document.getElementById("originalPreviewPlaceholder");
 
-const DEFAULT_STICKER_COUNT = 8;
-const MIN_STICKER_COUNT = 8;
-const MAX_STICKER_COUNT = 24;
-const DEFAULT_STYLE_OPTIONS = ["扁平插画", "3D 卡通", "日系 Q 版", "像素风", "国潮风"];
+let DEFAULT_STICKER_COUNT = 8;
+let MIN_STICKER_COUNT = 8;
+let MAX_STICKER_COUNT = 24;
+let DEFAULT_STYLE_OPTIONS = ["扁平插画", "3D 卡通", "日系 Q 版", "像素风", "国潮风"];
 const LAST_WECHAT_PACK_STORAGE_KEY = "easysticker:last-wechat-pack";
 const BASE_EXTRA_ASSET_DEFS = [
   {
@@ -1926,9 +1926,28 @@ originalPreview.addEventListener("error", () => {
   setNotice("图片加载失败，请重新上传。", "error");
 });
 
-initializeFieldAccessibility();
-renderStyleOptions(DEFAULT_STYLE_OPTIONS);
-syncRewardFields();
-resetGenerationResult({ clearPersisted: false });
-setPromptHint(currentStyles);
-restorePersistedPackResult();
+async function initApp() {
+  try {
+    const configRes = await fetch("/api/config");
+    if (configRes.ok) {
+      const config = await configRes.json();
+      if (config?.wechat) {
+        DEFAULT_STYLE_OPTIONS = config.wechat.styles || DEFAULT_STYLE_OPTIONS;
+        MIN_STICKER_COUNT = config.wechat.minStickerCount || MIN_STICKER_COUNT;
+        MAX_STICKER_COUNT = config.wechat.maxStickerCount || MAX_STICKER_COUNT;
+        DEFAULT_STICKER_COUNT = config.wechat.defaultStickerCount || DEFAULT_STICKER_COUNT;
+      }
+    }
+  } catch (err) {
+    console.warn("Failed to load config from server, using default constants.");
+  }
+
+  initializeFieldAccessibility();
+  renderStyleOptions(DEFAULT_STYLE_OPTIONS);
+  syncRewardFields();
+  resetGenerationResult({ clearPersisted: false });
+  setPromptHint(currentStyles);
+  restorePersistedPackResult();
+}
+
+initApp();

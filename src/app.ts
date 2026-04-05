@@ -15,6 +15,7 @@ import { registerUploadRoutes } from "./routes/uploads";
 import { registerAssetRoutes } from "./routes/assets";
 import { registerPackRoutes } from "./routes/packs";
 import { registerWeChatAiRoutes } from "./routes/wechatAi";
+import { registerConfigRoutes } from "./routes/config";
 
 export type AppConfig = {
   host: string;
@@ -73,6 +74,7 @@ export function buildApp(config: AppConfig): FastifyInstance {
   app.register(registerAssetRoutes, { prefix: "/api" });
   app.register(registerPackRoutes, { prefix: "/api" });
   app.register(registerWeChatAiRoutes, { prefix: "/api" });
+  app.register(registerConfigRoutes, { prefix: "/api" });
 
   return app;
 }
