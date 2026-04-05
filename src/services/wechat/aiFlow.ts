@@ -94,14 +94,22 @@ export async function generateWeChatAssetsAndPack(
   const imageWidth = promptConfig.ai?.imageSize?.width ?? 1024;
   const imageHeight = promptConfig.ai?.imageSize?.height ?? 1024;
 
-  emit?.("start", { count, styles, referenceMode });
+  let totalImageCount = count;
+  if (req.includeCover) totalImageCount++;
+  if (req.includeIcon) totalImageCount++;
+  if (req.includeBanner) totalImageCount++;
+  if (req.enableReward) totalImageCount += 2;
+
+  emit?.("start", { count: totalImageCount, styles, referenceMode });
   const stickerAssetIds: string[] = [];
+  let currentGenerated = 0;
+
   for (let i = 0; i < count; i++) {
     if (isCanceled?.()) throw createHttpError(499, "生成任务已取消");
     const style = styles[i % styles.length]!;
     const emotion = emotions[i % emotions.length]; // 依次取出一个情绪
     
-    emit?.("progress", { phase: "stickers", current: i + 1, total: count });
+    emit?.("progress", { phase: "stickers", current: currentGenerated + 1, total: totalImageCount });
     const compiledPrompt = compilePrompt(promptConfig.templates.sticker, {
       prompt: req.prompt,
       emotion,
@@ -125,8 +133,9 @@ export async function generateWeChatAssetsAndPack(
     const id = nanoid();
     saveAssetPng(app, sticker, id);
     stickerAssetIds.push(id);
+    currentGenerated++;
     const label = String(i + 1).padStart(3, "0");
-    emit?.("sticker", { label, assetId: id, url: `/api/assets/${id}`, prompt: compiledPrompt });
+    emit?.("sticker", { label, assetId: id, url: `/api/assets/${id}`, prompt: compiledPrompt, current: currentGenerated, total: totalImageCount });
   }
 
   const stickersValidation = await validateAssetList(app, "wechat_stickers", stickerAssetIds);
@@ -166,60 +175,65 @@ export async function generateWeChatAssetsAndPack(
 
   if (req.includeCover) {
     if (isCanceled?.()) throw createHttpError(499, "生成任务已取消");
-    emit?.("progress", { phase: "extras", label: "表情封面图" });
+    emit?.("progress", { phase: "extras", label: "表情封面图", current: currentGenerated + 1, total: totalImageCount });
     const out = await generateExtraImage(promptConfig.extraPrompts.cover);
     const cover = await toStickerPng(out.bytes, 240);
     coverAssetId = nanoid();
     saveAssetPng(app, cover, coverAssetId);
     const v = await validateAsset(app, "wechat_cover", coverAssetId);
     if (!v.ok) throw createHttpError(400, "wechat cover validation failed");
-    emit?.("extra", { key: "coverAssetId", assetId: coverAssetId, url: `/api/assets/${coverAssetId}`, prompt: out.prompt });
+    currentGenerated++;
+    emit?.("extra", { key: "coverAssetId", assetId: coverAssetId, url: `/api/assets/${coverAssetId}`, prompt: out.prompt, current: currentGenerated, total: totalImageCount });
   }
 
   if (req.includeIcon) {
     if (isCanceled?.()) throw createHttpError(499, "生成任务已取消");
-    emit?.("progress", { phase: "extras", label: "聊天面板图标" });
+    emit?.("progress", { phase: "extras", label: "聊天面板图标", current: currentGenerated + 1, total: totalImageCount });
     const out = await generateExtraImage(promptConfig.extraPrompts.icon);
     const icon = await toStickerPng(out.bytes, 50);
     iconAssetId = nanoid();
     saveAssetPng(app, icon, iconAssetId);
     const v = await validateAsset(app, "wechat_icon", iconAssetId);
     if (!v.ok) throw createHttpError(400, "wechat icon validation failed");
-    emit?.("extra", { key: "iconAssetId", assetId: iconAssetId, url: `/api/assets/${iconAssetId}`, prompt: out.prompt });
+    currentGenerated++;
+    emit?.("extra", { key: "iconAssetId", assetId: iconAssetId, url: `/api/assets/${iconAssetId}`, prompt: out.prompt, current: currentGenerated, total: totalImageCount });
   }
 
   if (req.includeBanner) {
     if (isCanceled?.()) throw createHttpError(499, "生成任务已取消");
-    emit?.("progress", { phase: "extras", label: "详情页横幅" });
+    emit?.("progress", { phase: "extras", label: "详情页横幅", current: currentGenerated + 1, total: totalImageCount });
     const out = await generateExtraImage(promptConfig.extraPrompts.banner);
     const banner = await toBannerPng(out.bytes);
     bannerAssetId = nanoid();
     saveAssetPng(app, banner, bannerAssetId);
     const v = await validateAsset(app, "wechat_banner", bannerAssetId);
     if (!v.ok) throw createHttpError(400, "wechat banner validation failed");
-    emit?.("extra", { key: "bannerAssetId", assetId: bannerAssetId, url: `/api/assets/${bannerAssetId}`, prompt: out.prompt });
+    currentGenerated++;
+    emit?.("extra", { key: "bannerAssetId", assetId: bannerAssetId, url: `/api/assets/${bannerAssetId}`, prompt: out.prompt, current: currentGenerated, total: totalImageCount });
   }
 
   if (req.enableReward) {
     if (isCanceled?.()) throw createHttpError(499, "生成任务已取消");
-    emit?.("progress", { phase: "extras", label: "赞赏引导图" });
+    emit?.("progress", { phase: "extras", label: "赞赏引导图", current: currentGenerated + 1, total: totalImageCount });
     const outGuide = await generateExtraImage(promptConfig.extraPrompts.rewardGuide);
     const rewardGuide = await toBannerPng(outGuide.bytes);
     rewardGuideAssetId = nanoid();
     saveAssetPng(app, rewardGuide, rewardGuideAssetId);
     const rewardGuideValidation = await validateAsset(app, "wechat_reward_guide", rewardGuideAssetId);
     if (!rewardGuideValidation.ok) throw createHttpError(400, "wechat reward guide validation failed");
-    emit?.("extra", { key: "rewardGuideAssetId", assetId: rewardGuideAssetId, url: `/api/assets/${rewardGuideAssetId}`, prompt: outGuide.prompt });
+    currentGenerated++;
+    emit?.("extra", { key: "rewardGuideAssetId", assetId: rewardGuideAssetId, url: `/api/assets/${rewardGuideAssetId}`, prompt: outGuide.prompt, current: currentGenerated, total: totalImageCount });
 
     if (isCanceled?.()) throw createHttpError(499, "生成任务已取消");
-    emit?.("progress", { phase: "extras", label: "赞赏感谢图" });
+    emit?.("progress", { phase: "extras", label: "赞赏感谢图", current: currentGenerated + 1, total: totalImageCount });
     const outThanks = await generateExtraImage(promptConfig.extraPrompts.rewardThanks);
     const rewardThanks = await toBannerPng(outThanks.bytes);
     rewardThanksAssetId = nanoid();
     saveAssetPng(app, rewardThanks, rewardThanksAssetId);
     const rewardThanksValidation = await validateAsset(app, "wechat_reward_thanks", rewardThanksAssetId);
     if (!rewardThanksValidation.ok) throw createHttpError(400, "wechat reward thanks validation failed");
-    emit?.("extra", { key: "rewardThanksAssetId", assetId: rewardThanksAssetId, url: `/api/assets/${rewardThanksAssetId}`, prompt: outThanks.prompt });
+    currentGenerated++;
+    emit?.("extra", { key: "rewardThanksAssetId", assetId: rewardThanksAssetId, url: `/api/assets/${rewardThanksAssetId}`, prompt: outThanks.prompt, current: currentGenerated, total: totalImageCount });
   }
 
   const assets = stickerAssetIds.map((assetId, idx) => ({
