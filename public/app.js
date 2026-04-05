@@ -433,7 +433,8 @@ function sanitizePersistedPackResult(raw) {
         .map((item) => ({
           label: item.label,
           url: item.url,
-          assetId: typeof item.assetId === "string" ? item.assetId : undefined
+          assetId: typeof item.assetId === "string" ? item.assetId : undefined,
+          prompt: typeof item.prompt === "string" ? item.prompt : undefined
         }))
     : [];
 
@@ -507,7 +508,8 @@ function persistLastGeneratedResult(result) {
             .map((item) => ({
               label: item.label,
               url: item.url,
-              assetId: typeof item.assetId === "string" ? item.assetId : undefined
+              assetId: typeof item.assetId === "string" ? item.assetId : undefined,
+              prompt: typeof item.prompt === "string" ? item.prompt : undefined
             }))
         : [],
       metadataJson: typeof result.metadataJson === "string" ? result.metadataJson : undefined,
@@ -1043,7 +1045,7 @@ function getExtraAssetDefs(extras = {}) {
     : BASE_EXTRA_ASSET_DEFS;
 }
 
-function getExtraAssetDescription(item, assetId, tone) {
+function getExtraAssetDescription(item, assetId, tone, prompt) {
   const descriptions = [item.description];
   const isRewardAsset = item.key === "rewardGuideAssetId" || item.key === "rewardThanksAssetId";
 
@@ -1057,6 +1059,10 @@ function getExtraAssetDescription(item, assetId, tone) {
     descriptions.push("生成失败后可重新生成。");
   } else if (tone === "idle") {
     descriptions.push("等待生成后展示。");
+  }
+  
+  if (tone === "success" && prompt) {
+    descriptions.push(`\n提示词：${prompt}`);
   }
 
   return descriptions.filter(Boolean).join(" ");
@@ -1087,9 +1093,10 @@ function getPreviewCardContent(sticker, tone) {
   }
 
   const label = sticker?.label || "---";
+  const promptText = sticker?.prompt ? `\n提示词：${sticker.prompt}` : "";
   return {
     title: `表情 ${label}`,
-    description: `${descriptionPrefix} 当前序号：${label}`
+    description: `${descriptionPrefix} 当前序号：${label}${promptText}`
   };
 }
 
@@ -1124,6 +1131,8 @@ function createPreviewCard(sticker, tone = "success") {
   const description = document.createElement("p");
   description.className = "preview-description";
   description.textContent = content.description;
+  // 识别提示词的换行
+  description.style.whiteSpace = "pre-wrap";
 
   head.appendChild(title);
   head.appendChild(spec);
@@ -1201,7 +1210,8 @@ function renderExtraAssets(extras = {}, tone = "idle") {
 
     const description = document.createElement("p");
     description.className = "asset-description";
-    description.textContent = getExtraAssetDescription(item, assetId, tone);
+    description.textContent = getExtraAssetDescription(item, assetId, tone, extras?.[`${item.key}_prompt`]);
+    description.style.whiteSpace = "pre-wrap";
 
     head.appendChild(title);
     head.appendChild(spec);
@@ -1585,13 +1595,16 @@ async function generateWechatPack() {
         return;
       }
       if (eventName === "sticker") {
-        stickers.push({ label: data.label, assetId: data.assetId, url: data.url });
+        stickers.push({ label: data.label, assetId: data.assetId, url: data.url, prompt: data.prompt });
         renderPreview(stickers, "loading");
         setStatus(generateState, `生成中 (${stickers.length}/${totalCount})`, "loading");
         return;
       }
       if (eventName === "extra") {
-        if (data?.key) extras[data.key] = data.assetId ?? null;
+        if (data?.key) {
+          extras[data.key] = data.assetId ?? null;
+          extras[`${data.key}_prompt`] = data.prompt ?? null;
+        }
         renderExtraAssets(extras, "loading");
         return;
       }
