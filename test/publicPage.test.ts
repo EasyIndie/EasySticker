@@ -410,7 +410,7 @@ describe("public page", () => {
     const res = await app.inject({ method: "GET", url: "/app.js" });
     expect(res.statusCode).toBe(200);
     expect(res.headers["content-type"]).toContain("application/javascript");
-    expect(res.body).toContain("renderSummary");
+    expect(res.body).toContain("renderExportInfo");
     expect(res.body).toContain("renderExtraAssets");
     expect(res.body).toContain("renderActions");
     expect(res.body).toContain("renderStyleOptions");
