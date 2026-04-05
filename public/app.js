@@ -339,7 +339,7 @@ function setPromptHint(styles = []) {
 }
 
 function syncOriginalPreviewSlot() {
-  const hasSrc = Boolean(originalPreview?.src && String(originalPreview.src).trim());
+  const hasSrc = Boolean(originalPreview?.getAttribute("src"));
   if (originalPreviewPlaceholder) {
     originalPreviewPlaceholder.hidden = hasSrc ? true : false;
   }
@@ -1137,6 +1137,13 @@ function createPreviewCard(sticker, tone = "success") {
     media.alt = `聊天场景贴纸 ${sticker.label} 预览`;
     media.loading = "lazy";
     media.decoding = "async";
+    media.onerror = () => {
+      media.outerHTML = `<div class="preview-media asset-placeholder">${PLACEHOLDER_STATE_TEXT.error}</div>`;
+      card.dataset.tone = "error";
+      card.classList.add("preview-item-empty");
+      const desc = card.querySelector(".preview-description");
+      if (desc) desc.textContent = "生成失败后可重新生成。";
+    };
   } else {
     media.classList.add("asset-placeholder");
     media.textContent = PLACEHOLDER_STATE_TEXT[tone] ?? PLACEHOLDER_STATE_TEXT.idle;
@@ -1208,6 +1215,12 @@ function renderExtraAssets(extras = {}, tone = "idle") {
       media.alt = item.alt;
       media.loading = "lazy";
       media.decoding = "async";
+      media.onerror = () => {
+        media.outerHTML = `<div class="asset-media${item.wide ? " asset-media-wide" : ""} asset-placeholder">${PLACEHOLDER_STATE_TEXT.error}</div>`;
+        card.dataset.tone = "error";
+        const desc = card.querySelector(".asset-description");
+        if (desc) desc.textContent = "生成失败后可重新生成。";
+      };
     } else {
       media.classList.add("asset-placeholder");
       media.textContent = PLACEHOLDER_STATE_TEXT[tone] ?? PLACEHOLDER_STATE_TEXT.idle;
@@ -1904,6 +1917,13 @@ wechatAiExportInfo.addEventListener("click", async (event) => {
 
 resetSubmit.addEventListener("click", () => {
   resetAllState();
+});
+
+originalPreview.addEventListener("error", () => {
+  originalPreview.removeAttribute("src");
+  syncOriginalPreviewSlot();
+  setStatus(uploadState, "图片加载失败", "error");
+  setNotice("图片加载失败，请重新上传。", "error");
 });
 
 initializeFieldAccessibility();
