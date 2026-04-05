@@ -41,8 +41,7 @@ describe("pipeline", () => {
   const app = buildApp({ host: "127.0.0.1", port: 0, dataDir, logLevel: "silent" });
 
   beforeAll(async () => {
-    // 强制在测试中使用 mock 提供商，避免真实 API 导致超时
-    process.env.AI_PROVIDER = "mock";
+    // 使用 mock 提供商的配置已在下方 spyOn 中完成，不需要设置环境变量
     await app.ready();
   });
 

@@ -1,13 +1,13 @@
 # HTTP AI Provider 契约（EasySticker）
 
-本项目通过 `AI_PROVIDER=http` 将图片生成请求转发到外部 AI 服务。为了减少对接成本，这里约定一个最小、稳定、可扩展的 HTTP 契约。
+本项目通过 `prompt-config.json` 中的 `type: "http"` 提供商配置将图片生成请求转发到外部 AI 服务。这里约定一个最小、稳定、可扩展的 HTTP 契约。
 
 ## Endpoint
 
 - Method: `POST`
-- URL: `AI_HTTP_ENDPOINT`
+- URL: `prompt-config.json` 中的 `endpoint` 字段
 - Content-Type: `application/json`
-- Auth: 可选 `Authorization: Bearer ${AI_HTTP_API_KEY}`
+- Auth: 可选 `Authorization: Bearer ${apiKey}`（配置中的 `apiKey` 字段）
 
 ## Request（JSON）
 
@@ -32,14 +32,14 @@
 
 说明：
 
-- 当 `AI_HTTP_REFERENCE_MODE=base64` 时发送 `referenceImageBase64` + `referenceImageMime`
-- 当 `AI_HTTP_REFERENCE_MODE=url` 时发送 `referenceImageUrl`（需要设置 `AI_PUBLIC_BASE_URL`）
-- 当 `AI_HTTP_REFERENCE_MODE=assetId` 时发送 `referenceImageAssetId`
-- 当 `AI_HTTP_REFERENCE_MODE=multipart` 时发送 `multipart/form-data`
+- 当 `prompt-config.json` 中全局或 HTTP 提供商级别的 `referenceMode` 为 `base64` 时发送 `referenceImageBase64` + `referenceImageMime`
+- 当 `referenceMode` 为 `url` 时发送 `referenceImageUrl`（需要正确配置 `server.publicBaseUrl`）
+- 当 `referenceMode` 为 `assetId` 时发送 `referenceImageAssetId`
+- 当 `referenceMode` 为 `multipart` 时发送 `multipart/form-data`
 
 ## Request（multipart/form-data）
 
-当 `AI_HTTP_REFERENCE_MODE=multipart` 时，请求字段为：
+当 `referenceMode` 为 `multipart` 时，请求字段为：
 
 - `prompt`
 - `negativePrompt`（可选）

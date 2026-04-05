@@ -44,7 +44,7 @@ async function toStickerPng(input: Buffer, size: number) {
     .toFormat("png")
     .ensureAlpha()
     .resize(size, size, { fit: "contain", background: { r: 0, g: 0, b: 0, alpha: 0 } })
-    .png({ compressionLevel: 9, adaptiveFiltering: true, palette: true })
+    .png({ compressionLevel: 9, adaptiveFiltering: true })
     .toBuffer();
   return buf;
 }
