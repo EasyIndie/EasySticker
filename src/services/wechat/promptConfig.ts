@@ -16,6 +16,7 @@ export interface PromptConfig {
       retryBaseMs?: number;
     };
     providers: Record<string, {
+      type: "mock" | "picsum" | "doubao" | "hf" | "http" | string;
       name?: string;
       baseUrl?: string;
       endpoint?: string;
