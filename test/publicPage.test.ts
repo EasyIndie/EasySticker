@@ -560,7 +560,7 @@ describe("public page", () => {
     expect(res.body).toContain("export {}");
   });
 
-  it("restores the latest generated result from local storage on page boot", () => {
+  it("restores the latest generated result from local storage on page boot", async () => {
     const persistedValue = {
       version: 1,
       uploadId: "upload-123",
@@ -632,6 +632,9 @@ describe("public page", () => {
     };
 
     const { app: pageApp, elements } = loadPublicApp(persistedValue);
+    // await for the async initApp to finish fetching config
+    await new Promise(resolve => setTimeout(resolve, 50));
+    
     const state = (pageApp.getState as () => {
       currentUploadId: string;
       currentStyles: string[];
@@ -729,6 +732,7 @@ describe("public page", () => {
     };
 
     const { elements, fetchCalls } = loadPublicApp(persistedValue);
+    await new Promise(resolve => setTimeout(resolve, 50));
     const link = elements.get("wechatAiZipLink")?.children[0];
     await link?.listeners.get("click")?.({ preventDefault: () => undefined });
 
@@ -758,6 +762,7 @@ describe("public page", () => {
     };
 
     const { elements, fetchState } = loadPublicApp(persistedValue);
+    await new Promise(resolve => setTimeout(resolve, 50));
     fetchState.ok = false;
     const link = elements.get("wechatAiZipLink")?.children[0];
     await link?.listeners.get("click")?.({ preventDefault: () => undefined });
@@ -786,11 +791,13 @@ describe("public page", () => {
     };
 
     const { app: pageApp, elements, fetchCalls } = loadPublicApp(persistedValue);
+    await new Promise(resolve => setTimeout(resolve, 50));
     const titleEl = elements.get("wechatAiTitle")! as FakeElement & Record<string, string>;
     const authorEl = elements.get("wechatAiAuthor")! as FakeElement & Record<string, string>;
     titleEl.value = "";
     await (pageApp.generateWechatPack as () => Promise<void>)();
-    expect(fetchCalls).toHaveLength(0);
+    // fetchCalls is 1 because of the initApp config fetch
+    expect(fetchCalls).toHaveLength(1);
     expect(elements.get("globalNotice")?.textContent).toBe("请填写表情包标题。");
     expect(titleEl["aria-invalid"]).toBe("true");
     expect(titleEl["aria-describedby"]).toContain("wechatAiTitleHint");
@@ -803,7 +810,7 @@ describe("public page", () => {
     titleEl.value = "新的标题";
     authorEl.value = "";
     await (pageApp.generateWechatPack as () => Promise<void>)();
-    expect(fetchCalls).toHaveLength(0);
+    expect(fetchCalls).toHaveLength(1);
     expect(elements.get("globalNotice")?.textContent).toBe("请填写作者名。");
     expect(authorEl["aria-invalid"]).toBe("true");
     expect(getErrorSummaryTexts(elements)).toEqual(["作者名：请填写作者名。"]);
@@ -812,7 +819,7 @@ describe("public page", () => {
     elements.get("wechatAiRewardEnabled")!.checked = true;
     elements.get("wechatAiRewardEnabled")?.listeners.get("change")?.();
     await (pageApp.generateWechatPack as () => Promise<void>)();
-    expect(fetchCalls).toHaveLength(0);
+    expect(fetchCalls).toHaveLength(1);
     expect(elements.get("globalNotice")?.textContent).toBe("开启赞赏功能后，请填写赞赏引导语。");
     const rewardMessageEl = elements.get("wechatAiRewardMessage")! as FakeElement & Record<string, string>;
     expect(rewardMessageEl["aria-invalid"]).toBe("true");
@@ -844,9 +851,10 @@ describe("public page", () => {
     };
 
     const { app: pageApp, elements, fetchCalls } = loadPublicApp(persistedValue);
+    await new Promise(resolve => setTimeout(resolve, 50));
     await (pageApp.generateWechatPack as () => Promise<void>)();
 
-    expect(fetchCalls).toHaveLength(0);
+    expect(fetchCalls).toHaveLength(1);
     const errorJumpButton = elements.get("generateErrorList")?.children[0]?.children[0];
     expect(errorJumpButton?.textContent).toBe("表情包标题：请填写表情包标题。");
 
@@ -875,6 +883,7 @@ describe("public page", () => {
     };
 
     const { app: pageApp, elements, fetchCalls } = loadPublicApp(persistedValue);
+    await new Promise(resolve => setTimeout(resolve, 50));
     const promptEl = elements.get("wechatAiPrompt")! as FakeElement & Record<string, string>;
     const titleEl = elements.get("wechatAiTitle")! as FakeElement & Record<string, string>;
     const authorEl = elements.get("wechatAiAuthor")! as FakeElement & Record<string, string>;
@@ -884,7 +893,7 @@ describe("public page", () => {
 
     await (pageApp.generateWechatPack as () => Promise<void>)();
 
-    expect(fetchCalls).toHaveLength(0);
+    expect(fetchCalls).toHaveLength(1);
     expect(elements.get("globalNotice")?.textContent).toBe("请先填写提示词。");
     expect(elements.get("generateState")?.textContent).toBe("待处理 3 项输入问题");
     expect(elements.get("generateErrorSummary")?.hidden).toBe(false);
@@ -898,7 +907,7 @@ describe("public page", () => {
     expect(elements.get("wechatAiPromptError")?.textContent).toBe("请先填写提示词。");
   });
 
-  it("renders all restored sticker previews instead of truncating to six", () => {
+  it("renders all restored sticker previews instead of truncating to six", async () => {
     const stickers = Array.from({ length: 7 }, (_, index) => ({
       label: String(index + 1).padStart(3, "0"),
       url: `/api/assets/sticker-${index + 1}`,
@@ -923,6 +932,7 @@ describe("public page", () => {
     };
 
     const { elements } = loadPublicApp(persistedValue);
+    await new Promise(resolve => setTimeout(resolve, 50));
     expect(elements.get("wechatAiPreview")?.children).toHaveLength(7);
     expect(elements.get("wechatAiPreview")?.children[0]?.children[0]?.children.map((child) => child.textContent)).toEqual([
       "表情 001",
@@ -931,8 +941,9 @@ describe("public page", () => {
     ]);
   });
 
-  it("renders extra asset placeholders as title size description blocks", () => {
+  it("renders extra asset placeholders as title size description blocks", async () => {
     const { elements } = loadPublicApp();
+    await new Promise(resolve => setTimeout(resolve, 50));
 
     expect(elements.get("wechatAiCover")?.children).toHaveLength(1);
     expect(elements.get("wechatAiIcon")?.children).toHaveLength(1);
@@ -959,8 +970,9 @@ describe("public page", () => {
     expect(elements.get("wechatAiRewardGuide")?.children[0]?.children[1]?.textContent).toBe("等待生成");
   });
 
-  it("renders sticker preview placeholder as title size description with unified media state", () => {
+  it("renders sticker preview placeholder as title size description with unified media state", async () => {
     const { elements } = loadPublicApp();
+    await new Promise(resolve => setTimeout(resolve, 50));
 
     expect(elements.get("wechatAiPreview")?.children).toHaveLength(1);
     expect(elements.get("wechatAiPreview")?.children[0]?.children[0]?.children.map((child) => child.textContent)).toEqual([
@@ -971,8 +983,9 @@ describe("public page", () => {
     expect(elements.get("wechatAiPreview")?.children[0]?.children[1]?.textContent).toBe("等待生成");
   });
 
-  it("renders sticker preview loading and error copy with resource description tone", () => {
+  it("renders sticker preview loading and error copy with resource description tone", async () => {
     const { app: pageApp, elements } = loadPublicApp();
+    await new Promise(resolve => setTimeout(resolve, 50));
 
     (pageApp.renderPreview as (stickers: Array<Record<string, unknown>>, tone: string) => void)([], "loading");
     expect(elements.get("wechatAiPreview")?.children[0]?.children[0]?.children.map((child) => child.textContent)).toEqual([
@@ -991,7 +1004,7 @@ describe("public page", () => {
     expect(elements.get("wechatAiPreview")?.children[0]?.children[1]?.textContent).toBe("生成失败，可点击重新生成");
   });
 
-  it("toggles summary card content from collapsed state", () => {
+  it("toggles summary card content from collapsed state", async () => {
     const persistedValue = {
       version: 1,
       uploadId: "upload-summary-toggle",
@@ -1022,6 +1035,7 @@ describe("public page", () => {
     };
 
     const { elements } = loadPublicApp(persistedValue);
+    await new Promise(resolve => setTimeout(resolve, 50));
     const summary = elements.get("wechatAiSummary");
 
     expect(summary?.innerHTML).toContain("展开内容");
@@ -1051,7 +1065,7 @@ describe("public page", () => {
     expect(summary?.innerHTML).not.toContain("猫咪日常-pack-summary-toggle.zip");
   });
 
-  it("toggles export info card content from collapsed state", () => {
+  it("toggles export info card content from collapsed state", async () => {
     const persistedValue = {
       version: 1,
       uploadId: "upload-export-toggle",
@@ -1079,6 +1093,7 @@ describe("public page", () => {
     };
 
     const { elements } = loadPublicApp(persistedValue);
+    await new Promise(resolve => setTimeout(resolve, 50));
     const exportInfo = elements.get("wechatAiExportInfo");
 
     expect(exportInfo?.innerHTML).toContain("展开内容");
@@ -1106,7 +1121,7 @@ describe("public page", () => {
     expect(exportInfo?.innerHTML).not.toContain("pack-export-toggle");
   });
 
-  it("toggles metadata preview content from collapsed state", () => {
+  it("toggles metadata preview content from collapsed state", async () => {
     const persistedValue = {
       version: 1,
       uploadId: "upload-toggle",
@@ -1135,6 +1150,7 @@ describe("public page", () => {
     };
 
     const { elements } = loadPublicApp(persistedValue);
+    await new Promise(resolve => setTimeout(resolve, 50));
     const metadataPreview = elements.get("wechatAiMetadataPreview");
 
     expect(metadataPreview?.innerHTML).toContain("展开内容");
@@ -1161,7 +1177,7 @@ describe("public page", () => {
     expect(metadataPreview?.innerHTML).not.toContain("&quot;packId&quot;: &quot;pack-toggle&quot;");
   });
 
-  it("ignores unrelated clicks on shared confirm card handlers", () => {
+  it("ignores unrelated clicks on shared confirm card handlers", async () => {
     const persistedValue = {
       version: 1,
       uploadId: "upload-ignore-click",
@@ -1190,6 +1206,7 @@ describe("public page", () => {
     };
 
     const { elements } = loadPublicApp(persistedValue);
+    await new Promise(resolve => setTimeout(resolve, 50));
     const summary = elements.get("wechatAiSummary");
     const exportInfo = elements.get("wechatAiExportInfo");
     const metadataPreview = elements.get("wechatAiMetadataPreview");
@@ -1241,6 +1258,7 @@ describe("public page", () => {
     };
 
     const { elements, clipboard } = loadPublicApp(persistedValue);
+    await new Promise(resolve => setTimeout(resolve, 50));
     const exportInfo = elements.get("wechatAiExportInfo");
     expect(exportInfo?.innerHTML).toContain("展开内容");
     expect(exportInfo?.innerHTML).not.toContain("pack-card-copy");
@@ -1288,6 +1306,7 @@ describe("public page", () => {
     };
 
     const { elements, clipboard } = loadPublicApp(persistedValue);
+    await new Promise(resolve => setTimeout(resolve, 50));
     const exportButton = findChildByText(elements.get("wechatAiActions"), "复制导出信息");
     await exportButton?.listeners.get("click")?.();
 
@@ -1328,6 +1347,7 @@ describe("public page", () => {
     };
 
     const { elements, clipboard } = loadPublicApp(persistedValue);
+    await new Promise(resolve => setTimeout(resolve, 50));
     const metadataPreview = elements.get("wechatAiMetadataPreview");
     expect(metadataPreview?.innerHTML).toContain("展开内容");
     expect(metadataPreview?.innerHTML).not.toContain("&quot;packId&quot;: &quot;pack-meta-card&quot;");
@@ -1374,6 +1394,7 @@ describe("public page", () => {
     };
 
     const { elements, clipboard } = loadPublicApp(persistedValue);
+    await new Promise(resolve => setTimeout(resolve, 50));
     const metadataButton = findChildByText(elements.get("wechatAiActions"), "复制 metadata.json");
     await metadataButton?.listeners.get("click")?.();
 
@@ -1384,7 +1405,7 @@ describe("public page", () => {
     expect(elements.get("toastNotice")?.dataset.visible).toBe("true");
   });
 
-  it("clears persisted result when resetting generation state", () => {
+  it("clears persisted result when resetting generation state", async () => {
     const persistedValue = {
       result: {
         packId: "pack-002",
@@ -1393,6 +1414,7 @@ describe("public page", () => {
     };
 
     const { app: pageApp, elements, storage } = loadPublicApp(persistedValue);
+    await new Promise(resolve => setTimeout(resolve, 50));
     (pageApp.resetGenerationResult as (options?: { clearPersisted?: boolean }) => void)();
 
     expect(storage.has("easysticker:last-wechat-pack")).toBe(false);
@@ -1403,7 +1425,7 @@ describe("public page", () => {
     expect(elements.get("regenerateSubmit")?.disabled).toBe(true);
   });
 
-  it("resets inputs, preview and storage with one-click reset", () => {
+  it("resets inputs, preview and storage with one-click reset", async () => {
     const persistedValue = {
       version: 1,
       uploadId: "upload-999",
@@ -1422,6 +1444,7 @@ describe("public page", () => {
     };
 
     const { app: pageApp, elements, storage } = loadPublicApp(persistedValue);
+    await new Promise(resolve => setTimeout(resolve, 50));
     (pageApp.resetAllState as () => void)();
 
     expect(storage.has("easysticker:last-wechat-pack")).toBe(false);
