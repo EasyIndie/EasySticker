@@ -64,6 +64,12 @@
           <div class="step-body prompt-actions">
             <button id="wechatAiSuggest" type="button" class="secondary">生成推荐提示词</button>
           </div>
+          <label class="field" for="wechatAiProvider">
+            <span class="section-title">AI 提供商选择</span>
+            <select id="wechatAiProvider" class="style-options" style="padding: 8px; border-radius: var(--radius-sm); border: 1px solid var(--color-border-subtle); background: var(--surface-card); color: var(--color-text);">
+              <option value="mock" selected>加载中...</option>
+            </select>
+          </label>
           <label class="field" for="wechatAiPrompt">
             <span class="section-title"><span class="required-mark">*</span>提示词</span>
             <textarea

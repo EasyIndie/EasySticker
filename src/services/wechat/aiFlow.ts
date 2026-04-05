@@ -15,6 +15,7 @@ import { loadPromptConfig, compilePrompt } from "./promptConfig";
 export type WeChatAiGenerateRequest = {
   referenceAssetId: string;
   prompt: string;
+  provider?: string;
   styles?: string[];
   stickerCount?: number;
   enableReward?: boolean;
@@ -77,21 +78,21 @@ export async function generateWeChatAssetsAndPack(
   if (!req.referenceAssetId) throw createHttpError(400, "missing referenceAssetId");
   if (!req.prompt) throw createHttpError(400, "missing prompt");
 
-  const provider = getAiProvider();
+  const provider = getAiProvider(req.provider);
   const client = buildMinimalClient(provider);
   const reference = findAssetFile(app, req.referenceAssetId);
   if (!reference) throw createHttpError(404, "reference asset not found");
   const referenceBytes = fs.readFileSync(reference.filePath);
   const referenceBase64 = referenceBytes.toString("base64");
-  const baseUrl = process.env.AI_PUBLIC_BASE_URL;
-  const referenceUrl = baseUrl ? `${baseUrl.replace(/\/+$/, "")}/api/assets/${req.referenceAssetId}` : undefined;
-  const referenceMode = process.env.AI_HTTP_REFERENCE_MODE ?? "base64";
-
   const promptConfig = loadPromptConfig();
   const emotions = promptConfig.emotions;
+  
+  const referenceMode = promptConfig.ai?.referenceMode ?? "base64";
+  const baseUrl = promptConfig.ai?.publicBaseUrl || "";
+  const referenceUrl = baseUrl ? `${baseUrl.replace(/\/+$/, "")}/api/assets/${req.referenceAssetId}` : undefined;
 
-  const imageWidth = Number(process.env.AI_IMAGE_WIDTH ?? 1024);
-  const imageHeight = Number(process.env.AI_IMAGE_HEIGHT ?? 1024);
+  const imageWidth = promptConfig.ai?.imageSize?.width ?? 1024;
+  const imageHeight = promptConfig.ai?.imageSize?.height ?? 1024;
 
   emit?.("start", { count, styles, referenceMode });
   const stickerAssetIds: string[] = [];

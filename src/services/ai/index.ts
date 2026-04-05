@@ -5,30 +5,33 @@ import { PicsumAiProvider } from "./providers/picsum";
 import { HfAiProvider } from "./providers/hf";
 import { DoubaoAiProvider } from "./providers/doubao";
 
-export function getAiProvider() {
-  const kind = process.env.AI_PROVIDER ?? "mock";
+import { loadPromptConfig } from "../wechat/promptConfig";
+
+export function getAiProvider(overrideKind?: string) {
+  const config = loadPromptConfig();
+  const kind = overrideKind ?? config.ai?.defaultProvider ?? "mock";
   if (kind === "mock") return new MockAiProvider();
   if (kind === "http") {
-    const endpoint = process.env.AI_HTTP_ENDPOINT;
-    if (!endpoint) throw createHttpError(500, "AI_HTTP_ENDPOINT is required for AI_PROVIDER=http");
-    return new HttpAiProvider(endpoint, process.env.AI_HTTP_API_KEY);
+    const endpoint = config.ai?.providers?.http?.endpoint;
+    if (!endpoint) throw createHttpError(500, "endpoint is required in prompt-config.json for ai.providers.http");
+    return new HttpAiProvider(endpoint, config.ai?.providers?.http?.apiKey);
   }
   if (kind === "picsum") {
-    const base = process.env.PICSUM_BASE_URL || "https://picsum.photos";
+    const base = config.ai?.providers?.picsum?.baseUrl || "https://picsum.photos";
     return new PicsumAiProvider(base);
   }
   if (kind === "doubao") {
-    const baseUrl = process.env.ARK_BASE_URL || "https://ark.cn-beijing.volces.com/api/v3";
-    const apiKey = process.env.ARK_API_KEY;
-    const model = process.env.ARK_MODEL || "doubao-seedream-5-0-260128";
-    if (!apiKey) throw createHttpError(500, "ARK_API_KEY is required for AI_PROVIDER=doubao");
+    const baseUrl = config.ai?.providers?.doubao?.baseUrl || "https://ark.cn-beijing.volces.com/api/v3";
+    const apiKey = config.ai?.providers?.doubao?.apiKey;
+    const model = config.ai?.providers?.doubao?.model || "doubao-seedream-5-0-260128";
+    if (!apiKey) throw createHttpError(500, "apiKey is required in prompt-config.json for ai.providers.doubao");
     return new DoubaoAiProvider(baseUrl, apiKey, model);
   }
   if (kind === "hf") {
-    const endpoint = process.env.AI_HTTP_ENDPOINT;
-    const apiKey = process.env.AI_HTTP_API_KEY;
-    if (!endpoint) throw createHttpError(500, "AI_HTTP_ENDPOINT is required for AI_PROVIDER=hf");
-    if (!apiKey) throw createHttpError(500, "AI_HTTP_API_KEY is required for AI_PROVIDER=hf");
+    const endpoint = config.ai?.providers?.hf?.endpoint;
+    const apiKey = config.ai?.providers?.hf?.apiKey;
+    if (!endpoint) throw createHttpError(500, "endpoint is required in prompt-config.json for ai.providers.hf");
+    if (!apiKey) throw createHttpError(500, "apiKey is required in prompt-config.json for ai.providers.hf");
     if (endpoint.includes("api-inference.huggingface.co")) {
       throw createHttpError(
         500,
