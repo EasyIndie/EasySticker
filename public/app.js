@@ -423,7 +423,7 @@ function sanitizePersistedPackResult(raw) {
   return {
     uploadId: typeof raw.uploadId === "string" ? raw.uploadId : null,
     prompt: typeof raw.prompt === "string" ? raw.prompt : "",
-    provider: typeof raw.provider === "string" ? raw.provider : "mock",
+    provider: typeof raw.provider === "string" ? raw.provider : undefined,
     title: typeof raw.title === "string" ? raw.title : "",
     author: typeof raw.author === "string" ? raw.author : "",
     versionText: typeof raw.versionText === "string" ? raw.versionText : "",
@@ -472,6 +472,7 @@ function persistLastGeneratedResult(result) {
     savedAt: new Date().toISOString(),
     uploadId: currentUploadId,
     prompt: wechatAiPrompt.value,
+    provider: currentAiProvider,
     title: wechatAiTitle.value,
     author: wechatAiAuthor.value,
     versionText: wechatAiVersion.value,
@@ -524,7 +525,9 @@ function restorePersistedPackResult() {
     }
 
     currentUploadId = restored.uploadId;
-    currentAiProvider = restored.provider || "mock";
+    if (restored.provider) {
+      currentAiProvider = restored.provider;
+    }
     currentStyles = restored.styles.length ? restored.styles : [...DEFAULT_STYLE_OPTIONS];
     currentRewardEnabled = Boolean(restored.rewardEnabled || restored.result?.meta?.rewardEnabled);
     hasGenerationAttempted = Boolean(restored.uploadId && restored.prompt && restored.hasGenerationAttempted);

@@ -69,4 +69,46 @@ describe("/api/config route validation", () => {
     expect(providers).not.toContain("hf-empty");
     expect(providers).not.toContain("hf-undef");
   });
+
+  it("adds a fallback mock provider when production config yields empty list", async () => {
+    // 模拟生产环境
+    const prevEnv = process.env.NODE_ENV;
+    process.env.NODE_ENV = "production";
+
+    vi.spyOn(promptConfigModule, "loadPromptConfig").mockReturnValue({
+      ai: {
+        defaultProvider: "mock",
+        providers: {
+          "doubao-invalid": {
+            type: "doubao",
+            apiKey: ""
+          },
+          "mock-should-be-filtered": {
+            type: "mock"
+          }
+        }
+      },
+      global: { prompt: "", negativePrompt: "", styles: [] },
+      emotions: [],
+      templates: { sticker: "", extra: "" },
+      extraPrompts: { cover: "", icon: "", banner: "", rewardGuide: "", rewardThanks: "" }
+    } as any);
+
+    try {
+      const res = await app.inject({
+        method: "GET",
+        url: "/api/config"
+      });
+
+      const data = res.json();
+      const providers = data.wechat.availableProviders;
+      
+      expect(providers.length).toBe(1);
+      expect(providers[0].id).toBe("mock");
+      expect(providers[0].name).toContain("生产环境未配置真实模型");
+      expect(data.wechat.defaultProvider).toBe("mock");
+    } finally {
+      process.env.NODE_ENV = prevEnv;
+    }
+  });
 });

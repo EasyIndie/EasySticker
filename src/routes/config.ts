@@ -36,6 +36,13 @@ export async function registerConfigRoutes(app: FastifyInstance) {
     if (!availableProviders.find((p) => p.id === defaultProvider)) {
       defaultProvider = availableProviders.length > 0 ? availableProviders[0].id : "mock";
     }
+    
+    // 如果在生产环境下，所有提供商都没有配置好导致列表为空，
+    // 强行插入一个 mock 兜底，避免前端下拉框完全空白无法交互
+    if (availableProviders.length === 0) {
+      availableProviders.push({ id: "mock", name: "本地模拟 (生产环境未配置真实模型)" });
+      defaultProvider = "mock";
+    }
 
     return {
       wechat: {
