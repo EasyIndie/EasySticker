@@ -617,19 +617,36 @@ select {
 
 .stepper-row {
   display: grid;
-  grid-template-columns: 40px 1fr 40px;
+  grid-template-columns: 44px 1fr 44px;
   gap: var(--space-2);
   align-items: center;
 }
 
 .stepper-button {
-  height: 40px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   border-radius: var(--radius-md);
   border: 1px solid var(--color-border-default);
-  background: var(--color-surface-primary);
+  background: var(--color-surface-secondary);
   color: var(--text);
   font-size: var(--font-16);
   font-weight: 800;
+  cursor: pointer;
+  padding: 0;
+  transition: background 0.2s ease, border-color 0.2s ease;
+}
+
+.stepper-button:hover:not(:disabled) {
+  background: var(--color-surface-hover);
+  border-color: var(--color-border-strong);
+}
+
+.stepper-row input {
+  text-align: center;
+  height: 44px;
+  padding: 0;
 }
 
 .stepper-button:disabled {
@@ -723,7 +740,19 @@ select {
   display: flex;
   flex-wrap: wrap;
   justify-content: flex-end;
-  gap: 8px;
+  gap: var(--space-2);
+  align-items: center;
+}
+
+.summary-card-actions .ghost-button {
+  padding: 6px 8px;
+  min-width: 32px;
+}
+
+.icon-text-button {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
 }
 
 .panel-toggle-button,
@@ -808,7 +837,12 @@ select {
 }
 
 .download-slot {
-  margin-top: var(--space-3);
+  margin-top: var(--space-4);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: var(--space-4);
+  flex-wrap: wrap;
 }
 
 .action-row {
@@ -852,6 +886,18 @@ select {
 
 .ghost-button:hover {
   background: var(--color-surface-hover);
+}
+
+.preview-section {
+  margin-top: var(--space-4);
+  padding: 16px;
+  border-radius: var(--radius-xl);
+  border: 1px solid var(--color-border-subtle);
+  background: var(--color-surface-secondary);
+}
+
+.preview-section .section-title {
+  margin-bottom: var(--space-3);
 }
 
 .preview-item {
@@ -957,7 +1003,7 @@ select {
 
 .asset-media-wide {
   height: 200px;
-  object-fit: cover;
+  object-fit: contain;
 }
 
 .asset-placeholder {
