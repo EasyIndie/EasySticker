@@ -18,9 +18,8 @@
 
 ## 架构与接口
 - Web UI：单页静态页面，仅提供上传与微信 AI 生成入口
-- AI Provider：
-  - 默认 mock（本地生成占位图）
-  - 可切换 http provider（由服务端转发到外部 AI 服务）
+- 配置文件：通过 `prompt-config.json` 统一管理
+- AI Provider：支持通过配置中的字典定义多个提供商（如 `mock`, `http`, `doubao` 等），按 `type` 字段区分，并在前端提供切换。
 - API：
   - `POST /api/uploads` 上传
   - `GET /api/assets/:id` 读取资产
@@ -36,6 +35,7 @@
 
 ## 交付物
 - 极简 Web UI
+- 统一的配置文件 `prompt-config.json`
 - AI Provider 抽象与默认 mock
 - 微信 AI 生成与 ZIP 导出 API
 - 最小单测与文档
