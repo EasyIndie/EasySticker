@@ -109,7 +109,7 @@ export async function generateWeChatAssetsAndPack(
     
     const out = await client.generateImage({
       prompt: compiledPrompt,
-      negativePrompt: undefined,
+      negativePrompt: promptConfig.global.negativePrompt,
       style,
       width: imageWidth,
       height: imageHeight,
@@ -149,7 +149,7 @@ export async function generateWeChatAssetsAndPack(
     
     const res = await client.generateImage({
       prompt: compiledPrompt,
-      negativePrompt: undefined,
+      negativePrompt: promptConfig.global.negativePrompt,
       style: styles[0],
       width: imageWidth,
       height: imageHeight,
