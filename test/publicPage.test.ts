@@ -546,6 +546,7 @@ describe("public page", () => {
     const persistedValue = {
       version: 1,
       uploadId: "upload-123",
+      provider: "doubao",
       prompt: "生成一组猫咪表情",
       title: "猫咪日常",
       author: "EasySticker Studio",
@@ -628,6 +629,7 @@ describe("public page", () => {
     expect(state.currentStyles).toEqual(["可爱"]); // 已经改为单选，只会恢复第一个
     expect(state.hasGenerationAttempted).toBe(true);
     expect(state.lastPackResult.packId).toBe("pack-001");
+    expect(elements.get("wechatAiProvider")?.value).toBe("doubao");
     expect(elements.get("wechatAiPrompt")?.value).toBe("生成一组猫咪表情");
     expect(elements.get("wechatAiTitle")?.value).toBe("猫咪日常");
     expect(elements.get("wechatAiAuthor")?.value).toBe("EasySticker Studio");
