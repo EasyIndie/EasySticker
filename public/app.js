@@ -1309,42 +1309,16 @@ function renderDownload(packId, downloadUrl, filename) {
   
   wechatAiZipLink.innerHTML = "";
   
-  // 复制链接按钮
-  const copyLinkBtn = document.createElement("button");
-  copyLinkBtn.type = "button";
-  copyLinkBtn.className = "ghost-button icon-text-button";
-  copyLinkBtn.innerHTML = `${COPY_ICON_SVG} <span>复制链接</span>`;
-  copyLinkBtn.addEventListener("click", async () => {
-    try {
-      const downloadHref = new URL(downloadUrl, window.location.origin).toString();
-      await copyText(downloadHref);
-      setNotice("下载链接已复制", "success");
-    } catch (error) {
-      setNotice("复制失败，请稍后重试。", "error");
-    }
-  });
-  
-  // 复制 packId 按钮
-  const copyPackIdBtn = document.createElement("button");
-  copyPackIdBtn.type = "button";
-  copyPackIdBtn.className = "ghost-button icon-text-button";
-  copyPackIdBtn.innerHTML = `${COPY_ICON_SVG} <span>复制 packId</span>`;
-  copyPackIdBtn.addEventListener("click", async () => {
-    try {
-      await copyText(packId);
-      setNotice("packId 已复制", "success");
-    } catch (error) {
-      setNotice("复制失败，请稍后重试。", "error");
-    }
-  });
-
   // 主下载按钮
   const link = document.createElement("a");
   link.href = downloadUrl;
   link.className = "download-button";
   link.rel = "noopener";
   link.download = resolvedFilename;
-  link.textContent = `确认后下载 ${resolvedFilename}`;
+  link.innerHTML = `
+    <span class="download-button-title">确认无误，下载ZIP包</span>
+    <span class="download-button-subtitle">${resolvedFilename}</span>
+  `;
   link.addEventListener("click", async (event) => {
     event.preventDefault();
     try {
@@ -1369,8 +1343,6 @@ function renderDownload(packId, downloadUrl, filename) {
     }
   });
   
-  wechatAiZipLink.appendChild(copyLinkBtn);
-  wechatAiZipLink.appendChild(copyPackIdBtn);
   wechatAiZipLink.appendChild(link);
 }
 

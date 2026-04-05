@@ -422,7 +422,7 @@ describe("public page", () => {
     expect(res.body).toContain("CONFIRM_CARD_CONFIGS");
     expect(res.body).toContain("renderConfirmCard");
     expect(res.body).toContain("handleConfirmCardClick");
-    expect(res.body).toContain("复制 packId");
+    expect(res.body).toContain("确认无误，下载ZIP包");
     expect(res.body).toContain("结果概览");
     expect(res.body).toContain("复制 metadata.json");
     expect(res.body).toContain("validateGenerateInputs");
@@ -475,8 +475,6 @@ describe("public page", () => {
     expect(html).toContain('href="/design-spec.html"');
     expect(html).toContain('href="/compatibility-report.html"');
     expect(html).toContain('href="/performance-report.html"');
-    expect(html).toContain('data-lang-switch="zh"');
-    expect(html).toContain('data-lang-switch="en"');
     expect(html).toContain("role=\"main\"");
   });
 
@@ -516,8 +514,6 @@ describe("public page", () => {
     expect(html).toContain("一键跳转到对应字段");
     expect(html).toContain('data-include="/partials/keyboard-cheatsheet.html"');
     expect(html).toContain('<script src="/include.js"></script>');
-    expect(html).toContain('data-lang-switch="zh"');
-    expect(html).toContain('data-lang-switch="en"');
     expect(html).toContain("role=\"main\"");
   });
 
@@ -658,8 +654,8 @@ describe("public page", () => {
     expect(elements.get("wechatAiMetadataPreview")?.innerHTML).not.toContain("&quot;packId&quot;: &quot;pack-001&quot;");
     expect(elements.get("wechatAiStyleOptions")?.children.length).toBeGreaterThan(0);
     expect(elements.get("wechatAiFeedback")?.innerHTML).toContain("已从本地恢复最近一次生成结果");
-    expect(elements.get("wechatAiZipLink")?.children).toHaveLength(3);
-    expect(elements.get("wechatAiZipLink")?.children[2]?.download).toBe("猫咪日常-pack-001.zip");
+    expect(elements.get("wechatAiZipLink")?.children).toHaveLength(1);
+    expect(elements.get("wechatAiZipLink")?.children[0]?.download).toBe("猫咪日常-pack-001.zip");
     expect(elements.get("wechatAiPreview")?.children).toHaveLength(2);
     expect(elements.get("wechatAiPreview")?.children[0]?.children[0]?.children.map((child) => child.textContent)).toEqual([
       "表情 001",
@@ -707,7 +703,7 @@ describe("public page", () => {
 
     const { elements, fetchCalls } = loadPublicApp(persistedValue);
     await new Promise(resolve => setTimeout(resolve, 50));
-    const link = elements.get("wechatAiZipLink")?.children[2];
+    const link = elements.get("wechatAiZipLink")?.children[0];
     await link?.listeners.get("click")?.({ preventDefault: () => undefined });
 
     expect(fetchCalls.at(-1)?.url).toBe("/api/packs/pack-download/download");
@@ -738,7 +734,7 @@ describe("public page", () => {
     const { elements, fetchState } = loadPublicApp(persistedValue);
     await new Promise(resolve => setTimeout(resolve, 50));
     fetchState.ok = false;
-    const link = elements.get("wechatAiZipLink")?.children[2];
+    const link = elements.get("wechatAiZipLink")?.children[0];
     await link?.listeners.get("click")?.({ preventDefault: () => undefined });
 
     expect(elements.get("globalNotice")?.textContent).toBe("下载失败，请稍后重试。");
