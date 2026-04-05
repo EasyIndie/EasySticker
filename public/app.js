@@ -1549,16 +1549,15 @@ async function generateWechatPack() {
         return;
       }
       if (eventName === "progress") {
-        if (data?.phase === "stickers") {
-          const current = Number(data?.current || 0);
-          setStatus(generateState, `生成中 (${current}/${totalCount})`, "loading");
-        }
+        const current = Number(data?.current || 0);
+        setStatus(generateState, `生成中 (${current}/${totalCount})`, "loading");
         return;
       }
       if (eventName === "sticker") {
         stickers.push({ label: data.label, assetId: data.assetId, url: data.url, prompt: data.prompt });
         renderPreview(stickers, "loading");
-        setStatus(generateState, `生成中 (${stickers.length}/${totalCount})`, "loading");
+        const current = Number(data?.current || stickers.length);
+        setStatus(generateState, `生成中 (${current}/${totalCount})`, "loading");
         return;
       }
       if (eventName === "extra") {
@@ -1567,6 +1566,8 @@ async function generateWechatPack() {
           extras[`${data.key}_prompt`] = data.prompt ?? null;
         }
         renderExtraAssets(extras, "loading");
+        const current = Number(data?.current || 0);
+        setStatus(generateState, `生成中 (${current}/${totalCount})`, "loading");
         return;
       }
       if (eventName === "done") {
