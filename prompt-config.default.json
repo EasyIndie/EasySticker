@@ -8,7 +8,7 @@
     "taskGcIntervalMs": 600000
   },
   "ai": {
-    "defaultProvider": "mock",
+    "defaultProvider": "picsum",
     "referenceMode": "base64",
     "publicBaseUrl": "",
     "imageSize": {
@@ -21,8 +21,12 @@
       "retryBaseMs": 1000
     },
     "providers": {
-      "mock": {},
-      "picsum":{},
+      "mock": {
+        "name": "本地模拟 (Mock - 无需配置 Key)"
+      },
+      "picsum": {
+        "name": "随机图片 (Picsum)"
+      },
       "doubao": {
         "baseUrl": "https://ark.cn-beijing.volces.com/api/v3",
         "model": "doubao-seedream-5-0-260128",
@@ -34,8 +38,7 @@
         "apiKey": "<your-api-key>"
       },
       "http": {
-        "baseUrl": "http://localhost:8000/v1",
-        "model": "deepseek-3.5-7b-instruct",
+        "endpoint": "http://localhost:8000/v1",
         "apiKey": "<your-api-key>"
       }
     }

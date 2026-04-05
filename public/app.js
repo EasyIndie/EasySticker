@@ -21,7 +21,7 @@ const sectionRewardGuide = document.getElementById("sectionRewardGuide");
 const wechatAiRewardGuide = document.getElementById("wechatAiRewardGuide");
 const sectionRewardThanks = document.getElementById("sectionRewardThanks");
 const wechatAiRewardThanks = document.getElementById("wechatAiRewardThanks");
-const wechatAiSuggest = document.getElementById("wechatAiSuggest");
+
 const wechatAiPrompt = document.getElementById("wechatAiPrompt");
 const wechatAiTitle = document.getElementById("wechatAiTitle");
 const wechatAiAuthor = document.getElementById("wechatAiAuthor");
@@ -1428,15 +1428,8 @@ async function requestJson(url, options) {
   return json;
 }
 
-async function suggestPrompt({ silent = false } = {}) {
-  if (!currentUploadId) {
-    throw new Error("请先上传参考图");
-  }
-
-  if (!silent) {
-    setBusy(wechatAiSuggest, true, "生成中...");
-    setNotice("正在生成推荐提示词...", "info");
-  }
+async function suggestPrompt() {
+  if (!currentUploadId) return;
 
   try {
     const json = await requestJson("/api/wechat/prompt", {
@@ -1449,11 +1442,8 @@ async function suggestPrompt({ silent = false } = {}) {
     currentStyles = Array.isArray(json.styles) ? json.styles.filter(Boolean) : [];
     renderStyleOptions(currentStyles.length ? currentStyles : DEFAULT_STYLE_OPTIONS);
     setPromptHint(currentStyles);
-    setNotice("提示词已准备好，可以直接生成，也可以继续编辑。", "success");
-  } finally {
-    if (!silent) {
-      setBusy(wechatAiSuggest, false);
-    }
+  } catch (error) {
+    // 忽略后台提示词生成错误，不影响主流程
   }
 }
 
@@ -1760,15 +1750,7 @@ uploadForm.addEventListener("submit", (event) => {
   event.preventDefault();
 });
 
-wechatAiSuggest.addEventListener("click", async () => {
-  try {
-    await suggestPrompt();
-  } catch (error) {
-    setNotice(error instanceof Error ? error.message : "提示词生成失败，请稍后重试。", "error");
-  } finally {
-    setBusy(wechatAiSuggest, false);
-  }
-});
+
 
 wechatAiPrompt.addEventListener("input", () => {
   setFieldInvalid(wechatAiPrompt, false);

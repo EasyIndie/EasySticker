@@ -16,6 +16,7 @@ export interface PromptConfig {
       retryBaseMs?: number;
     };
     providers: Record<string, {
+      name?: string;
       baseUrl?: string;
       endpoint?: string;
       apiKey?: string;

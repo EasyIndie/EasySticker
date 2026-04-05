@@ -165,7 +165,6 @@ function createAppSandbox(persistedValue?: Record<string, unknown>) {
     "exportConfirmPanel",
     "wechatAiPreview",
     "sectionCoverIcon",
-    "wechatAiSuggest",
     "wechatAiProvider",
     "wechatAiPrompt",
     "wechatAiTitle",
@@ -374,6 +373,7 @@ describe("public page", () => {
     expect(html).toContain("建议上传主体清晰、边缘完整的 PNG 或 JPG");
     expect(html).toContain("建议在提示词中补充主体、情绪、动作和背景限制");
     expect(html).toContain('<span class="required-mark">*</span>选择图片');
+    expect(html).toContain('<span class="required-mark">*</span>AI 提供商选择');
     expect(html).toContain('<span class="required-mark">*</span>提示词');
     expect(html).toContain('<span class="required-mark">*</span>表情包标题');
     expect(html).toContain('<span class="required-mark">*</span>作者名');
@@ -628,7 +628,6 @@ describe("public page", () => {
     expect(state.currentStyles).toEqual(["可爱"]); // 已经改为单选，只会恢复第一个
     expect(state.hasGenerationAttempted).toBe(true);
     expect(state.lastPackResult.packId).toBe("pack-001");
-    expect(elements.get("wechatAiProvider")?.value).toBe("mock");
     expect(elements.get("wechatAiPrompt")?.value).toBe("生成一组猫咪表情");
     expect(elements.get("wechatAiTitle")?.value).toBe("猫咪日常");
     expect(elements.get("wechatAiAuthor")?.value).toBe("EasySticker Studio");
