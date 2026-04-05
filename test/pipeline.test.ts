@@ -52,6 +52,19 @@ describe("pipeline", () => {
   });
 
   it("upload -> wechat prompt -> wechat ai generate -> validate -> download", async () => {
+    const originalConfig = promptConfigModule.loadPromptConfig();
+    vi.spyOn(promptConfigModule, "loadPromptConfig").mockReturnValue({
+      ...originalConfig,
+      ai: {
+        ...originalConfig.ai,
+        defaultProvider: "mock",
+        providers: {
+          ...originalConfig.ai.providers,
+          mock: { name: "本地模拟" }
+        }
+      }
+    });
+
     const png = await sharp({
       create: { width: 256, height: 256, channels: 4, background: { r: 255, g: 255, b: 255, alpha: 1 } }
     })
@@ -167,6 +180,8 @@ describe("pipeline", () => {
     expect(zipRes.headers["content-type"]).toContain("application/zip");
     expect(zipRes.headers["content-disposition"]).toContain('filename="');
     expect(zipRes.headers["content-disposition"]).toContain("filename*=");
+
+    vi.restoreAllMocks();
   }, 120000);
 
   it("wechat ai generate via http provider with base64 reference", async () => {
