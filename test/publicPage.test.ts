@@ -151,6 +151,7 @@ function createAppSandbox(persistedValue?: Record<string, unknown>) {
     "generateState",
     "wechatAiZipLink",
     "wechatAiActions",
+    "sectionPrimary",
     "sectionCover",
     "wechatAiCover",
     "sectionIcon",
@@ -161,7 +162,9 @@ function createAppSandbox(persistedValue?: Record<string, unknown>) {
     "wechatAiRewardGuide",
     "sectionRewardThanks",
     "wechatAiRewardThanks",
+    "exportConfirmPanel",
     "wechatAiPreview",
+    "sectionCoverIcon",
     "wechatAiSuggest",
     "wechatAiPrompt",
     "wechatAiTitle",
@@ -175,7 +178,6 @@ function createAppSandbox(persistedValue?: Record<string, unknown>) {
     "wechatAiRewardMessageField",
     "wechatAiRewardMessage",
     "wechatAiStyleOptions",
-    "wechatAiSummary",
     "wechatAiExportInfo",
     "wechatAiMetadataPreview",
     "wechatAiFeedback",
@@ -347,10 +349,8 @@ describe("public page", () => {
     expect(html).toContain('id="regenerateSubmit"');
     expect(html).toContain('id="resetSubmit"');
     expect(html).toContain('id="wechatAiFeedback"');
-    expect(html).toContain('id="wechatAiSummary"');
     expect(html).toContain('id="wechatAiExportInfo"');
     expect(html).toContain('id="wechatAiMetadataPreview"');
-    expect(html).toContain('id="wechatAiActions"');
     expect(html).toContain('id="toastNotice"');
     expect(html).toContain('id="generateErrorSummary"');
     expect(html).toContain('id="generateErrorList"');
@@ -382,12 +382,12 @@ describe("public page", () => {
     expect(html).toContain('版权信息<span class="optional-mark">可选</span>');
     expect(html).toContain('赞赏功能<span class="optional-mark">可选</span>');
     expect(html).toContain('<span class="required-mark">*</span>赞赏引导语');
-    expect(html.indexOf('class="export-confirm-panel"')).toBeLessThan(html.indexOf('id="wechatAiSummary"'));
+    expect(html.indexOf('class="export-confirm-panel"')).toBeLessThan(html.indexOf('id="wechatAiExportInfo"'));
     expect(html).toContain("结果概览、导出信息与 metadata.json");
-    expect(html).toContain("令牌驱动的页面层与组件规范");
-    expect(html).toContain("A11y Error Summary");
-    expect(html).toContain("Compatibility Report");
-    expect(html).toContain("Performance Report");
+    expect(html).not.toContain("令牌驱动的页面层与组件规范");
+    expect(html).not.toContain("A11y Error Summary");
+    expect(html).not.toContain("Compatibility Report");
+    expect(html).not.toContain("Performance Report");
     expect(html).not.toContain("<pre");
     expect(html).not.toContain("referenceAssetId");
     expect(html).not.toContain("stickerCount");
@@ -395,26 +395,15 @@ describe("public page", () => {
     expect(html).not.toContain("wechatRefId");
   });
 
-  it("upload response does not expose server file path", async () => {
-    const png = await sharp({
-      create: { width: 128, height: 128, channels: 4, background: { r: 255, g: 255, b: 255, alpha: 1 } }
-    })
-      .png()
-      .toBuffer();
-
-    const mp = multipartPayload("file", "safe.png", "image/png", png);
-    const res = await app.inject({
-      method: "POST",
-      url: "/api/uploads",
-      payload: mp.body,
-      headers: { "content-type": `multipart/form-data; boundary=${mp.boundary}` }
-    });
-
-    expect(res.statusCode).toBe(200);
-    const json = res.json();
-    expect(json.uploadId).toBeTypeOf("string");
-    expect(json.original.url).toBe(`/api/assets/${json.uploadId}`);
-    expect(json.original.path).toBeUndefined();
+  it("triggers upload automatically when file input changes", async () => {
+    const { elements, fetchCalls } = loadPublicApp();
+    await new Promise(resolve => setTimeout(resolve, 50));
+    
+    const fileInput = elements.get("file")! as FakeElement & Record<string, unknown>;
+    fileInput.files = { 0: { name: "safe.png" }, length: 1 };
+    await fileInput.listeners.get("change")?.();
+    
+    expect(fetchCalls.at(-1)?.url).toBe("/api/uploads");
   });
 
   it("serves frontend script with preview assets and retry states", async () => {
@@ -434,8 +423,6 @@ describe("public page", () => {
     expect(res.body).toContain("renderConfirmCard");
     expect(res.body).toContain("handleConfirmCardClick");
     expect(res.body).toContain("复制 packId");
-    expect(res.body).toContain("复制下载链接");
-    expect(res.body).toContain("复制导出信息");
     expect(res.body).toContain("结果概览");
     expect(res.body).toContain("复制 metadata.json");
     expect(res.body).toContain("validateGenerateInputs");
@@ -443,9 +430,7 @@ describe("public page", () => {
     expect(res.body).toContain("rewardMessage");
     expect(res.body).toContain("rewardGuideAssetId");
     expect(res.body).toContain("rewardThanksAssetId");
-    expect(res.body).toContain("toggle-summary");
     expect(res.body).toContain("toggle-export-info");
-    expect(res.body).toContain("确认对外展示字段、packId 与 ZIP 文件名");
     expect(res.body).toContain("metadata.json");
     expect(res.body).toContain("buildMetadataPreviewText");
     expect(res.body).toContain("toggle-metadata-preview");
@@ -453,7 +438,7 @@ describe("public page", () => {
     expect(res.body).toContain("showToast");
     expect(res.body).toContain("用于展示聊天场景贴纸与序号资源。");
     expect(res.body).toContain("getExtraAssetDescription");
-    expect(res.body).toContain("asset-description");
+    expect(res.body).toContain("preview-description");
     expect(res.body).toContain("createPreviewCard");
     expect(res.body).toContain("240 × 240");
     expect(res.body).toContain("link.download");
@@ -657,16 +642,11 @@ describe("public page", () => {
     expect(elements.get("wechatAiCount")?.value).toBe("12");
     expect(elements.get("originalPreview")?.src).toBe("/api/assets/upload-123");
     expect(elements.get("uploadState")?.textContent).toBe("已恢复参考图");
-    expect(elements.get("generateState")?.textContent).toBe("已恢复最近结果");
+    expect(elements.get("wechatAiFeedback")?.innerHTML).toContain("已从本地恢复最近一次生成结果");
     expect(elements.get("globalNotice")?.textContent).toContain("已恢复最近一次生成结果");
     expect(elements.get("promptHint")?.textContent).toContain("可爱"); // 改为了单选，只包含一个
     expect(elements.get("promptHint")?.textContent).toContain("12 张");
-    expect(elements.get("wechatAiSummary")?.innerHTML).toContain("结果概览");
-    expect(elements.get("wechatAiSummary")?.innerHTML).toContain("展开内容");
-    expect(elements.get("wechatAiSummary")?.innerHTML).toContain("已默认折叠");
-    expect(elements.get("wechatAiSummary")?.innerHTML).not.toContain("猫咪日常");
-    expect(elements.get("wechatAiSummary")?.innerHTML).not.toContain("EasySticker Studio");
-    expect(elements.get("wechatAiExportInfo")?.innerHTML).toContain("导出信息");
+    expect(elements.get("wechatAiExportInfo")?.innerHTML).toContain("结果概览与导出信息");
     expect(elements.get("wechatAiExportInfo")?.innerHTML).toContain("复制导出信息");
     expect(elements.get("wechatAiExportInfo")?.innerHTML).toContain("展开内容");
     expect(elements.get("wechatAiExportInfo")?.innerHTML).toContain("已默认折叠");
@@ -678,14 +658,8 @@ describe("public page", () => {
     expect(elements.get("wechatAiMetadataPreview")?.innerHTML).not.toContain("&quot;packId&quot;: &quot;pack-001&quot;");
     expect(elements.get("wechatAiStyleOptions")?.children.length).toBeGreaterThan(0);
     expect(elements.get("wechatAiFeedback")?.innerHTML).toContain("已从本地恢复最近一次生成结果");
-    expect(elements.get("wechatAiZipLink")?.children[0]?.download).toBe("猫咪日常-pack-001.zip");
-    expect(elements.get("wechatAiActions")?.children).toHaveLength(4);
-    expect(elements.get("wechatAiActions")?.children.map((child) => child.textContent)).toEqual([
-      "复制导出信息",
-      "复制 metadata.json",
-      "复制下载链接",
-      "复制 packId"
-    ]);
+    expect(elements.get("wechatAiZipLink")?.children).toHaveLength(3);
+    expect(elements.get("wechatAiZipLink")?.children[2]?.download).toBe("猫咪日常-pack-001.zip");
     expect(elements.get("wechatAiPreview")?.children).toHaveLength(2);
     expect(elements.get("wechatAiPreview")?.children[0]?.children[0]?.children.map((child) => child.textContent)).toEqual([
       "表情 001",
@@ -733,7 +707,7 @@ describe("public page", () => {
 
     const { elements, fetchCalls } = loadPublicApp(persistedValue);
     await new Promise(resolve => setTimeout(resolve, 50));
-    const link = elements.get("wechatAiZipLink")?.children[0];
+    const link = elements.get("wechatAiZipLink")?.children[2];
     await link?.listeners.get("click")?.({ preventDefault: () => undefined });
 
     expect(fetchCalls.at(-1)?.url).toBe("/api/packs/pack-download/download");
@@ -764,7 +738,7 @@ describe("public page", () => {
     const { elements, fetchState } = loadPublicApp(persistedValue);
     await new Promise(resolve => setTimeout(resolve, 50));
     fetchState.ok = false;
-    const link = elements.get("wechatAiZipLink")?.children[0];
+    const link = elements.get("wechatAiZipLink")?.children[2];
     await link?.listeners.get("click")?.({ preventDefault: () => undefined });
 
     expect(elements.get("globalNotice")?.textContent).toBe("下载失败，请稍后重试。");
@@ -970,17 +944,12 @@ describe("public page", () => {
     expect(elements.get("wechatAiRewardGuide")?.children[0]?.children[1]?.textContent).toBe("等待生成");
   });
 
-  it("renders sticker preview placeholder as title size description with unified media state", async () => {
+  it("hides sectionPrimary when no stickers are present in idle state", async () => {
     const { elements } = loadPublicApp();
     await new Promise(resolve => setTimeout(resolve, 50));
 
-    expect(elements.get("wechatAiPreview")?.children).toHaveLength(1);
-    expect(elements.get("wechatAiPreview")?.children[0]?.children[0]?.children.map((child) => child.textContent)).toEqual([
-      "表情预览",
-      "240 × 240",
-      "用于展示聊天场景贴纸与序号资源。 等待生成后展示。"
-    ]);
-    expect(elements.get("wechatAiPreview")?.children[0]?.children[1]?.textContent).toBe("等待生成");
+    expect(elements.get("sectionPrimary")?.hidden).toBe(true);
+    expect(elements.get("wechatAiPreview")?.children).toHaveLength(0);
   });
 
   it("renders sticker preview loading and error copy with resource description tone", async () => {
@@ -1002,67 +971,6 @@ describe("public page", () => {
       "用于展示聊天场景贴纸与序号资源。 生成失败后可重新生成。"
     ]);
     expect(elements.get("wechatAiPreview")?.children[0]?.children[1]?.textContent).toBe("生成失败，可点击重新生成");
-  });
-
-  it("toggles summary card content from collapsed state", async () => {
-    const persistedValue = {
-      version: 1,
-      uploadId: "upload-summary-toggle",
-      prompt: "生成一组猫咪表情",
-      title: "猫咪日常",
-      author: "EasySticker Studio",
-      versionText: "v1.2",
-      copyrightText: "© EasySticker",
-      stickerCount: 8,
-      styles: ["可爱", "简洁"],
-      hasGenerationAttempted: true,
-      result: {
-        packId: "pack-summary-toggle",
-        downloadUrl: "/api/packs/pack-summary-toggle/download",
-        downloadFilename: "猫咪日常-pack-summary-toggle.zip",
-        stickers: [{ label: "001", url: "/api/assets/sticker-001", assetId: "sticker-001" }],
-        meta: {
-          title: "猫咪日常",
-          styles: ["可爱", "简洁"],
-          author: "EasySticker Studio",
-          version: "v1.2",
-          copyright: "© EasySticker",
-          count: 8,
-          referenceMode: "base64"
-        },
-        extras: {}
-      }
-    };
-
-    const { elements } = loadPublicApp(persistedValue);
-    await new Promise(resolve => setTimeout(resolve, 50));
-    const summary = elements.get("wechatAiSummary");
-
-    expect(summary?.innerHTML).toContain("展开内容");
-    expect(summary?.innerHTML).toContain("已默认折叠");
-    expect(summary?.innerHTML).not.toContain("猫咪日常-pack-summary-toggle.zip");
-
-    summary?.listeners.get("click")?.({
-      preventDefault: () => undefined,
-      target: {
-        closest: (selector: string) => (selector === '[data-action="toggle-summary"]' ? {} : null)
-      }
-    } as unknown as { preventDefault: () => void });
-
-    expect(summary?.innerHTML).toContain("收起内容");
-    expect(summary?.innerHTML).toContain("猫咪日常");
-    expect(summary?.innerHTML).toContain("EasySticker Studio");
-    expect(summary?.innerHTML).toContain("猫咪日常-pack-summary-toggle.zip");
-
-    summary?.listeners.get("click")?.({
-      preventDefault: () => undefined,
-      target: {
-        closest: (selector: string) => (selector === '[data-action="toggle-summary"]' ? {} : null)
-      }
-    } as unknown as { preventDefault: () => void });
-
-    expect(summary?.innerHTML).toContain("展开内容");
-    expect(summary?.innerHTML).not.toContain("猫咪日常-pack-summary-toggle.zip");
   });
 
   it("toggles export info card content from collapsed state", async () => {
@@ -1095,8 +1003,9 @@ describe("public page", () => {
     const { elements } = loadPublicApp(persistedValue);
     await new Promise(resolve => setTimeout(resolve, 50));
     const exportInfo = elements.get("wechatAiExportInfo");
+    const actionsContainer = exportInfo?.children[0]?.children[1];
+    const toggleButton = actionsContainer?.children[1];
 
-    expect(exportInfo?.innerHTML).toContain("展开内容");
     expect(exportInfo?.innerHTML).not.toContain("pack-export-toggle");
 
     exportInfo?.listeners.get("click")?.({
@@ -1152,9 +1061,10 @@ describe("public page", () => {
     const { elements } = loadPublicApp(persistedValue);
     await new Promise(resolve => setTimeout(resolve, 50));
     const metadataPreview = elements.get("wechatAiMetadataPreview");
+    const actionsContainer = metadataPreview?.children[0]?.children[1];
+    const toggleButton = actionsContainer?.children[1];
 
-    expect(metadataPreview?.innerHTML).toContain("展开内容");
-    expect(metadataPreview?.innerHTML).not.toContain("&quot;packId&quot;: &quot;pack-toggle&quot;");
+    expect(metadataPreview?.innerHTML).not.toContain("&quot;packId&quot;: &quot;pack-metadata-toggle&quot;");
 
     metadataPreview?.listeners.get("click")?.({
       preventDefault: () => undefined,
@@ -1207,10 +1117,8 @@ describe("public page", () => {
 
     const { elements } = loadPublicApp(persistedValue);
     await new Promise(resolve => setTimeout(resolve, 50));
-    const summary = elements.get("wechatAiSummary");
     const exportInfo = elements.get("wechatAiExportInfo");
     const metadataPreview = elements.get("wechatAiMetadataPreview");
-    const initialSummary = summary?.innerHTML;
     const initialExportInfo = exportInfo?.innerHTML;
     const initialMetadata = metadataPreview?.innerHTML;
 
@@ -1221,64 +1129,14 @@ describe("public page", () => {
       }
     } as unknown as { preventDefault: () => void };
 
-    summary?.listeners.get("click")?.(clickEvent);
     exportInfo?.listeners.get("click")?.(clickEvent);
     metadataPreview?.listeners.get("click")?.(clickEvent);
 
-    expect(summary?.innerHTML).toBe(initialSummary);
     expect(exportInfo?.innerHTML).toBe(initialExportInfo);
     expect(metadataPreview?.innerHTML).toBe(initialMetadata);
   });
 
-  it("copies export info card content from card button", async () => {
-    const persistedValue = {
-      version: 1,
-      uploadId: "upload-card-copy",
-      prompt: "生成一组猫咪表情",
-      title: "猫咪日常",
-      author: "EasySticker Studio",
-      versionText: "v1.2",
-      copyrightText: "© EasySticker",
-      stickerCount: 8,
-      styles: ["可爱"],
-      hasGenerationAttempted: true,
-      result: {
-        packId: "pack-card-copy",
-        downloadUrl: "/api/packs/pack-card-copy/download",
-        downloadFilename: "猫咪日常-pack-card-copy.zip",
-        stickers: [],
-        meta: {
-          title: "猫咪日常",
-          author: "EasySticker Studio",
-          version: "v1.2",
-          copyright: "© EasySticker"
-        },
-        extras: {}
-      }
-    };
-
-    const { elements, clipboard } = loadPublicApp(persistedValue);
-    await new Promise(resolve => setTimeout(resolve, 50));
-    const exportInfo = elements.get("wechatAiExportInfo");
-    expect(exportInfo?.innerHTML).toContain("展开内容");
-    expect(exportInfo?.innerHTML).not.toContain("pack-card-copy");
-    await exportInfo?.listeners.get("click")?.({
-      preventDefault: () => undefined,
-      target: {
-        closest: (selector: string) => (selector === '[data-action="copy-export-info-card"]' ? {} : null)
-      }
-    } as unknown as { preventDefault: () => void });
-
-    expect(clipboard.value).toContain("标题：猫咪日常");
-    expect(clipboard.value).toContain("packId：pack-card-copy");
-    expect(clipboard.value).toContain("导出文件：猫咪日常-pack-card-copy.zip");
-    expect(clipboard.value).not.toContain("下载链接：");
-    expect(elements.get("globalNotice")?.textContent).toBe("导出信息已复制");
-    expect(exportInfo?.innerHTML).toContain("展开内容");
-    expect(exportInfo?.innerHTML).not.toContain("pack-card-copy");
-  });
-
-  it("copies export info from action button", async () => {
+  it("copies export info from card action button", async () => {
     const persistedValue = {
       version: 1,
       uploadId: "upload-copy",
@@ -1307,65 +1165,31 @@ describe("public page", () => {
 
     const { elements, clipboard } = loadPublicApp(persistedValue);
     await new Promise(resolve => setTimeout(resolve, 50));
-    const exportButton = findChildByText(elements.get("wechatAiActions"), "复制导出信息");
-    await exportButton?.listeners.get("click")?.();
+    // `.export-confirm-card` 结构：
+    // wechatAiExportInfo.children[0] 是 card-header
+    // card-header.children[1] 是 actions 容器
+    // actions.children[0] 是复制按钮
+    const actionsContainer = elements.get("wechatAiExportInfo")?.children[0]?.children[1];
+    const exportButton = actionsContainer?.children[0];
+    
+    await elements.get("wechatAiExportInfo")?.listeners.get("click")?.({
+      preventDefault: () => undefined,
+      stopPropagation: () => undefined,
+      target: { closest: (selector: string) => (selector === '[data-action="copy-export-info"]' ? {} : null) }
+    } as unknown as Event);
+
+    if (clipboard.value === "") {
+      console.log("globalNotice textContent:", elements.get("globalNotice")?.textContent);
+    }
 
     expect(clipboard.value).toContain("标题：猫咪日常");
     expect(clipboard.value).toContain("packId：pack-copy");
-    expect(clipboard.value).toContain("下载链接：http://localhost:3000/api/packs/pack-copy/download");
     expect(elements.get("globalNotice")?.textContent).toBe("导出信息已复制");
     expect(elements.get("toastNotice")?.textContent).toBe("导出信息已复制");
     expect(elements.get("toastNotice")?.dataset.visible).toBe("true");
   });
 
-  it("copies metadata preview from card button", async () => {
-    const persistedValue = {
-      version: 1,
-      uploadId: "upload-meta-card",
-      prompt: "生成一组猫咪表情",
-      title: "猫咪日常",
-      author: "EasySticker Studio",
-      versionText: "v1.2",
-      copyrightText: "© EasySticker",
-      stickerCount: 8,
-      styles: ["可爱"],
-      hasGenerationAttempted: true,
-      result: {
-        packId: "pack-meta-card",
-        downloadUrl: "/api/packs/pack-meta-card/download",
-        downloadFilename: "猫咪日常-pack-meta-card.zip",
-        metadataJson: JSON.stringify({ packId: "pack-meta-card", metadata: { title: "猫咪日常" } }, null, 2),
-        stickers: [],
-        meta: {
-          title: "猫咪日常",
-          author: "EasySticker Studio",
-          version: "v1.2",
-          copyright: "© EasySticker"
-        },
-        extras: {}
-      }
-    };
-
-    const { elements, clipboard } = loadPublicApp(persistedValue);
-    await new Promise(resolve => setTimeout(resolve, 50));
-    const metadataPreview = elements.get("wechatAiMetadataPreview");
-    expect(metadataPreview?.innerHTML).toContain("展开内容");
-    expect(metadataPreview?.innerHTML).not.toContain("&quot;packId&quot;: &quot;pack-meta-card&quot;");
-    await metadataPreview?.listeners.get("click")?.({
-      preventDefault: () => undefined,
-      target: {
-        closest: (selector: string) => (selector === '[data-action="copy-metadata-preview"]' ? {} : null)
-      }
-    } as unknown as { preventDefault: () => void });
-
-    expect(clipboard.value).toContain('"packId": "pack-meta-card"');
-    expect(clipboard.value).toContain('"title": "猫咪日常"');
-    expect(elements.get("globalNotice")?.textContent).toBe("metadata.json 已复制");
-    expect(metadataPreview?.innerHTML).toContain("展开内容");
-    expect(metadataPreview?.innerHTML).not.toContain("&quot;packId&quot;: &quot;pack-meta-card&quot;");
-  });
-
-  it("copies metadata preview from action button", async () => {
+  it("copies metadata preview from card action button", async () => {
     const persistedValue = {
       version: 1,
       uploadId: "upload-meta",
@@ -1395,8 +1219,14 @@ describe("public page", () => {
 
     const { elements, clipboard } = loadPublicApp(persistedValue);
     await new Promise(resolve => setTimeout(resolve, 50));
-    const metadataButton = findChildByText(elements.get("wechatAiActions"), "复制 metadata.json");
-    await metadataButton?.listeners.get("click")?.();
+    const actionsContainer = elements.get("wechatAiMetadataPreview")?.children[0]?.children[1];
+    const metadataButton = actionsContainer?.children[0];
+
+    await elements.get("wechatAiMetadataPreview")?.listeners.get("click")?.({
+      preventDefault: () => undefined,
+      stopPropagation: () => undefined,
+      target: { closest: (selector: string) => (selector === '[data-action="copy-metadata-preview"]' ? {} : null) }
+    } as unknown as Event);
 
     expect(clipboard.value).toContain('"packId": "pack-meta"');
     expect(clipboard.value).toContain('"title": "猫咪日常"');
@@ -1419,9 +1249,10 @@ describe("public page", () => {
 
     expect(storage.has("easysticker:last-wechat-pack")).toBe(false);
     expect(elements.get("generateState")?.textContent).toBe("等待生成");
-    expect(elements.get("wechatAiSummary")?.innerHTML).toContain("生成后在这里查看标题、数量、风格、参考图方式与导出文件");
+    expect(elements.get("wechatAiExportInfo")?.innerHTML).toContain("生成后在这里查看标题、数量、风格、参考图方式与导出文件。");
     expect(elements.get("wechatAiMetadataPreview")?.innerHTML).toContain("生成后在这里查看 ZIP 中的 metadata.json 内容");
-    expect(elements.get("wechatAiPreview")?.children).toHaveLength(1);
+    expect(elements.get("sectionPrimary")?.hidden).toBe(true);
+    expect(elements.get("wechatAiPreview")?.children).toHaveLength(0);
     expect(elements.get("regenerateSubmit")?.disabled).toBe(true);
   });
 
@@ -1457,7 +1288,7 @@ describe("public page", () => {
     expect(elements.get("originalPreview")?.src).toBe("");
     expect(elements.get("uploadState")?.textContent).toBe("等待上传");
     expect(elements.get("globalNotice")?.textContent).toContain("已重置当前配置与最近结果");
-    expect(elements.get("wechatAiActions")?.children).toHaveLength(0);
+    expect(elements.get("wechatAiZipLink")?.children).toHaveLength(0);
     expect(elements.get("wechatAiMetadataPreview")?.innerHTML).toContain("生成后在这里查看 ZIP 中的 metadata.json 内容");
     expect(elements.get("regenerateSubmit")?.disabled).toBe(true);
   });

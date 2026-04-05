@@ -14,7 +14,6 @@
         <div class="hero-topline">
           <span class="badge">微信 AI 表情流程</span>
           <nav class="hero-actions" aria-label="页面快捷入口">
-            <a class="hero-link" href="#componentLibrary">查看组件要点</a>
             <a class="hero-link" href="/components.html">打开组件库文档页</a>
             <a class="hero-link" href="/design-spec.html">查看设计规范页</a>
             <a class="hero-link" href="/compatibility-report.html">查看兼容性报告</a>
@@ -47,7 +46,6 @@
               />
               <span id="uploadHint" class="field-hint">建议上传主体清晰、边缘完整的 PNG 或 JPG，上传后仅作为当前生成流程的参考图。</span>
             </label>
-            <button id="uploadSubmit" type="submit">上传图片</button>
           </form>
           <div id="uploadState" class="status-chip" aria-live="polite">等待上传</div>
           <div class="preview-card">
@@ -76,54 +74,20 @@
             ></textarea>
             <div id="wechatAiPromptError" class="field-error" hidden></div>
           </label>
-          <label class="field" for="wechatAiTitle">
-            <span class="section-title"><span class="required-mark">*</span>表情包标题</span>
-            <input
-              id="wechatAiTitle"
-              type="text"
-              placeholder="例如：小猫日常表情包"
-              maxlength="48"
-              aria-describedby="wechatAiTitleHint"
-            />
-            <div id="wechatAiTitleHint" class="field-hint">用于导出信息、下载文件名和组件库文档示例展示。</div>
-            <div id="wechatAiTitleError" class="field-error" hidden></div>
-          </label>
-          <div class="config-grid">
-            <label class="field" for="wechatAiAuthor">
-              <span class="section-title"><span class="required-mark">*</span>作者名</span>
-              <input
-                id="wechatAiAuthor"
-                type="text"
-                placeholder="例如：EasySticker Studio"
-                maxlength="48"
-                aria-describedby="wechatAiAuthorHint"
-              />
-              <div id="wechatAiAuthorHint" class="field-hint">用于 metadata.json 与对外展示信息，建议与品牌主体保持一致。</div>
-              <div id="wechatAiAuthorError" class="field-error" hidden></div>
-            </label>
-            <label class="field" for="wechatAiVersion">
-              <span class="section-title">版本信息<span class="optional-mark">可选</span></span>
-              <input
-                id="wechatAiVersion"
-                type="text"
-                placeholder="可选，例如：v1.0 / 2026 春季版"
-                maxlength="48"
-                aria-describedby="wechatAiVersionHint"
-              />
-              <div id="wechatAiVersionHint" class="field-hint">建议用于区分发布批次或活动版本，例如季度版、联名版或 A/B 测试版本。</div>
-            </label>
+          <div class="field">
+            <span id="wechatAiStyleLabel" class="section-title"><span class="required-mark">*</span>风格选择</span>
+            <div
+              id="wechatAiStyleOptions"
+              class="style-options"
+              role="group"
+              aria-labelledby="wechatAiStyleLabel"
+              aria-describedby="wechatAiStyleHint"
+              tabindex="-1"
+            ></div>
+            <div id="wechatAiStyleChipHelp" class="sr-only">左右/上下箭头移动焦点，Home/End 快速跳首/跳尾，Enter 或空格切换选中风格。</div>
+            <div id="wechatAiStyleHint" class="field-hint">请选择 1 种生成风格，系统会按选中风格推荐提示词。</div>
+            <div id="wechatAiStyleError" class="field-error" hidden></div>
           </div>
-          <label class="field" for="wechatAiCopyright">
-            <span class="section-title">版权信息<span class="optional-mark">可选</span></span>
-            <input
-              id="wechatAiCopyright"
-              type="text"
-              placeholder="可选，例如：© 2026 EasySticker Studio"
-              maxlength="80"
-              aria-describedby="wechatAiCopyrightHint"
-            />
-            <div id="wechatAiCopyrightHint" class="field-hint">用于导出信息与 metadata.json 展示，建议填写明确的版权主体、年份或授权说明。</div>
-          </label>
           <div class="config-grid">
             <label class="field" for="wechatAiCount">
               <span class="section-title"><span class="required-mark">*</span>贴纸数量</span>
@@ -144,27 +108,13 @@
               <div id="wechatAiCountError" class="field-error" hidden></div>
             </label>
             <div class="field">
-              <span id="wechatAiStyleLabel" class="section-title"><span class="required-mark">*</span>风格选择</span>
-              <div
-                id="wechatAiStyleOptions"
-                class="style-options"
-                role="group"
-                aria-labelledby="wechatAiStyleLabel"
-                aria-describedby="wechatAiStyleHint"
-                tabindex="-1"
-              ></div>
-              <div id="wechatAiStyleChipHelp" class="sr-only">左右/上下箭头移动焦点，Home/End 快速跳首/跳尾，Enter 或空格切换选中风格。</div>
-              <div id="wechatAiStyleHint" class="field-hint">请选择 1 种生成风格，系统会按选中风格推荐提示词。</div>
-              <div id="wechatAiStyleError" class="field-error" hidden></div>
+              <span class="section-title">赞赏功能<span class="optional-mark">可选</span></span>
+              <label class="toggle-row" for="wechatAiRewardEnabled">
+                <input id="wechatAiRewardEnabled" type="checkbox" aria-describedby="wechatAiRewardEnabledHint" />
+                <span>开启后自动生成赞赏图</span>
+              </label>
+              <div id="wechatAiRewardEnabledHint" class="field-hint">额外生成 2 张 750 × 400 资源。</div>
             </div>
-          </div>
-          <div class="field">
-            <span class="section-title">赞赏功能<span class="optional-mark">可选</span></span>
-            <label class="toggle-row" for="wechatAiRewardEnabled">
-              <input id="wechatAiRewardEnabled" type="checkbox" aria-describedby="wechatAiRewardEnabledHint" />
-              <span>开启后自动生成赞赏引导图和赞赏感谢图</span>
-            </label>
-            <div id="wechatAiRewardEnabledHint" class="field-hint">开启后会额外生成 2 张 750 × 400 资源，适合在公众号、社群或私域场景中引导赞赏。</div>
           </div>
           <label id="wechatAiRewardMessageField" class="field" for="wechatAiRewardMessage" hidden>
             <span class="section-title"><span class="required-mark">*</span>赞赏引导语</span>
@@ -178,6 +128,57 @@
             <div id="wechatAiRewardHint" class="field-hint">会同步用于赞赏引导图与感谢图文案，建议简短、礼貌且易理解。</div>
             <div id="wechatAiRewardMessageError" class="field-error" hidden></div>
           </label>
+          <div class="config-grid">
+            <label class="field" for="wechatAiTitle">
+              <span class="section-title"><span class="required-mark">*</span>表情包标题</span>
+              <input
+                id="wechatAiTitle"
+                type="text"
+                placeholder="例如：小猫日常表情包"
+                maxlength="48"
+                aria-describedby="wechatAiTitleHint"
+              />
+              <div id="wechatAiTitleHint" class="field-hint">用于导出信息、下载文件名和组件库文档示例展示。</div>
+              <div id="wechatAiTitleError" class="field-error" hidden></div>
+            </label>
+            <label class="field" for="wechatAiAuthor">
+              <span class="section-title"><span class="required-mark">*</span>作者名</span>
+              <input
+                id="wechatAiAuthor"
+                type="text"
+                placeholder="例如：EasySticker Studio"
+                maxlength="48"
+                aria-describedby="wechatAiAuthorHint"
+              />
+              <div id="wechatAiAuthorHint" class="field-hint">用于 metadata.json 与对外展示信息，建议与品牌主体保持一致。</div>
+              <div id="wechatAiAuthorError" class="field-error" hidden></div>
+            </label>
+          </div>
+          
+          <div class="config-grid">
+            <label class="field" for="wechatAiVersion">
+              <span class="section-title">版本信息<span class="optional-mark">可选</span></span>
+              <input
+                id="wechatAiVersion"
+                type="text"
+                placeholder="可选，例如：v1.0 / 2026 春季版"
+                maxlength="48"
+                aria-describedby="wechatAiVersionHint"
+              />
+              <div id="wechatAiVersionHint" class="field-hint">建议用于区分发布批次或活动版本，例如季度版、联名版或 A/B 测试版本。</div>
+            </label>
+            <label class="field" for="wechatAiCopyright">
+              <span class="section-title">版权信息<span class="optional-mark">可选</span></span>
+              <input
+                id="wechatAiCopyright"
+                type="text"
+                placeholder="可选，例如：© 2026 EasySticker Studio"
+                maxlength="80"
+                aria-describedby="wechatAiCopyrightHint"
+              />
+              <div id="wechatAiCopyrightHint" class="field-hint">用于导出信息与 metadata.json 展示，建议填写明确的版权主体、年份或授权说明。</div>
+            </label>
+          </div>
           <div id="promptHint" class="muted">建议在提示词中补充主体、情绪、动作和背景限制。系统默认生成 8 张表情，并自动补齐封面、图标和横幅。</div>
         </article>
 
@@ -206,112 +207,69 @@
             <h2>预览与下载</h2>
             <p class="muted">生成后展示部分效果图，并提供 ZIP 下载。</p>
           </div>
-          <div id="wechatAiFeedback" class="feedback-card" data-tone="idle" aria-live="polite">
-            <div class="section-title">预览状态</div>
-            <p class="muted">等待生成后展示 cover、icon、banner 与表情预览。</p>
+          <div id="previewSectionsContainer">
+            <div id="wechatAiFeedback" class="feedback-card" data-tone="idle" aria-live="polite">
+              <div class="section-title">预览状态</div>
+              <p class="muted">等待生成后展示 cover、icon、banner 与表情预览。</p>
+            </div>
+
+            <!-- 表情主图区 -->
+            <div class="preview-section" id="sectionPrimary" hidden>
+              <div class="section-title">表情主图</div>
+              <div id="wechatAiPreview" class="grid"></div>
+            </div>
+
+            <!-- Cover & Icon 区 -->
+            <div class="preview-section" id="sectionCoverIcon" hidden>
+              <div class="grid" style="grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: var(--space-4);">
+                <div>
+                  <div class="section-title" style="margin-bottom: var(--space-3);">表情封面图 (Cover)</div>
+                  <div id="wechatAiCover" class="grid" style="grid-template-columns: 1fr;"></div>
+                </div>
+                <div>
+                  <div class="section-title" style="margin-bottom: var(--space-3);">聊天面板图标 (Icon)</div>
+                  <div id="wechatAiIcon" class="grid" style="grid-template-columns: 1fr;"></div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Banner 横幅区 -->
+            <div class="preview-section" id="sectionBanner" hidden>
+              <div class="section-title">详情页横幅 (Banner)</div>
+              <div id="wechatAiBanner" class="grid" style="grid-template-columns: 1fr;"></div>
+            </div>
+
+            <!-- 赞赏引导图区 -->
+            <div class="preview-section" id="sectionRewardGuide" hidden>
+              <div class="section-title">赞赏引导图</div>
+              <div id="wechatAiRewardGuide" class="grid" style="grid-template-columns: 1fr;"></div>
+            </div>
+
+            <!-- 赞赏感谢图区 -->
+            <div class="preview-section" id="sectionRewardThanks" hidden>
+              <div class="section-title">赞赏感谢图</div>
+              <div id="wechatAiRewardThanks" class="grid" style="grid-template-columns: 1fr;"></div>
+            </div>
           </div>
-          <section class="export-confirm-panel" aria-labelledby="exportConfirmTitle">
+
+          <section class="export-confirm-panel" id="exportConfirmPanel" aria-labelledby="exportConfirmTitle" hidden>
             <div class="export-confirm-head">
               <div>
                 <div id="exportConfirmTitle" class="section-title">导出确认面板</div>
                 <p class="muted">下载前集中核对结果概览、导出信息与 metadata.json，确认标题、数量、版本和资源索引无误。</p>
               </div>
             </div>
-            <div id="wechatAiSummary" class="summary-card export-confirm-card">
-              <div class="section-title">结果概览</div>
-              <p class="muted">生成后在这里查看标题、数量、风格、参考图方式与导出文件。</p>
-            </div>
-            <div id="wechatAiZipLink" class="download-slot"></div>
-            <div id="wechatAiActions" class="action-row"></div>
             <div id="wechatAiExportInfo" class="summary-card export-confirm-card">
-              <div class="section-title">导出信息</div>
-              <p class="muted">确认对外展示字段、packId 与 ZIP 文件名，确认后可直接复制。</p>
+              <div class="section-title">结果概览与导出信息</div>
+              <p class="muted">确认生成范围、风格与导出信息，确认后可直接复制。</p>
             </div>
             <div id="wechatAiMetadataPreview" class="summary-card export-confirm-card">
               <div class="section-title">metadata.json</div>
               <p class="muted">确认 packId、资源映射与扩展资源字段，再继续下载或提审。</p>
             </div>
+            <div id="wechatAiZipLink" class="download-slot"></div>
           </section>
-          <div id="previewSectionsContainer">
-            <!-- 表情主图区 -->
-            <div class="preview-section" id="sectionPrimary">
-              <div class="section-title">表情主图</div>
-              <div id="wechatAiPreview" class="grid"></div>
-            </div>
-
-            <!-- Cover 封面图区 -->
-            <div class="preview-section" id="sectionCover" hidden>
-              <div class="section-title">表情封面图 (Cover)</div>
-              <div id="wechatAiCover" class="asset-grid"></div>
-            </div>
-
-            <!-- Icon 图标区 -->
-            <div class="preview-section" id="sectionIcon" hidden>
-              <div class="section-title">聊天面板图标 (Icon)</div>
-              <div id="wechatAiIcon" class="asset-grid"></div>
-            </div>
-
-            <!-- Banner 横幅区 -->
-            <div class="preview-section" id="sectionBanner" hidden>
-              <div class="section-title">详情页横幅 (Banner)</div>
-              <div id="wechatAiBanner" class="asset-grid"></div>
-            </div>
-
-            <!-- 赞赏引导图区 -->
-            <div class="preview-section" id="sectionRewardGuide" hidden>
-              <div class="section-title">赞赏引导图</div>
-              <div id="wechatAiRewardGuide" class="asset-grid"></div>
-            </div>
-
-            <!-- 赞赏感谢图区 -->
-            <div class="preview-section" id="sectionRewardThanks" hidden>
-              <div class="section-title">赞赏感谢图</div>
-              <div id="wechatAiRewardThanks" class="asset-grid"></div>
-            </div>
-          </div>
         </article>
-      </section>
-
-      <section id="componentLibrary" class="card library-highlight" aria-labelledby="componentLibraryTitle">
-        <div class="library-highlight-head">
-          <div>
-            <span class="badge badge-neutral">组件库文档</span>
-            <h2 id="componentLibraryTitle">令牌驱动的页面层与组件规范</h2>
-            <p class="muted">当前页面已统一接入语义色板、间距、圆角和状态令牌，并补齐可访问性错误说明容器、设计规范页与兼容性测试报告页。</p>
-          </div>
-          <div class="hero-actions">
-            <a class="ghost-button library-link" href="/components.html">查看完整组件库文档页</a>
-            <a class="ghost-button library-link" href="/design-spec.html">查看设计规范页</a>
-            <a class="ghost-button library-link" href="/compatibility-report.html">查看兼容性测试报告</a>
-            <a class="ghost-button library-link" href="/performance-report.html">查看性能基线与对比报告</a>
-          </div>
-        </div>
-        <div class="library-highlight-grid">
-          <article class="library-highlight-card">
-            <div class="section-title">Design Tokens</div>
-            <p class="muted">统一定义 surface、text、border、spacing、radius、shadow 与 state tokens，减少硬编码样式。</p>
-          </article>
-          <article class="library-highlight-card">
-            <div class="section-title">A11y Error Summary</div>
-            <p class="muted">生成前集中展示字段问题，并通过 aria-describedby 将错误说明回连到对应控件。</p>
-          </article>
-          <article class="library-highlight-card">
-            <div class="section-title">Component Docs</div>
-            <p class="muted">文档页覆盖按钮、输入框、状态反馈、预览卡片与导出确认模块的视觉与语义规范。</p>
-          </article>
-          <article class="library-highlight-card">
-            <div class="section-title">Design Spec</div>
-            <p class="muted">独立说明布局、字号、色板、表单帮助文案与页面组合规则，便于后续新增业务页复用。</p>
-          </article>
-          <article class="library-highlight-card">
-            <div class="section-title">Compatibility Report</div>
-            <p class="muted">汇总当前基于自动化测试与前端基线整理的浏览器、响应式与无障碍兼容性检查项。</p>
-          </article>
-          <article class="library-highlight-card">
-            <div class="section-title">Performance Report</div>
-            <p class="muted">沉淀页面静态资源、交互耗时与 DOM 复杂度的基线数据，并对比最近一轮增量改造结果。</p>
-          </article>
-        </div>
       </section>
     </main>
     <div id="toastNotice" class="toast-notice" data-tone="info" data-visible="false" aria-live="assertive"></div>
