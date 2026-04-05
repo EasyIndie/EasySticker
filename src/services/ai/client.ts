@@ -1,4 +1,5 @@
 import { type AiProvider, type AiGenerateInput, type AiGenerateOutput } from "./provider";
+import { loadPromptConfig } from "../wechat/promptConfig";
 
 type Options = {
   timeoutMs: number;
@@ -29,10 +30,12 @@ function isRetryable(err: any) {
 }
 
 export function buildMinimalClient(provider: AiProvider, opts?: Partial<Options>) {
+  const config = loadPromptConfig();
+  const settings = config.ai?.settings || {};
   const options: Options = {
-    timeoutMs: Number(process.env.AI_REQUEST_TIMEOUT_MS ?? 60000), // 增加到 60s
-    retryMax: Number(process.env.AI_REQUEST_RETRY_MAX ?? 3),       // 增加到 3 次
-    retryBaseMs: Number(process.env.AI_REQUEST_RETRY_BASE_MS ?? 1000), // 初始退避增加到 1s
+    timeoutMs: settings.timeoutMs ?? 60000,
+    retryMax: settings.retryMax ?? 3,
+    retryBaseMs: settings.retryBaseMs ?? 1000,
     ...(opts ?? {})
   };
 

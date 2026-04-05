@@ -34,6 +34,7 @@ const wechatAiRewardMessage = document.getElementById("wechatAiRewardMessage");
 const wechatAiStyleOptions = document.getElementById("wechatAiStyleOptions");
 const wechatAiCountDec = document.getElementById("wechatAiCountDec");
 const wechatAiCountInc = document.getElementById("wechatAiCountInc");
+const wechatAiProvider = document.getElementById("wechatAiProvider");
 const wechatAiExportInfo = document.getElementById("wechatAiExportInfo");
 const wechatAiMetadataPreview = document.getElementById("wechatAiMetadataPreview");
 const wechatAiFeedback = document.getElementById("wechatAiFeedback");
@@ -136,20 +137,21 @@ const FIELD_A11Y_CONFIGS = {
     focusTarget: wechatAiStyleOptions
   },
   rewardMessage: {
-    key: "rewardMessage",
-    target: wechatAiRewardMessage,
-    label: "赞赏引导语",
-    errorId: "wechatAiRewardMessageError",
-    baseDescribedBy: ["wechatAiRewardHint"]
-  }
-};
-
-let currentUploadId = null;
-let currentStyles = [];
-let availableStyles = [...DEFAULT_STYLE_OPTIONS];
-let currentRewardEnabled = false;
-let currentRewardMessage = "";
-let hasGenerationAttempted = false;
+      key: "rewardMessage",
+      target: wechatAiRewardMessage,
+      label: "赞赏引导语",
+      errorId: "wechatAiRewardMessageError",
+      baseDescribedBy: ["wechatAiRewardHint"]
+    }
+  };
+  
+  let currentUploadId = null;
+  let currentStyles = [];
+  let availableStyles = [...DEFAULT_STYLE_OPTIONS];
+  let currentRewardEnabled = false;
+  let currentRewardMessage = "";
+  let currentAiProvider = "mock";
+  let hasGenerationAttempted = false;
 let lastPackResult = null;
 let currentTaskId = null;
 let sseAbortController = null;
@@ -421,6 +423,7 @@ function sanitizePersistedPackResult(raw) {
   return {
     uploadId: typeof raw.uploadId === "string" ? raw.uploadId : null,
     prompt: typeof raw.prompt === "string" ? raw.prompt : "",
+    provider: typeof raw.provider === "string" ? raw.provider : "mock",
     title: typeof raw.title === "string" ? raw.title : "",
     author: typeof raw.author === "string" ? raw.author : "",
     versionText: typeof raw.versionText === "string" ? raw.versionText : "",
@@ -521,12 +524,14 @@ function restorePersistedPackResult() {
     }
 
     currentUploadId = restored.uploadId;
+    currentAiProvider = restored.provider || "mock";
     currentStyles = restored.styles.length ? restored.styles : [...DEFAULT_STYLE_OPTIONS];
     currentRewardEnabled = Boolean(restored.rewardEnabled || restored.result?.meta?.rewardEnabled);
     hasGenerationAttempted = Boolean(restored.uploadId && restored.prompt && restored.hasGenerationAttempted);
     lastPackResult = restored.result;
 
     wechatAiPrompt.value = restored.prompt;
+    if (wechatAiProvider) wechatAiProvider.value = currentAiProvider;
     wechatAiTitle.value = restored.title;
     wechatAiAuthor.value = restored.author;
     wechatAiVersion.value = restored.versionText;
@@ -1152,6 +1157,9 @@ function syncRegenerateButton() {
 function setGenerateButtonsBusy(busy) {
   setBusy(generateSubmit, busy, "生成中...");
   setBusy(regenerateSubmit, busy, "重新生成中...");
+  if (wechatAiProvider) {
+    wechatAiProvider.disabled = busy;
+  }
   if (cancelGenerate) {
     cancelGenerate.hidden = busy ? false : true;
     cancelGenerate.disabled = busy ? false : true;
@@ -1500,6 +1508,7 @@ async function generateWechatPack() {
     const payload = {
       referenceAssetId: currentUploadId,
       prompt,
+      provider: wechatAiProvider ? wechatAiProvider.value : "mock",
       styles: currentStyles.length ? currentStyles : undefined,
       stickerCount,
       enableReward: currentRewardEnabled,
@@ -1870,6 +1879,10 @@ wechatAiForm.addEventListener("keydown", async (event) => {
     await generateWechatPack();
   }
 });
+wechatAiProvider.addEventListener("change", () => {
+  currentAiProvider = wechatAiProvider.value;
+});
+
 wechatAiRewardMessage.addEventListener("input", () => {
   currentRewardMessage = wechatAiRewardMessage.value.trim();
   setFieldInvalid(wechatAiRewardMessage, false);
@@ -1913,6 +1926,21 @@ async function initApp() {
         MIN_STICKER_COUNT = config.wechat.minStickerCount || MIN_STICKER_COUNT;
         MAX_STICKER_COUNT = config.wechat.maxStickerCount || MAX_STICKER_COUNT;
         DEFAULT_STICKER_COUNT = config.wechat.defaultStickerCount || DEFAULT_STICKER_COUNT;
+        
+        if (config.wechat.availableProviders && wechatAiProvider) {
+          wechatAiProvider.innerHTML = "";
+          config.wechat.availableProviders.forEach(p => {
+            const option = document.createElement("option");
+            option.value = p.id;
+            option.textContent = p.name;
+            wechatAiProvider.appendChild(option);
+          });
+        }
+
+        if (config.wechat.defaultProvider && wechatAiProvider) {
+          currentAiProvider = config.wechat.defaultProvider;
+          wechatAiProvider.value = currentAiProvider;
+        }
       }
     }
   } catch (err) {

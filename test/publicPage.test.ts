@@ -166,6 +166,7 @@ function createAppSandbox(persistedValue?: Record<string, unknown>) {
     "wechatAiPreview",
     "sectionCoverIcon",
     "wechatAiSuggest",
+    "wechatAiProvider",
     "wechatAiPrompt",
     "wechatAiTitle",
     "wechatAiAuthor",
@@ -338,7 +339,7 @@ describe("public page", () => {
     expect(html).toContain("编辑提示词");
     expect(html).toContain("生成表情");
     expect(html).toContain("预览与下载");
-    expect(html).toContain('id="wechatAiTitle"');
+    expect(html).toContain('id="wechatAiProvider"');
     expect(html).toContain('id="wechatAiAuthor"');
     expect(html).toContain('id="wechatAiVersion"');
     expect(html).toContain('id="wechatAiCopyright"');
@@ -627,6 +628,7 @@ describe("public page", () => {
     expect(state.currentStyles).toEqual(["可爱"]); // 已经改为单选，只会恢复第一个
     expect(state.hasGenerationAttempted).toBe(true);
     expect(state.lastPackResult.packId).toBe("pack-001");
+    expect(elements.get("wechatAiProvider")?.value).toBe("mock");
     expect(elements.get("wechatAiPrompt")?.value).toBe("生成一组猫咪表情");
     expect(elements.get("wechatAiTitle")?.value).toBe("猫咪日常");
     expect(elements.get("wechatAiAuthor")?.value).toBe("EasySticker Studio");
@@ -1275,6 +1277,7 @@ describe("public page", () => {
     (pageApp.resetAllState as () => void)();
 
     expect(storage.has("easysticker:last-wechat-pack")).toBe(false);
+    expect(elements.get("wechatAiProvider")?.value).toBe("mock");
     expect(elements.get("wechatAiPrompt")?.value).toBe("");
     expect(elements.get("wechatAiTitle")?.value).toBe("");
     expect(elements.get("wechatAiAuthor")?.value).toBe("");

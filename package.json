@@ -7,11 +7,11 @@
     "node": ">=20"
   },
   "scripts": {
-    "dev": "concurrently -k \"tsup --watch\" \"node --env-file=.env --watch dist/server.js\"",
+    "dev": "concurrently -k \"tsup --watch\" \"node --watch dist/server.js\"",
     "build": "tsup",
-    "start": "node --env-file=.env dist/server.js",
+    "start": "node dist/server.js",
     "mock-ai": "node scripts/mock-ai-server.mjs",
-    "test": "npm run build && node --env-file=.env ./node_modules/.bin/vitest run"
+    "test": "npm run build && node ./node_modules/.bin/vitest run"
   },
   "dependencies": {
     "@fastify/multipart": "^9.0.3",

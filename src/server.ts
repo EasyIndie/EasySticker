@@ -1,19 +1,16 @@
 import fs from "node:fs";
 import path from "node:path";
 import { buildApp } from "./app";
-
-function envInt(name: string, defaultValue: number): number {
-  const raw = process.env[name];
-  if (!raw) return defaultValue;
-  const parsed = Number.parseInt(raw, 10);
-  return Number.isFinite(parsed) ? parsed : defaultValue;
-}
+import { loadPromptConfig } from "./services/wechat/promptConfig";
 
 async function main() {
-  const host = process.env.HOST ?? "0.0.0.0";
-  const port = envInt("PORT", 3000);
-  const dataDir = process.env.DATA_DIR ?? path.join(process.cwd(), "data");
-  const logLevel = process.env.LOG_LEVEL ?? "info";
+  const config = loadPromptConfig();
+  const serverConfig = config.server || {};
+
+  const host = serverConfig.host ?? "0.0.0.0";
+  const port = serverConfig.port ?? 3000;
+  const dataDir = serverConfig.dataDir ?? path.join(process.cwd(), "data");
+  const logLevel = serverConfig.logLevel ?? "info";
 
   fs.mkdirSync(dataDir, { recursive: true });
 
