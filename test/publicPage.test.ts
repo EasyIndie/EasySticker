@@ -105,6 +105,11 @@ class FakeElement {
     (this as unknown as Record<string, string>)[name] = value;
   }
 
+  getAttribute(name: string) {
+    const val = (this as unknown as Record<string, string>)[name];
+    return val === "" || val === undefined ? null : val;
+  }
+
   removeAttribute(name: string) {
     (this as unknown as Record<string, string>)[name] = "";
   }
