@@ -68,6 +68,26 @@ describe("getAiProvider validation", () => {
     expect(() => getAiProvider()).toThrowError("apiKey is required and cannot be empty");
   });
 
+  it("throws error when openai apiKey is empty string", () => {
+    vi.spyOn(promptConfigModule, "loadPromptConfig").mockReturnValue({
+      ai: {
+        defaultProvider: "test-openai",
+        providers: {
+          "test-openai": {
+            type: "openai",
+            apiKey: ""
+          }
+        }
+      },
+      global: { prompt: "", negativePrompt: "", styles: [] },
+      emotions: [],
+      templates: { sticker: "", extra: "" },
+      extraPrompts: { cover: "", icon: "", banner: "", rewardGuide: "", rewardThanks: "" }
+    } as any);
+
+    expect(() => getAiProvider()).toThrowError("apiKey is required and cannot be empty");
+  });
+
   it("throws error when hf apiKey is undefined", () => {
     vi.spyOn(promptConfigModule, "loadPromptConfig").mockReturnValue({
       ai: {
@@ -89,13 +109,34 @@ describe("getAiProvider validation", () => {
     expect(() => getAiProvider()).toThrowError("apiKey is required and cannot be empty");
   });
 
-  it("returns provider successfully when apiKey is valid", () => {
+  it("returns doubao provider successfully when apiKey is valid", () => {
     vi.spyOn(promptConfigModule, "loadPromptConfig").mockReturnValue({
       ai: {
         defaultProvider: "test-doubao",
         providers: {
           "test-doubao": {
             type: "doubao",
+            apiKey: "valid-key"
+          }
+        }
+      },
+      global: { prompt: "", negativePrompt: "", styles: [] },
+      emotions: [],
+      templates: { sticker: "", extra: "" },
+      extraPrompts: { cover: "", icon: "", banner: "", rewardGuide: "", rewardThanks: "" }
+    } as any);
+
+    const provider = getAiProvider();
+    expect(provider).toBeDefined();
+  });
+
+  it("returns openai provider successfully when apiKey is valid", () => {
+    vi.spyOn(promptConfigModule, "loadPromptConfig").mockReturnValue({
+      ai: {
+        defaultProvider: "test-openai",
+        providers: {
+          "test-openai": {
+            type: "openai",
             apiKey: "valid-key"
           }
         }
