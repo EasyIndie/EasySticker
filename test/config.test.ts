@@ -34,6 +34,17 @@ describe("/api/config route validation", () => {
             type: "hf",
             endpoint: "http://example.com"
           },
+          "openai-empty": {
+            type: "openai",
+            apiKey: ""
+          },
+          "openai-undef": {
+            type: "openai"
+          },
+          "openai-valid": {
+            type: "openai",
+            apiKey: "valid-key"
+          },
           "http-valid": {
             type: "http",
             endpoint: "http://example.com"
@@ -63,11 +74,14 @@ describe("/api/config route validation", () => {
     expect(providers).toContain("mock");
     expect(providers).toContain("http-valid");
     expect(providers).toContain("doubao-valid");
+    expect(providers).toContain("openai-valid");
     
     expect(providers).not.toContain("doubao-empty");
     expect(providers).not.toContain("doubao-undef");
     expect(providers).not.toContain("hf-empty");
     expect(providers).not.toContain("hf-undef");
+    expect(providers).not.toContain("openai-empty");
+    expect(providers).not.toContain("openai-undef");
   });
 
   it("adds a fallback mock provider when production config yields empty list", async () => {

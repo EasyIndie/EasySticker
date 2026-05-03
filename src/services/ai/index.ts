@@ -4,6 +4,7 @@ import { MockAiProvider } from "./providers/mock";
 import { PicsumAiProvider } from "./providers/picsum";
 import { HfAiProvider } from "./providers/hf";
 import { DoubaoAiProvider } from "./providers/doubao";
+import { OpenAiImageProvider } from "./providers/openai";
 
 import { loadPromptConfig } from "../wechat/promptConfig";
 
@@ -40,6 +41,22 @@ export function getAiProvider(overrideKind?: string) {
       throw createHttpError(500, `apiKey is required and cannot be empty in prompt-config.json for provider: ${providerId}`);
     }
     return new DoubaoAiProvider(baseUrl, apiKey, model);
+  }
+
+  if (type === "openai") {
+    const baseUrl = providerConfig.baseUrl || "https://api.openai.com/v1";
+    const apiKey = providerConfig.apiKey;
+    const model = providerConfig.model || "gpt-image-1.5";
+    if (!apiKey || typeof apiKey !== "string" || apiKey.length === 0) {
+      throw createHttpError(500, `apiKey is required and cannot be empty in prompt-config.json for provider: ${providerId}`);
+    }
+    return new OpenAiImageProvider(baseUrl, apiKey, model, {
+      background: providerConfig.background,
+      quality: providerConfig.quality,
+      outputFormat: providerConfig.outputFormat,
+      moderation: providerConfig.moderation,
+      inputFidelity: providerConfig.inputFidelity
+    });
   }
   
   if (type === "hf") {

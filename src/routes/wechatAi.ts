@@ -134,11 +134,12 @@ export async function registerWeChatAiRoutes(app: FastifyInstance) {
 
     let closed = false;
     let pingInterval: NodeJS.Timeout;
+    let listener: ((ev: { id: number; event: string; data: unknown }) => void) | undefined;
     
     req.raw.on("close", () => {
       closed = true;
       clearInterval(pingInterval);
-      removeListener(task, listener);
+      if (listener) removeListener(task, listener);
     });
 
     pingInterval = setInterval(() => {
@@ -157,11 +158,17 @@ export async function registerWeChatAiRoutes(app: FastifyInstance) {
     const lastIdHeader = req.headers["last-event-id"];
     const lastEventId = typeof lastIdHeader === "string" ? Number(lastIdHeader) || 0 : 0;
     const backlog = getEventsSince(task, lastEventId);
-    for (const ev of backlog) send(ev);
-
-    const listener = (ev: { id: number; event: string; data: unknown }) => {
+    for (const ev of backlog) {
       send(ev);
-      if (ev.event === "done") {
+      if (ev.event === "done" || ev.event === "error") {
+        if (!closed) raw.end();
+        return;
+      }
+    }
+
+    listener = (ev: { id: number; event: string; data: unknown }) => {
+      send(ev);
+      if (ev.event === "done" || ev.event === "error") {
         removeListener(task, listener);
         if (!closed) raw.end();
       }

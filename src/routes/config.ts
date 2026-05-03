@@ -19,6 +19,9 @@ export async function registerConfigRoutes(app: FastifyInstance) {
       if (type === "doubao") {
         if (!config.name) name = "豆包大模型 (Ark)";
         isValid = typeof config.apiKey === "string" && config.apiKey.length > 0;
+      } else if (type === "openai") {
+        if (!config.name) name = "OpenAI 图片生成";
+        isValid = typeof config.apiKey === "string" && config.apiKey.length > 0;
       } else if (type === "hf") {
         if (!config.name) name = "HuggingFace Inference";
         isValid = !!config.endpoint && typeof config.apiKey === "string" && config.apiKey.length > 0;
