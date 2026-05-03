@@ -54,14 +54,27 @@ npm run prod
         "model": "doubao-seedream-5-0-260128",
         "apiKey": "YOUR_ARK_API_KEY"
       },
-      // 2. HuggingFace Inference
+      // 2. OpenAI 图片生成
+      "openai": {
+        "type": "openai",
+        "name": "OpenAI 图片生成",
+        "baseUrl": "https://api.openai.com/v1",
+        "model": "gpt-image-1.5",
+        "apiKey": "YOUR_OPENAI_API_KEY",
+        "background": "transparent",
+        "quality": "auto",
+        "outputFormat": "png",
+        "moderation": "auto",
+        "inputFidelity": "high"
+      },
+      // 3. HuggingFace Inference
       "hf": {
         "type": "hf",
         "name": "HuggingFace",
         "endpoint": "https://router.huggingface.co/hf-inference/models/black-forest-labs/FLUX.1-schnell",
         "apiKey": "YOUR_HF_TOKEN"
       },
-      // 3. 通用 HTTP 服务 (对接私有部署或第三方 API)
+      // 4. 通用 HTTP 服务 (对接私有部署或第三方 API)
       "my-custom-api": {
         "type": "http",
         "name": "公司内部模型",
@@ -77,6 +90,7 @@ npm run prod
 - `key`（如上文的 `my-custom-api`）可以自由命名，作为该提供商的唯一 ID。
 - `name` 字段用于前端下拉框的友好展示。
 - 只有参数配置完整（如填写了正确的 `apiKey` 或 `endpoint`）的提供商才会在前端页面中显示。
+- OpenAI Provider 会在无参考图时调用图片生成接口，在有参考图时调用图片编辑接口；本项目默认通过 `referenceMode: "base64"` 传递参考图。
 
 ## AI 最小流程（微信）
 

@@ -16,12 +16,17 @@ export interface PromptConfig {
       retryBaseMs?: number;
     };
     providers: Record<string, {
-      type: "mock" | "picsum" | "doubao" | "hf" | "http" | string;
+      type: "mock" | "picsum" | "doubao" | "hf" | "http" | "openai" | string;
       name?: string;
       baseUrl?: string;
       endpoint?: string;
       apiKey?: string;
       model?: string;
+      background?: "transparent" | "opaque" | "auto";
+      quality?: "low" | "medium" | "high" | "auto";
+      outputFormat?: "png" | "jpeg" | "webp";
+      moderation?: "low" | "auto";
+      inputFidelity?: "low" | "high";
       [key: string]: any;
     }>;
   };

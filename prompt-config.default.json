@@ -36,6 +36,18 @@
         "model": "doubao-seedream-5-0-260128",
         "apiKey": ""
       },
+      "openai": {
+        "type": "openai",
+        "name": "OpenAI 图片生成",
+        "baseUrl": "https://api.openai.com/v1",
+        "model": "gpt-image-1.5",
+        "apiKey": "",
+        "background": "transparent",
+        "quality": "auto",
+        "outputFormat": "png",
+        "moderation": "auto",
+        "inputFidelity": "high"
+      },
       "hf": {
         "type": "hf",
         "name": "HuggingFace",
