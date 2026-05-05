@@ -9,6 +9,7 @@ export type AiGenerateInput = {
   referenceImageUrl?: string;
   referenceImageMime?: string;
   referenceImageAssetId?: string;
+  providerOptions?: Record<string, unknown>;
 };
 
 export type AiGenerateOutput = {
@@ -17,5 +18,5 @@ export type AiGenerateOutput = {
 };
 
 export interface AiProvider {
-  generateImage(input: AiGenerateInput): Promise<AiGenerateOutput>;
+  generateImage(input: AiGenerateInput, signal?: AbortSignal): Promise<AiGenerateOutput>;
 }

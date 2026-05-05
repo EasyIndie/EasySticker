@@ -71,20 +71,23 @@ export async function generateWeChatAssetsAndPack(
   app: FastifyInstance,
   req: WeChatAiGenerateRequest,
   emit?: (event: string, data: unknown) => void,
-  isCanceled?: () => boolean
+  isCanceled?: () => boolean,
+  signal?: AbortSignal
 ) {
   const count = Math.max(8, Math.min(24, Math.floor(req.stickerCount ?? 8)));
   const styles = (req.styles?.filter(Boolean) ?? []).length ? (req.styles!.filter(Boolean) as string[]) : ["默认"];
   if (!req.referenceAssetId) throw createHttpError(400, "missing referenceAssetId");
   if (!req.prompt) throw createHttpError(400, "missing prompt");
 
-  const provider = getAiProvider(req.provider);
+  const promptConfig = loadPromptConfig();
+  const providerId = req.provider ?? promptConfig.ai?.defaultProvider ?? "mock";
+  const provider = getAiProvider(providerId);
   const client = buildMinimalClient(provider);
   const reference = findAssetFile(app, req.referenceAssetId);
   if (!reference) throw createHttpError(404, "reference asset not found");
   const referenceBytes = fs.readFileSync(reference.filePath);
   const referenceBase64 = referenceBytes.toString("base64");
-  const promptConfig = loadPromptConfig();
+  const providerComfyOptions = promptConfig.ai?.providers?.[providerId]?.comfy;
   const emotions = promptConfig.emotions;
   
   const referenceMode = promptConfig.ai?.referenceMode ?? "base64";
@@ -103,9 +106,12 @@ export async function generateWeChatAssetsAndPack(
   emit?.("start", { count: totalImageCount, styles, referenceMode });
   const stickerAssetIds: string[] = [];
   let currentGenerated = 0;
+  const throwIfCanceled = () => {
+    if (signal?.aborted || isCanceled?.()) throw createHttpError(499, "生成任务已取消");
+  };
 
   for (let i = 0; i < count; i++) {
-    if (isCanceled?.()) throw createHttpError(499, "生成任务已取消");
+    throwIfCanceled();
     const style = styles[i % styles.length]!;
     const emotion = emotions[i % emotions.length]; // 依次取出一个情绪
     
@@ -116,19 +122,24 @@ export async function generateWeChatAssetsAndPack(
       style
     });
     
-    const out = await client.generateImage({
-      prompt: compiledPrompt,
-      negativePrompt: promptConfig.global.negativePrompt,
-      style,
-      width: imageWidth,
-      height: imageHeight,
-      referenceImageTransport: referenceMode as "base64" | "url" | "assetId" | "multipart",
-      referenceImageBase64:
-        referenceMode === "base64" || referenceMode === "multipart" ? referenceBase64 : undefined,
-      referenceImageUrl: referenceMode === "url" ? referenceUrl : undefined,
-      referenceImageMime: "image/png",
-      referenceImageAssetId: referenceMode === "assetId" ? req.referenceAssetId : undefined
-    });
+    const out = await client.generateImage(
+      {
+        prompt: compiledPrompt,
+        negativePrompt: promptConfig.global.negativePrompt,
+        style,
+        width: imageWidth,
+        height: imageHeight,
+        referenceImageTransport: referenceMode as "base64" | "url" | "assetId" | "multipart",
+        referenceImageBase64:
+          referenceMode === "base64" || referenceMode === "multipart" ? referenceBase64 : undefined,
+        referenceImageUrl: referenceMode === "url" ? referenceUrl : undefined,
+        referenceImageMime: "image/png",
+        referenceImageAssetId: referenceMode === "assetId" ? req.referenceAssetId : undefined,
+        providerOptions: providerComfyOptions ? { comfy: providerComfyOptions } : undefined
+      },
+      signal
+    );
+    throwIfCanceled();
     const sticker = await toStickerPng(out.bytes, 240);
     const id = nanoid();
     saveAssetPng(app, sticker, id);
@@ -151,30 +162,36 @@ export async function generateWeChatAssetsAndPack(
 
   // 辅助函数：调用大模型生成专属的额外资源图
   const generateExtraImage = async (customPrompt: string) => {
+    throwIfCanceled();
     const compiledPrompt = compilePrompt(promptConfig.templates.extra, {
       prompt: req.prompt,
       customPrompt,
       style: styles[0]!
     });
     
-    const res = await client.generateImage({
-      prompt: compiledPrompt,
-      negativePrompt: promptConfig.global.negativePrompt,
-      style: styles[0],
-      width: imageWidth,
-      height: imageHeight,
-      referenceImageTransport: referenceMode as "base64" | "url" | "assetId" | "multipart",
-      referenceImageBase64:
-        referenceMode === "base64" || referenceMode === "multipart" ? referenceBase64 : undefined,
-      referenceImageUrl: referenceMode === "url" ? referenceUrl : undefined,
-      referenceImageMime: "image/png",
-      referenceImageAssetId: referenceMode === "assetId" ? req.referenceAssetId : undefined
-    });
+    const res = await client.generateImage(
+      {
+        prompt: compiledPrompt,
+        negativePrompt: promptConfig.global.negativePrompt,
+        style: styles[0],
+        width: imageWidth,
+        height: imageHeight,
+        referenceImageTransport: referenceMode as "base64" | "url" | "assetId" | "multipart",
+        referenceImageBase64:
+          referenceMode === "base64" || referenceMode === "multipart" ? referenceBase64 : undefined,
+        referenceImageUrl: referenceMode === "url" ? referenceUrl : undefined,
+        referenceImageMime: "image/png",
+        referenceImageAssetId: referenceMode === "assetId" ? req.referenceAssetId : undefined,
+        providerOptions: providerComfyOptions ? { comfy: providerComfyOptions } : undefined
+      },
+      signal
+    );
+    throwIfCanceled();
     return { ...res, prompt: compiledPrompt };
   };
 
   if (req.includeCover) {
-    if (isCanceled?.()) throw createHttpError(499, "生成任务已取消");
+    throwIfCanceled();
     emit?.("progress", { phase: "extras", label: "表情封面图", current: currentGenerated + 1, total: totalImageCount });
     const out = await generateExtraImage(promptConfig.extraPrompts.cover);
     const cover = await toStickerPng(out.bytes, 240);
@@ -187,7 +204,7 @@ export async function generateWeChatAssetsAndPack(
   }
 
   if (req.includeIcon) {
-    if (isCanceled?.()) throw createHttpError(499, "生成任务已取消");
+    throwIfCanceled();
     emit?.("progress", { phase: "extras", label: "聊天面板图标", current: currentGenerated + 1, total: totalImageCount });
     const out = await generateExtraImage(promptConfig.extraPrompts.icon);
     const icon = await toStickerPng(out.bytes, 50);
@@ -200,7 +217,7 @@ export async function generateWeChatAssetsAndPack(
   }
 
   if (req.includeBanner) {
-    if (isCanceled?.()) throw createHttpError(499, "生成任务已取消");
+    throwIfCanceled();
     emit?.("progress", { phase: "extras", label: "详情页横幅", current: currentGenerated + 1, total: totalImageCount });
     const out = await generateExtraImage(promptConfig.extraPrompts.banner);
     const banner = await toBannerPng(out.bytes);
@@ -213,7 +230,7 @@ export async function generateWeChatAssetsAndPack(
   }
 
   if (req.enableReward) {
-    if (isCanceled?.()) throw createHttpError(499, "生成任务已取消");
+    throwIfCanceled();
     emit?.("progress", { phase: "extras", label: "赞赏引导图", current: currentGenerated + 1, total: totalImageCount });
     const outGuide = await generateExtraImage(promptConfig.extraPrompts.rewardGuide);
     const rewardGuide = await toBannerPng(outGuide.bytes);
@@ -224,7 +241,7 @@ export async function generateWeChatAssetsAndPack(
     currentGenerated++;
     emit?.("extra", { key: "rewardGuideAssetId", assetId: rewardGuideAssetId, url: `/api/assets/${rewardGuideAssetId}`, prompt: outGuide.prompt, current: currentGenerated, total: totalImageCount });
 
-    if (isCanceled?.()) throw createHttpError(499, "生成任务已取消");
+    throwIfCanceled();
     emit?.("progress", { phase: "extras", label: "赞赏感谢图", current: currentGenerated + 1, total: totalImageCount });
     const outThanks = await generateExtraImage(promptConfig.extraPrompts.rewardThanks);
     const rewardThanks = await toBannerPng(outThanks.bytes);

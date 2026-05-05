@@ -141,6 +141,20 @@ function createAppSandbox(persistedValue?: Record<string, unknown>) {
     "uploadForm",
     "uploadSubmit",
     "uploadState",
+    "creationModeAi",
+    "creationModeImport",
+    "aiSourceSection",
+    "importSourceSection",
+    "aiConfigFields",
+    "importForm",
+    "importFiles",
+    "importCover",
+    "importIcon",
+    "importBanner",
+    "importRewardGuide",
+    "importRewardThanks",
+    "importState",
+    "importHint",
     "originalPreviewPlaceholder",
     "originalPreview",
     "wechatAiForm",
@@ -335,7 +349,9 @@ describe("public page", () => {
 
     const html = res.body;
     expect(html).toContain("上传参考图");
-    expect(html).toContain("编辑提示词");
+    expect(html).toContain("选择创建方式");
+    expect(html).toContain("配置与信息");
+    expect(html).toContain("导入已有表情图");
     expect(html).toContain("生成表情");
     expect(html).toContain("预览与下载");
     expect(html).toContain('id="wechatAiProvider"');

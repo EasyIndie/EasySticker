@@ -5,6 +5,7 @@ import { PicsumAiProvider } from "./providers/picsum";
 import { HfAiProvider } from "./providers/hf";
 import { DoubaoAiProvider } from "./providers/doubao";
 import { OpenAiImageProvider } from "./providers/openai";
+import { ManagedHttpAiProvider } from "./providers/managedHttp";
 
 import { loadPromptConfig } from "../wechat/promptConfig";
 
@@ -25,6 +26,9 @@ export function getAiProvider(overrideKind?: string) {
   if (type === "http") {
     const endpoint = providerConfig.endpoint;
     if (!endpoint) throw createHttpError(500, `endpoint is required in prompt-config.json for provider: ${providerId}`);
+    if (providerConfig.autoStart) {
+      return new ManagedHttpAiProvider(endpoint, providerConfig.apiKey, providerConfig.autoStart);
+    }
     return new HttpAiProvider(endpoint, providerConfig.apiKey);
   }
   

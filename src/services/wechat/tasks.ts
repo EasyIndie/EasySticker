@@ -12,6 +12,7 @@ export type WechatGenTask = {
   createdAt: number;
   canceled?: boolean;
   finishedAt?: number;
+  cancelHandler?: () => void;
 };
 
 const TASKS = new Map<string, WechatGenTask>();
@@ -44,7 +45,7 @@ export function appendEvent(task: WechatGenTask, event: string, data: unknown) {
       // ignore listener errors
     }
   }
-  if (event === "done") {
+  if (event === "done" || event === "error") {
     task.done = true;
     task.finishedAt = Date.now();
   }
@@ -63,10 +64,23 @@ export function getEventsSince(task: WechatGenTask, lastEventId: number): TaskEv
   return task.events.filter((e) => e.id > lastEventId);
 }
 
+export function setTaskCancelHandler(taskId: string, handler: () => void) {
+  const task = TASKS.get(taskId);
+  if (!task) return false;
+  task.cancelHandler = handler;
+  return true;
+}
+
 export function cancelTask(taskId: string) {
   const task = TASKS.get(taskId);
   if (!task) return false;
+  if (task.done) return true;
   task.canceled = true;
+  try {
+    task.cancelHandler?.();
+  } catch {
+    // ignore cancellation hook errors
+  }
   appendEvent(task, "error", { message: "已取消生成任务" });
   return true;
 }
