@@ -8,14 +8,15 @@ export class HttpAiProvider implements AiProvider {
     private readonly apiKey?: string
   ) {}
 
-  async generateImage(input: AiGenerateInput): Promise<AiGenerateOutput> {
+  async generateImage(input: AiGenerateInput, signal?: AbortSignal): Promise<AiGenerateOutput> {
     const transport = input.referenceImageTransport ?? "base64";
     const payload: Record<string, unknown> = {
       prompt: input.prompt,
       negativePrompt: input.negativePrompt,
       style: input.style,
       width: input.width,
-      height: input.height
+      height: input.height,
+      providerOptions: input.providerOptions
     };
 
     if (input.referenceImageBase64) {
@@ -46,7 +47,8 @@ export class HttpAiProvider implements AiProvider {
         headers: {
           ...(this.apiKey ? { authorization: `Bearer ${this.apiKey}` } : {})
         },
-        body: form
+        body: form,
+        signal
       });
     } else {
       res = await fetch(this.endpoint, {
@@ -55,7 +57,8 @@ export class HttpAiProvider implements AiProvider {
           "content-type": "application/json",
           ...(this.apiKey ? { authorization: `Bearer ${this.apiKey}` } : {})
         },
-        body: JSON.stringify(payload)
+        body: JSON.stringify(payload),
+        signal
       });
     }
 

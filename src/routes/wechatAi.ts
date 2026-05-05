@@ -1,6 +1,7 @@
 import { type FastifyInstance } from "fastify";
 import { z } from "zod";
 import { generateWeChatAssetsAndPack, getWeChatPromptTemplate } from "../services/wechat/aiFlow";
+import { importWeChatStickerPack } from "../services/wechat/importFlow";
 import {
   createTask,
   getTask,
@@ -8,7 +9,9 @@ import {
   addListener,
   removeListener,
   getEventsSince,
-  ensureTaskGc
+  ensureTaskGc,
+  cancelTask,
+  setTaskCancelHandler
 } from "../services/wechat/tasks";
 
 import { loadPromptConfig } from "../services/wechat/promptConfig";
@@ -51,6 +54,11 @@ export async function registerWeChatAiRoutes(app: FastifyInstance) {
     return getWeChatPromptTemplate(parsed.data.referenceAssetId);
   });
 
+  app.post("/wechat/import", async (req, reply) => {
+    const result = await importWeChatStickerPack(app, req);
+    return result;
+  });
+
   app.post("/wechat/generate", async (req, reply) => {
     const parsed = generateSchema.safeParse(req.body);
     if (!parsed.success) {
@@ -66,8 +74,10 @@ export async function registerWeChatAiRoutes(app: FastifyInstance) {
     raw.flushHeaders?.();
 
     let closed = false;
+    const abortController = new AbortController();
     req.raw.on("close", () => {
       closed = true;
+      abortController.abort();
     });
 
     function send(event: string, data: unknown) {
@@ -77,7 +87,7 @@ export async function registerWeChatAiRoutes(app: FastifyInstance) {
     }
 
     try {
-      await generateWeChatAssetsAndPack(app, parsed.data, send);
+      await generateWeChatAssetsAndPack(app, parsed.data, send, undefined, abortController.signal);
     } catch (error) {
       send("error", {
         message: error instanceof Error ? error.message : "生成失败，请稍后重试。"
@@ -94,6 +104,8 @@ export async function registerWeChatAiRoutes(app: FastifyInstance) {
       return { error: "BadRequest", message: "invalid request body", issues: parsed.error.issues };
     }
     const task = createTask();
+    const abortController = new AbortController();
+    setTaskCancelHandler(task.id, () => abortController.abort());
     // run in background
     setImmediate(async () => {
       try {
@@ -101,9 +113,11 @@ export async function registerWeChatAiRoutes(app: FastifyInstance) {
           app,
           parsed.data,
           (event, data) => appendEvent(task, event, data),
-          () => Boolean(getTask(task.id)?.canceled)
+          () => Boolean(getTask(task.id)?.canceled),
+          abortController.signal
         );
       } catch (error) {
+        if (getTask(task.id)?.canceled) return;
         console.error("[WeChatAI] Task generation failed:", task.id, error);
         appendEvent(task, "error", {
           message: error instanceof Error ? error.message : "生成失败，请稍后重试。"
@@ -183,7 +197,7 @@ export async function registerWeChatAiRoutes(app: FastifyInstance) {
       reply.status(400);
       return { error: "BadRequest", message: "missing taskId" };
     }
-    const ok = require("../services/wechat/tasks").cancelTask(taskId);
+    const ok = cancelTask(taskId);
     if (!ok) {
       reply.status(404);
       return { error: "NotFound", message: "task not found" };

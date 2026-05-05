@@ -14,7 +14,7 @@ export class HfAiProvider implements AiProvider {
     private readonly apiKey: string
   ) {}
 
-  async generateImage(input: AiGenerateInput): Promise<AiGenerateOutput> {
+  async generateImage(input: AiGenerateInput, signal?: AbortSignal): Promise<AiGenerateOutput> {
     const body = {
       inputs: input.prompt,
       parameters: {
@@ -33,7 +33,8 @@ export class HfAiProvider implements AiProvider {
         "content-type": "application/json",
         authorization: `Bearer ${this.apiKey}`
       },
-      body: JSON.stringify(body)
+      body: JSON.stringify(body),
+      signal
     });
 
     if (!res.ok) {

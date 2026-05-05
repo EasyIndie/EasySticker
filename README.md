@@ -111,6 +111,63 @@ npm run mock-ai
 HTTP 契约详情见：
 - [ai-http-contract.md](https://github.com/EasyIndie/EasySticker/spec/ai-http-contract.md)
 
+## 本地 ComfyUI 接入
+
+如果使用 ComfyUI Desktop，可以让 EasySticker 在真正生成时自动启动本地适配器，无需手动常驻 `comfy-adapter`：
+
+```json
+{
+  "ai": {
+    "defaultProvider": "comfy-local",
+    "referenceMode": "base64",
+    "imageSize": { "width": 512, "height": 512 },
+    "settings": {
+      "timeoutMs": 300000,
+      "retryMax": 0,
+      "retryBaseMs": 1000
+    },
+    "providers": {
+      "comfy-local": {
+        "type": "http",
+        "name": "本地 ComfyUI",
+        "endpoint": "http://127.0.0.1:8787/generate",
+        "autoStart": {
+          "command": "npm",
+          "args": ["run", "comfy-adapter"],
+          "cwd": ".",
+          "healthUrl": "http://127.0.0.1:8787/health",
+          "cancelUrl": "http://127.0.0.1:8787/cancel",
+          "startupTimeoutMs": 20000,
+          "idleMs": 120000
+        }
+      }
+    }
+  }
+}
+```
+
+使用前只需要保持 ComfyUI Desktop 运行在 `http://127.0.0.1:8000`，并确保 `comfy/workflow_api.json` 指向可用 checkpoint。`autoStart.idleMs` 表示适配器空闲多久后自动停止；设为 `0` 可禁用自动停止。`cancelUrl` 用于页面离开或手动取消时中断本地 ComfyUI 当前任务。
+
+### 本地 ComfyUI 表情包质量档位
+
+`comfy-local` provider 支持通过 `comfy.qualityPreset` 选择本地图生图参数，适合微信人物表情包的默认档位如下：
+
+```json
+{
+  "comfy": {
+    "qualityPreset": "standard",
+    "qualityPresets": {
+      "fast": { "steps": 16, "cfg": 5.5, "denoise": 0.4, "samplerName": "dpmpp_2m", "scheduler": "karras" },
+      "standard": { "steps": 22, "cfg": 5.5, "denoise": 0.45, "samplerName": "dpmpp_2m", "scheduler": "karras" },
+      "quality": { "steps": 28, "cfg": 6, "denoise": 0.5, "samplerName": "dpmpp_2m", "scheduler": "karras" },
+      "expressive": { "steps": 26, "cfg": 6.5, "denoise": 0.6, "samplerName": "dpmpp_2m", "scheduler": "karras" }
+    }
+  }
+}
+```
+
+调参建议：人物不像参考图时降低 `denoise`；动作和表情不够夸张时提高到 `expressive`；最终批量出图时用 `quality`。如果下载了更适合贴纸的 checkpoint，可在 `comfy.checkpoint` 或对应 preset 里填写 ComfyUI 识别到的模型名。
+
 ## Docker 部署
 
 在构建和运行 Docker 容器时，建议通过挂载卷的方式将你的自定义 `prompt-config.json` 注入到容器中：

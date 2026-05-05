@@ -21,6 +21,49 @@ function multipartPayload(field: string, filename: string, contentType: string, 
   };
 }
 
+function multipartMixedPayload(
+  files: Array<{ field: string; filename: string; contentType: string; buf: Buffer }>,
+  fields: Record<string, string> = {}
+) {
+  const boundary = `----easysticker-${Math.random().toString(16).slice(2)}`;
+  const chunks: Buffer[] = [];
+  for (const [name, value] of Object.entries(fields)) {
+    chunks.push(
+      Buffer.from(
+        `--${boundary}\r\n` +
+          `Content-Disposition: form-data; name="${name}"\r\n\r\n` +
+          `${value}\r\n`
+      )
+    );
+  }
+  for (const file of files) {
+    chunks.push(
+      Buffer.from(
+        `--${boundary}\r\n` +
+          `Content-Disposition: form-data; name="${file.field}"; filename="${file.filename}"\r\n` +
+          `Content-Type: ${file.contentType}\r\n\r\n`
+      ),
+      file.buf,
+      Buffer.from("\r\n")
+    );
+  }
+  chunks.push(Buffer.from(`--${boundary}--\r\n`));
+  return { boundary, body: Buffer.concat(chunks) };
+}
+
+async function solidPng(width: number, height: number, color: { r: number; g: number; b: number; alpha?: number }) {
+  return sharp({
+    create: {
+      width,
+      height,
+      channels: 4,
+      background: { ...color, alpha: color.alpha ?? 1 }
+    }
+  })
+    .png()
+    .toBuffer();
+}
+
 describe("pipeline", () => {
   function parseSseEvents(body: string) {
     const normalized = body.replace(/\r\n/g, "\n");
@@ -182,6 +225,81 @@ describe("pipeline", () => {
 
     vi.restoreAllMocks();
   }, 120000);
+
+  it("imports existing images -> normalize -> validate -> download", async () => {
+    const files = await Promise.all(
+      Array.from({ length: 8 }, async (_, index) => {
+        const width = index % 2 === 0 ? 360 : 180;
+        const height = index % 2 === 0 ? 180 : 360;
+        const buf = await solidPng(width, height, { r: 20 + index * 20, g: 90, b: 180 });
+        return { field: "stickers", filename: `sticker-${index + 1}.png`, contentType: "image/png", buf };
+      })
+    );
+    const extraFiles = [
+      { field: "banner", filename: "banner.png", contentType: "image/png", buf: await solidPng(900, 300, { r: 230, g: 120, b: 40 }) },
+      {
+        field: "rewardGuide",
+        filename: "reward-guide.png",
+        contentType: "image/png",
+        buf: await solidPng(750, 500, { r: 120, g: 40, b: 200 })
+      },
+      {
+        field: "rewardThanks",
+        filename: "reward-thanks.png",
+        contentType: "image/png",
+        buf: await solidPng(750, 500, { r: 40, g: 180, b: 110 })
+      }
+    ];
+    const mp = multipartMixedPayload([...files, ...extraFiles], {
+      title: "Imported Pack",
+      author: "EasySticker Studio",
+      includeReward: "true",
+      rewardMessage: "谢谢支持"
+    });
+
+    const importRes = await app.inject({
+      method: "POST",
+      url: "/api/wechat/import",
+      payload: mp.body,
+      headers: { "content-type": `multipart/form-data; boundary=${mp.boundary}` }
+    });
+
+    expect(importRes.statusCode).toBe(200);
+    const json = importRes.json();
+    expect(json.packId).toBeTypeOf("string");
+    expect(json.downloadFilename).toBe(`imported-pack-${json.packId}.zip`);
+    expect(json.stickers).toHaveLength(8);
+    expect(json.meta.referenceMode).toBe("import");
+    expect(json.meta.title).toBe("Imported Pack");
+    expect(json.meta.rewardEnabled).toBe(true);
+    expect(json.extras.coverAssetId).toBeTypeOf("string");
+    expect(json.extras.iconAssetId).toBeTypeOf("string");
+    expect(json.extras.bannerAssetId).toBeTypeOf("string");
+    expect(json.extras.rewardGuideAssetId).toBeTypeOf("string");
+    expect(json.extras.rewardThanksAssetId).toBeTypeOf("string");
+    expect(json.metadataJson).toContain('"title": "Imported Pack"');
+    expect(json.metadataJson).toContain('"rewardMessage": "谢谢支持"');
+
+    const assetRes = await app.inject({ method: "GET", url: `/api/assets/${json.stickers[0].assetId}` });
+    expect(assetRes.statusCode).toBe(200);
+    expect(assetRes.headers["content-type"]).toContain("image/png");
+    const info = await sharp(assetRes.rawPayload).metadata();
+    expect(info.width).toBe(240);
+    expect(info.height).toBe(240);
+
+    const coverRes = await app.inject({ method: "GET", url: `/api/assets/${json.extras.coverAssetId}` });
+    expect((await sharp(coverRes.rawPayload).metadata()).width).toBe(240);
+    const iconRes = await app.inject({ method: "GET", url: `/api/assets/${json.extras.iconAssetId}` });
+    expect((await sharp(iconRes.rawPayload).metadata()).width).toBe(50);
+    const bannerRes = await app.inject({ method: "GET", url: `/api/assets/${json.extras.bannerAssetId}` });
+    const bannerInfo = await sharp(bannerRes.rawPayload).metadata();
+    expect(bannerInfo.width).toBe(750);
+    expect(bannerInfo.height).toBe(400);
+
+    const zipRes = await app.inject({ method: "GET", url: json.downloadUrl });
+    expect(zipRes.statusCode).toBe(200);
+    expect(zipRes.headers["content-type"]).toContain("application/zip");
+  });
 
   it("wechat ai generate via http provider with base64 reference", async () => {
     const hits: any[] = [];

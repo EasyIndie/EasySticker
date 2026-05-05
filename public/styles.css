@@ -389,6 +389,77 @@ button.secondary:hover {
   margin: 6px 0 0;
 }
 
+.mode-selector {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-1);
+  margin-top: var(--space-4);
+  width: 100%;
+  padding: 4px;
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-secondary);
+}
+
+.mode-option {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 42px;
+  padding: 9px 12px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  cursor: pointer;
+  font-weight: 700;
+  line-height: 1.2;
+  text-align: center;
+  color: var(--color-text-tertiary);
+  transition: background 0.2s ease, border-color 0.2s ease, color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.mode-option input {
+  position: absolute;
+  inset: 0;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.mode-option span {
+  position: relative;
+  z-index: 1;
+  white-space: nowrap;
+}
+
+.mode-option:has(input:checked) {
+  border-color: var(--color-success-border);
+  background: var(--color-surface-primary);
+  color: var(--color-success);
+  box-shadow: var(--shadow-sm);
+}
+
+.mode-option:focus-within {
+  outline: none;
+}
+
+.mode-option:has(input:focus-visible) {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+  box-shadow: 0 0 0 3px var(--focus-ring-soft);
+}
+
+.mode-option:has(input:checked):has(input:focus-visible) {
+  box-shadow: var(--shadow-sm), 0 0 0 3px var(--focus-ring-soft);
+}
+
+@media (max-width: 520px) {
+  .mode-selector {
+    grid-template-columns: 1fr;
+  }
+}
+
 .step-body {
   margin-top: 14px;
   display: flex;

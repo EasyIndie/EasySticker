@@ -1,7 +1,20 @@
 const uploadForm = document.getElementById("uploadForm");
 const fileInput = document.getElementById("file");
 const uploadState = document.getElementById("uploadState");
+const importForm = document.getElementById("importForm");
+const importFiles = document.getElementById("importFiles");
+const importCover = document.getElementById("importCover");
+const importIcon = document.getElementById("importIcon");
+const importBanner = document.getElementById("importBanner");
+const importRewardGuide = document.getElementById("importRewardGuide");
+const importRewardThanks = document.getElementById("importRewardThanks");
+const importState = document.getElementById("importState");
 const originalPreview = document.getElementById("originalPreview");
+const creationModeAi = document.getElementById("creationModeAi");
+const creationModeImport = document.getElementById("creationModeImport");
+const aiSourceSection = document.getElementById("aiSourceSection");
+const importSourceSection = document.getElementById("importSourceSection");
+const aiConfigFields = document.getElementById("aiConfigFields");
 const wechatAiForm = document.getElementById("wechatAiForm");
 const generateSubmit = document.getElementById("generateSubmit");
 const regenerateSubmit = document.getElementById("regenerateSubmit");
@@ -151,6 +164,7 @@ const FIELD_A11Y_CONFIGS = {
   let currentRewardEnabled = false;
   let currentRewardMessage = "";
   let currentAiProvider = "mock";
+  let currentCreationMode = "ai";
   let hasGenerationAttempted = false;
 let lastPackResult = null;
 let currentTaskId = null;
@@ -577,6 +591,12 @@ function setBusy(button, busy, text) {
   button.disabled = busy;
   button.dataset.label = button.dataset.label || button.textContent;
   button.textContent = busy ? text : button.dataset.label;
+}
+
+function setButtonLabel(button, text) {
+  if (!button) return;
+  button.textContent = text;
+  delete button.dataset.label;
 }
 
 function setStatus(node, text, tone = "idle") {
@@ -1150,26 +1170,46 @@ function createPreviewCard(sticker, tone = "success") {
 }
 
 function canRegenerate() {
-  return Boolean(currentUploadId && wechatAiPrompt.value.trim() && hasGenerationAttempted);
+  return currentCreationMode === "ai" && Boolean(currentUploadId && wechatAiPrompt.value.trim() && hasGenerationAttempted);
 }
 
 function syncRegenerateButton() {
   regenerateSubmit.disabled = canRegenerate() ? false : true;
+  regenerateSubmit.hidden = currentCreationMode !== "ai";
 }
 
 function setGenerateButtonsBusy(busy) {
-  setBusy(generateSubmit, busy, "生成中...");
+  setBusy(generateSubmit, busy, currentCreationMode === "import" ? "导入中..." : "生成中...");
   setBusy(regenerateSubmit, busy, "重新生成中...");
   if (wechatAiProvider) {
     wechatAiProvider.disabled = busy;
   }
   if (cancelGenerate) {
-    cancelGenerate.hidden = busy ? false : true;
+    cancelGenerate.hidden = busy && currentCreationMode === "ai" ? false : true;
     cancelGenerate.disabled = busy ? false : true;
   }
   if (!busy) {
     syncRegenerateButton();
   }
+}
+
+function syncCreationMode() {
+  currentCreationMode = creationModeImport?.checked ? "import" : "ai";
+  if (aiSourceSection) aiSourceSection.hidden = currentCreationMode !== "ai";
+  if (importSourceSection) importSourceSection.hidden = currentCreationMode !== "import";
+  if (aiConfigFields) aiConfigFields.hidden = currentCreationMode !== "ai";
+  setButtonLabel(generateSubmit, currentCreationMode === "import" ? "导入并打包" : "开始生成");
+  regenerateSubmit.hidden = currentCreationMode !== "ai";
+  cancelGenerate.hidden = true;
+  clearGenerateValidation();
+  if (currentCreationMode === "import") {
+    setStatus(generateState, "等待导入", "idle");
+    setNotice("请选择已有表情图，系统会自动标准化并打包。", "info");
+  } else {
+    setStatus(generateState, "等待生成", "idle");
+    setNotice(currentUploadId ? "参考图已就绪，可继续生成表情包。" : "先上传一张主体清晰的图片。", "info");
+  }
+  syncRegenerateButton();
 }
 
 function renderExtraAssets(extras = {}, tone = "idle") {
@@ -1291,10 +1331,14 @@ function resetAllState() {
   availableStyles = [...DEFAULT_STYLE_OPTIONS];
   currentRewardEnabled = false;
   currentRewardMessage = "";
+  currentCreationMode = "ai";
   hasGenerationAttempted = false;
   lastPackResult = null;
 
   uploadForm.reset();
+  importForm?.reset?.();
+  if (creationModeAi) creationModeAi.checked = true;
+  if (creationModeImport) creationModeImport.checked = false;
   wechatAiPrompt.value = "";
   wechatAiTitle.value = "";
   wechatAiAuthor.value = "";
@@ -1311,6 +1355,8 @@ function resetAllState() {
   resetGenerationResult({ clearPersisted: true });
   setPromptHint(currentStyles);
   setStatus(uploadState, "等待上传", "idle");
+  setStatus(importState, "等待导入", "idle");
+  syncCreationMode();
   setNotice("已重置当前配置与最近结果，请重新上传一张主体清晰的图片。", "info");
 }
 
@@ -1450,6 +1496,114 @@ async function suggestPrompt() {
   }
 }
 
+function getWechatMetadataPayload() {
+  const title = wechatAiTitle.value.trim();
+  const author = wechatAiAuthor.value.trim();
+  const version = wechatAiVersion.value.trim();
+  const copyright = wechatAiCopyright.value.trim();
+  const rewardMessage = wechatAiRewardMessage.value.trim();
+  return title || author || version || copyright || rewardMessage
+    ? {
+        ...(title ? { title } : {}),
+        ...(author ? { author } : {}),
+        ...(version ? { version } : {}),
+        ...(copyright ? { copyright } : {}),
+        ...(rewardMessage ? { rewardMessage } : {})
+      }
+    : undefined;
+}
+
+function renderCompletedPackResult(json, successMessage, feedbackMessage) {
+  currentRewardEnabled = Boolean(json?.meta?.rewardEnabled ?? false);
+  currentRewardMessage = json?.meta?.rewardMessage ?? "";
+  wechatAiRewardEnabled.checked = currentRewardEnabled;
+  wechatAiRewardMessage.value = currentRewardMessage;
+  syncRewardFields();
+  lastPackResult = json;
+  renderPreview(json?.stickers ?? [], "success");
+  renderExtraAssets(json?.extras ?? {}, "success");
+
+  const exportConfirmPanel = document.getElementById("exportConfirmPanel");
+  if (exportConfirmPanel) exportConfirmPanel.hidden = false;
+
+  renderDownload(json?.packId, json?.downloadUrl, json?.downloadFilename);
+  renderActions(json);
+  persistLastGeneratedResult(json);
+  setStatus(generateState, "已完成", "success");
+  setNotice(successMessage, "success");
+  setFeedback(feedbackMessage, "success");
+  renderExportInfo(json);
+  renderMetadataPreview(json);
+}
+
+async function importWechatPack() {
+  const files = importFiles?.files;
+  const count = Number(files?.length || 0);
+  if (count < MIN_STICKER_COUNT || count > MAX_STICKER_COUNT) {
+    setNotice(`请选择 ${MIN_STICKER_COUNT}-${MAX_STICKER_COUNT} 张图片后再导入。`, "error");
+    setStatus(importState, "数量不符合", "error");
+    return;
+  }
+
+  setStatus(importState, "处理中...", "loading");
+  setStatus(generateState, "正在导入", "loading");
+  setNotice("正在标准化导入图片并打包。", "info");
+  resetGenerationResult({ clearPersisted: true });
+  renderPreview([], "loading");
+  renderExtraAssets({}, "idle");
+  setFeedback("正在把导入图片转换为微信表情包规格。", "loading");
+  renderMetadataPreview(null, "loading");
+  setGenerateButtonsBusy(true);
+
+  try {
+    const formData = new FormData();
+    for (const file of Array.from(files)) {
+      formData.append("stickers", file);
+    }
+    const optionalFiles = [
+      ["cover", importCover?.files?.[0]],
+      ["icon", importIcon?.files?.[0]],
+      ["banner", importBanner?.files?.[0]],
+      ["rewardGuide", importRewardGuide?.files?.[0]],
+      ["rewardThanks", importRewardThanks?.files?.[0]]
+    ];
+    for (const [field, file] of optionalFiles) {
+      if (file) formData.append(field, file);
+    }
+    if (currentRewardEnabled || importRewardGuide?.files?.[0] || importRewardThanks?.files?.[0]) {
+      formData.append("includeReward", "true");
+    }
+    const metadata = getWechatMetadataPayload();
+    if (metadata) {
+      for (const [key, value] of Object.entries(metadata)) {
+        formData.append(key, value);
+      }
+    }
+
+    const json = await requestJson("/api/wechat/import", {
+      method: "POST",
+      body: formData
+    });
+
+    setStatus(importState, "导入完成", "success");
+    renderCompletedPackResult(
+      json,
+      "图片已导入并标准化，可以预览后下载 ZIP。",
+      "已将导入图片统一处理为微信表情包规格，可继续核对并下载 ZIP。"
+    );
+  } catch (error) {
+    setStatus(importState, "导入失败", "error");
+    setStatus(generateState, "导入失败", "error");
+    setNotice(error instanceof Error ? error.message : "导入失败，请稍后重试。", "error");
+    renderPreview([], "error");
+    renderExtraAssets({}, "error");
+    setFeedback("导入失败，请检查图片格式和数量后重试。", "error");
+    renderMetadataPreview(null, "error");
+  } finally {
+    setGenerateButtonsBusy(false);
+  }
+}
+
 async function generateWechatPack() {
   if (!currentUploadId) {
     setNotice("请先上传参考图。", "error");
@@ -1463,10 +1617,6 @@ async function generateWechatPack() {
   }
 
   const prompt = wechatAiPrompt.value.trim();
-  const title = wechatAiTitle.value.trim();
-  const author = wechatAiAuthor.value.trim();
-  const version = wechatAiVersion.value.trim();
-  const copyright = wechatAiCopyright.value.trim();
   const rewardMessage = wechatAiRewardMessage.value.trim();
   const stickerCount = Number(wechatAiCount.value || DEFAULT_STICKER_COUNT);
 
@@ -1508,16 +1658,7 @@ async function generateWechatPack() {
       includeCover: true,
       includeIcon: true,
       includeBanner: true,
-      metadata:
-        title || author || version || copyright || rewardMessage
-          ? {
-              ...(title ? { title } : {}),
-              ...(author ? { author } : {}),
-              ...(version ? { version } : {}),
-              ...(copyright ? { copyright } : {}),
-              ...(rewardMessage ? { rewardMessage } : {})
-            }
-          : undefined
+      metadata: getWechatMetadataPayload()
     };
 
     const stickers = [];
@@ -1572,6 +1713,8 @@ async function generateWechatPack() {
       }
       if (eventName === "done") {
         const json = data;
+        currentTaskId = null;
+        sseAbortController = null;
         currentRewardEnabled = Boolean(json?.meta?.rewardEnabled ?? currentRewardEnabled);
         currentRewardMessage = json?.meta?.rewardMessage ?? rewardMessage;
         wechatAiRewardEnabled.checked = currentRewardEnabled;
@@ -1601,6 +1744,8 @@ async function generateWechatPack() {
       }
       if (eventName === "error") {
         const msg = String(data?.message || "");
+        currentTaskId = null;
+        sseAbortController = null;
         if (msg.includes("取消")) {
           cancelRequested = true;
           setStatus(generateState, "已取消", "error");
@@ -1690,6 +1835,8 @@ async function generateWechatPack() {
       setExportInfo("结果概览与导出信息", "生成失败，请调整提示词或稍后重试。");
     }
   } finally {
+    currentTaskId = null;
+    sseAbortController = null;
     setGenerateButtonsBusy(false);
   }
 }
@@ -1754,6 +1901,10 @@ uploadForm.addEventListener("submit", (event) => {
   event.preventDefault();
 });
 
+importForm?.addEventListener("submit", async (event) => {
+  event.preventDefault();
+});
+
 
 
 wechatAiPrompt.addEventListener("input", () => {
@@ -1803,16 +1954,36 @@ wechatAiRewardEnabled.addEventListener("change", () => {
   renderExtraAssets(lastPackResult?.extras ?? {}, lastPackResult ? "success" : "idle");
 });
 
+function getSelectedAiProvider() {
+  return wechatAiProvider ? wechatAiProvider.value : currentAiProvider;
+}
+
+function isLocalComfyProvider() {
+  return getSelectedAiProvider() === "comfy-local";
+}
+
+async function requestCancelCurrentGeneration(options = {}) {
+  const taskId = currentTaskId;
+  if (!taskId) return false;
+  cancelRequested = true;
+  const body = JSON.stringify({ taskId });
+  const keepalive = Boolean(options.keepalive);
+  if (keepalive && navigator.sendBeacon) {
+    const blob = new Blob([body], { type: "application/json" });
+    if (navigator.sendBeacon("/api/wechat/generate/cancel", blob)) return true;
+  }
+  await fetch("/api/wechat/generate/cancel", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body,
+    keepalive
+  });
+  return true;
+}
+
 cancelGenerate?.addEventListener("click", async () => {
   try {
-    if (currentTaskId) {
-      await fetch("/api/wechat/generate/cancel", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ taskId: currentTaskId })
-      });
-    }
-    cancelRequested = true;
+    await requestCancelCurrentGeneration();
     sseAbortController?.abort?.();
   } catch {
     // ignore
@@ -1820,6 +1991,23 @@ cancelGenerate?.addEventListener("click", async () => {
     setGenerateButtonsBusy(false);
   }
 });
+
+function cancelLocalComfyGenerationOnLeave() {
+  if (!currentTaskId || cancelRequested || !isLocalComfyProvider()) return;
+  void requestCancelCurrentGeneration({ keepalive: true }).catch(() => {
+    // The browser is leaving; cancellation is best effort from this side.
+  });
+  sseAbortController?.abort?.();
+}
+
+if (typeof window.addEventListener === "function") {
+  window.addEventListener("pagehide", cancelLocalComfyGenerationOnLeave);
+  window.addEventListener("beforeunload", cancelLocalComfyGenerationOnLeave);
+}
+
+creationModeAi?.addEventListener("change", syncCreationMode);
+creationModeImport?.addEventListener("change", syncCreationMode);
+syncCreationMode();
 
 wechatAiStyleOptions.addEventListener("focus", (event) => {
   if (event?.target === wechatAiStyleOptions) {
@@ -1862,7 +2050,11 @@ wechatAiStyleOptions.addEventListener("keydown", (event) => {
 wechatAiForm.addEventListener("keydown", async (event) => {
   if (event?.ctrlKey && event?.key === "Enter") {
     event.preventDefault?.();
-    await generateWechatPack();
+    if (currentCreationMode === "import") {
+      await importWechatPack();
+    } else {
+      await generateWechatPack();
+    }
   }
 });
 wechatAiProvider.addEventListener("change", () => {
@@ -1876,10 +2068,15 @@ wechatAiRewardMessage.addEventListener("input", () => {
 
 wechatAiForm.addEventListener("submit", async (event) => {
   event.preventDefault();
-  await generateWechatPack();
+  if (currentCreationMode === "import") {
+    await importWechatPack();
+  } else {
+    await generateWechatPack();
+  }
 });
 
 regenerateSubmit.addEventListener("click", async () => {
+  if (currentCreationMode !== "ai") return;
   await generateWechatPack();
 });
 
