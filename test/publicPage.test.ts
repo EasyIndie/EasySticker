@@ -376,11 +376,13 @@ describe("public page", () => {
     expect(html).toContain('id="wechatAiStyleHint"');
     expect(html).toContain('id="wechatAiStyleError"');
     expect(html).toContain("导出确认面板");
-    expect(html).toContain("打开组件库文档页");
-    expect(html).toContain('href="/components.html"');
-    expect(html).toContain('href="/design-spec.html"');
-    expect(html).toContain('href="/compatibility-report.html"');
-    expect(html).toContain('href="/performance-report.html"');
+    expect(html).toContain("内部开发页");
+    expect(html).toContain('href="/internal.html"');
+    expect(html).not.toContain("打开组件库文档页");
+    expect(html).not.toContain('href="/components.html"');
+    expect(html).not.toContain('href="/design-spec.html"');
+    expect(html).not.toContain('href="/compatibility-report.html"');
+    expect(html).not.toContain('href="/performance-report.html"');
     expect(html).toContain('id="uploadHint"');
     expect(html).toContain('aria-describedby="uploadHint"');
     expect(html).toContain('id="wechatAiVersionHint"');
@@ -410,6 +412,30 @@ describe("public page", () => {
     expect(html).not.toContain("stickerCount");
     expect(html).not.toContain("wechatAiStyles");
     expect(html).not.toContain("wechatRefId");
+  });
+
+  it("hides the internal page link in production", async () => {
+    const originalNodeEnv = process.env.NODE_ENV;
+    const prodDataDir = fs.mkdtempSync(path.join(os.tmpdir(), "easysticker-public-prod-"));
+    process.env.NODE_ENV = "production";
+    const prodApp = buildApp({ host: "127.0.0.1", port: 0, dataDir: prodDataDir, logLevel: "silent" });
+
+    try {
+      await prodApp.ready();
+      const res = await prodApp.inject({ method: "GET", url: "/" });
+      expect(res.statusCode).toBe(200);
+      expect(res.body).toContain("选择创建方式");
+      expect(res.body).not.toContain("内部开发页");
+      expect(res.body).not.toContain('href="/internal.html"');
+    } finally {
+      await prodApp.close();
+      if (originalNodeEnv === undefined) {
+        delete process.env.NODE_ENV;
+      } else {
+        process.env.NODE_ENV = originalNodeEnv;
+      }
+      fs.rmSync(prodDataDir, { recursive: true, force: true });
+    }
   });
 
   it("triggers upload automatically when file input changes", async () => {
@@ -473,82 +499,38 @@ describe("public page", () => {
     expect(res.body).toContain("建议在提示词中补充主体、情绪、动作和背景限制");
   });
 
-  it("serves the component library documentation page", async () => {
-    const res = await app.inject({ method: "GET", url: "/components.html" });
+  it("serves the consolidated internal development page", async () => {
+    const res = await app.inject({ method: "GET", url: "/internal.html" });
     expect(res.statusCode).toBe(200);
     expect(res.headers["content-type"]).toContain("text/html");
 
     const html = res.body;
-    expect(html).toContain("EasySticker 组件库文档页");
-    expect(html).toContain("Design Tokens");
-    expect(html).toContain("基础令牌与语义映射");
-    expect(html).toContain("无障碍策略");
+    expect(html).toContain("EasySticker 内部开发页");
+    expect(html).toContain("组件与令牌");
+    expect(html).toContain("设计原则");
+    expect(html).toContain("兼容性与回归检查");
+    expect(html).toContain("性能基线");
     expect(html).toContain("键盘操作速查表");
     expect(html).toContain('data-include="/partials/keyboard-cheatsheet.html"');
     expect(html).toContain('<script src="/include.js"></script>');
-    expect(html).toContain("错误说明容器");
     expect(html).toContain("导出确认卡");
     expect(html).toContain('href="/"');
-    expect(html).toContain('href="/design-spec.html"');
-    expect(html).toContain('href="/compatibility-report.html"');
-    expect(html).toContain('href="/performance-report.html"');
+    expect(html).toContain('href="#componentGuide"');
+    expect(html).toContain('href="#designRules"');
+    expect(html).toContain('href="#qualityChecks"');
+    expect(html).toContain('href="#performanceBaseline"');
     expect(html).toContain("role=\"main\"");
+    expect(html).not.toContain('href="/components.html"');
+    expect(html).not.toContain('href="/design-spec.html"');
+    expect(html).not.toContain('href="/compatibility-report.html"');
+    expect(html).not.toContain('href="/performance-report.html"');
   });
 
-  it("serves the design spec page", async () => {
-    const res = await app.inject({ method: "GET", url: "/design-spec.html" });
-    expect(res.statusCode).toBe(200);
-    expect(res.headers["content-type"]).toContain("text/html");
-
-    const html = res.body;
-    expect(html).toContain("EasySticker 设计规范页");
-    expect(html).toContain("设计原则");
-    expect(html).toContain("令牌使用约束");
-    expect(html).toContain("帮助文案策略");
-    expect(html).toContain("新增页面扩展规则");
-    expect(html).toContain("键盘操作速查表");
-    expect(html).toContain('href="/compatibility-report.html"');
-    expect(html).toContain('href="/performance-report.html"');
-    expect(html).toContain("role=\"main\"");
-  });
-
-  it("serves the compatibility report page", async () => {
-    const res = await app.inject({ method: "GET", url: "/compatibility-report.html" });
-    expect(res.statusCode).toBe(200);
-    expect(res.headers["content-type"]).toContain("text/html");
-
-    const html = res.body;
-    expect(html).toContain("EasySticker 兼容性测试报告页");
-    expect(html).toContain("兼容性矩阵");
-    expect(html).toContain("桌面 Chromium 内核");
-    expect(html).toContain("A11y Checks");
-    expect(html).toContain("已知边界与后续建议");
-    expect(html).toContain('href="/design-spec.html"');
-    expect(html).toContain('href="/performance-report.html"');
-    expect(html).toContain("摘要跳转字段");
-    expect(html).toContain("性能基线/对比报告页");
-    expect(html).toContain("五页互通");
-    expect(html).toContain("一键跳转到对应字段");
-    expect(html).toContain('data-include="/partials/keyboard-cheatsheet.html"');
-    expect(html).toContain('<script src="/include.js"></script>');
-    expect(html).toContain("role=\"main\"");
-  });
-
-  it("serves the performance report page", async () => {
-    const res = await app.inject({ method: "GET", url: "/performance-report.html" });
-    expect(res.statusCode).toBe(200);
-    expect(res.headers["content-type"]).toContain("text/html");
-
-    const html = res.body;
-    expect(html).toContain("EasySticker 性能基线/对比报告页");
-    expect(html).toContain("性能基线指标");
-    expect(html).toContain("本轮改造对比");
-    expect(html).toContain("本机实时采样");
-    expect(html).toContain("getEntriesByType(\"navigation\")");
-    expect(html).toContain("错误修复路径");
-    expect(html).toContain("支持回跳");
-    expect(html).toContain('href="/compatibility-report.html"');
-    expect(html).toContain("role=\"main\"");
+  it("does not serve removed standalone internal pages", async () => {
+    for (const url of ["/components.html", "/design-spec.html", "/compatibility-report.html", "/performance-report.html"]) {
+      const res = await app.inject({ method: "GET", url });
+      expect(res.statusCode).toBe(404);
+    }
   });
 
   it("serves a noop vite client shim for embedded preview environments", async () => {
