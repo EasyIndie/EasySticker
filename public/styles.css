@@ -1052,27 +1052,6 @@ select {
   line-height: 1.5;
 }
 
-.library-highlight {
-  margin-top: var(--space-6);
-}
-
-.library-highlight-head {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: var(--space-4);
-}
-
-.library-highlight-head h2 {
-  margin: var(--space-3) 0 0;
-  font-size: var(--font-24);
-}
-
-.library-link {
-  flex-shrink: 0;
-}
-
-.library-highlight-grid,
 .docs-grid,
 .token-grid,
 .component-demo-grid {
@@ -1080,12 +1059,6 @@ select {
   gap: var(--space-3);
 }
 
-.library-highlight-grid {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  margin-top: var(--space-4);
-}
-
-.library-highlight-card,
 .token-card,
 .docs-card,
 .component-demo {
@@ -1161,14 +1134,12 @@ select {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
-.demo-row,
 .demo-stack,
 .demo-toolbar {
   display: flex;
   gap: var(--space-2);
 }
 
-.demo-row,
 .demo-toolbar {
   flex-wrap: wrap;
   align-items: center;
@@ -1176,55 +1147,6 @@ select {
 
 .demo-stack {
   flex-direction: column;
-}
-
-.demo-surface {
-  padding: var(--space-4);
-  border-radius: var(--radius-md);
-  border: 1px dashed var(--color-border-strong);
-  background: var(--color-surface-secondary);
-}
-
-.type-display,
-.type-heading,
-.type-strong,
-.type-body,
-.type-caption {
-  line-height: 1.4;
-}
-
-.type-display {
-  font-size: var(--font-32);
-  font-weight: 800;
-}
-
-.type-heading {
-  font-size: var(--font-18);
-  font-weight: 700;
-}
-
-.type-strong {
-  font-size: var(--font-14);
-  font-weight: 600;
-}
-
-.type-body {
-  font-size: var(--font-13);
-}
-
-.type-caption {
-  font-size: var(--font-12);
-}
-
-.report-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: var(--space-3);
-}
-
-.report-card {
-  display: grid;
-  gap: var(--space-3);
 }
 
 .report-status {
@@ -1314,8 +1236,7 @@ select {
 }
 
 @media (max-width: 720px) {
-  .hero-topline,
-  .library-highlight-head {
+  .hero-topline {
     flex-direction: column;
     align-items: stretch;
   }
@@ -1324,8 +1245,7 @@ select {
     width: 100%;
   }
 
-  .hero-link,
-  .library-link {
+  .hero-link {
     width: 100%;
   }
 
@@ -1346,11 +1266,9 @@ select {
   }
 
 
-  .library-highlight-grid,
   .docs-grid,
   .token-grid,
-  .component-demo-grid,
-  .report-grid {
+  .component-demo-grid {
     grid-template-columns: 1fr;
   }
 }
