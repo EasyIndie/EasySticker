@@ -1,0 +1,281 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>EasySticker 内部开发页</title>
+    <meta name="theme-color" content="#07c160" />
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <a href="#internalMain" class="skip-link">跳到主要内容</a>
+    <main id="internalMain" class="page docs-page" role="main">
+      <header class="hero card">
+        <div class="hero-topline">
+          <span class="badge badge-neutral">Internal</span>
+          <nav class="hero-actions" aria-label="内部页导航">
+            <a class="hero-link" href="/">返回生成页</a>
+            <a class="hero-link" href="#componentGuide">组件与令牌</a>
+            <a class="hero-link" href="#designRules">设计约束</a>
+            <a class="hero-link" href="#qualityChecks">质量检查</a>
+            <a class="hero-link" href="#performanceBaseline">性能基线</a>
+          </nav>
+        </div>
+        <h1>EasySticker 内部开发页</h1>
+        <p class="hero-text">集中沉淀组件样式、设计约束、兼容性检查与性能基线，用于开发自查和回归验收。</p>
+        <div class="notice" data-tone="info">
+          该页面不属于用户主流程，不在首页展示；开发时可直接访问 /internal.html。
+        </div>
+      </header>
+
+      <section id="componentGuide" class="docs-card card" aria-labelledby="componentGuideTitle">
+        <div class="section-title">Components</div>
+        <h2 id="componentGuideTitle">组件与令牌</h2>
+        <p class="muted">主流程优先复用既有组件结构，避免新增页面或控件时出现视觉漂移。</p>
+        <div class="token-grid">
+          <article class="token-card">
+            <div class="token-swatch token-swatch-primary"></div>
+            <div class="token-meta">
+              <span class="token-name">Primary</span>
+              <span class="token-value">--color-primary / #07C160</span>
+              <span class="token-value">主按钮、选中态、成功路径强调。</span>
+            </div>
+          </article>
+          <article class="token-card">
+            <div class="token-swatch token-swatch-info"></div>
+            <div class="token-meta">
+              <span class="token-name">Info</span>
+              <span class="token-value">--color-info / #2563EB</span>
+              <span class="token-value">信息提示、导出确认区、聚焦反馈。</span>
+            </div>
+          </article>
+          <article class="token-card">
+            <div class="token-swatch token-swatch-danger"></div>
+            <div class="token-meta">
+              <span class="token-name">Danger</span>
+              <span class="token-value">--color-danger / #EF4444</span>
+              <span class="token-value">错误摘要、字段校验、失败状态。</span>
+            </div>
+          </article>
+          <article class="token-card">
+            <div class="token-swatch token-swatch-surface"></div>
+            <div class="token-meta">
+              <span class="token-name">Surface</span>
+              <span class="token-value">--color-surface-primary / secondary</span>
+              <span class="token-value">卡片、分组容器、预览承载区。</span>
+            </div>
+          </article>
+        </div>
+        <div class="component-demo-grid">
+          <article class="component-demo">
+            <h3>按钮</h3>
+            <p class="muted">主操作使用实心按钮，次操作使用 secondary，辅助跳转使用 ghost-button。</p>
+            <div class="demo-toolbar">
+              <button type="button">开始生成</button>
+              <button type="button" class="secondary">重新生成</button>
+              <a href="/" class="ghost-button">返回主流程</a>
+            </div>
+          </article>
+          <article class="component-demo">
+            <h3>状态反馈</h3>
+            <p class="muted">notice、status-chip、toast-notice 分别承担阶段提示、流程状态与短反馈。</p>
+            <div class="demo-stack">
+              <div class="notice" data-tone="success">成功提示用于阶段性确认。</div>
+              <div class="notice" data-tone="error">错误提示用于阻断性问题说明。</div>
+              <div class="status-chip" data-tone="loading">生成中...</div>
+            </div>
+          </article>
+          <article class="component-demo">
+            <h3>导出确认卡</h3>
+            <p class="muted">结果概览和 metadata.json 默认折叠，下载前再展开核对。</p>
+            <div class="summary-card export-confirm-card">
+              <div class="summary-card-head">
+                <div class="summary-card-copy">
+                  <div class="section-title">结果概览与导出信息</div>
+                  <p class="muted">确认生成范围、风格与导出信息，确认后可直接复制。</p>
+                </div>
+                <div class="summary-card-actions">
+                  <button type="button" class="ghost-button panel-toggle-button">展开内容</button>
+                </div>
+              </div>
+              <p class="muted summary-card-placeholder">已默认折叠，展开后查看完整内容。</p>
+            </div>
+          </article>
+          <article class="component-demo">
+            <h3>资源预览卡</h3>
+            <p class="muted">图片区保持棋盘底图，标题、规格、说明三段式展示。</p>
+            <div class="preview-item">
+              <div class="preview-head">
+                <div class="preview-title">表情 001</div>
+                <div class="preview-spec">240 × 240</div>
+                <p class="preview-description">用于展示聊天场景贴纸与序号资源。当前序号：001</p>
+              </div>
+              <div class="preview-media asset-placeholder">等待生成</div>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <section id="designRules" class="docs-grid" aria-label="设计约束">
+        <article class="docs-card card">
+          <div class="section-title">Principles</div>
+          <h2>设计原则</h2>
+          <ul class="spec-list">
+            <li>以单页主流程为核心，优先保证上传、导入、生成、预览、下载的线性可理解性。</li>
+            <li>主流程不展示内部工程页面入口，避免普通用户分心。</li>
+            <li>页面主容器最大宽度 980px，窄屏统一回落到单列布局。</li>
+            <li>新增控件先复用语义 token、card、notice、summary-card、preview-item 等基础模式。</li>
+          </ul>
+        </article>
+        <article class="docs-card card">
+          <div class="section-title">Forms</div>
+          <h2>表单与文案规则</h2>
+          <ul class="spec-list">
+            <li>必填项必须同步提供 hint、error 容器、aria-describedby 与错误摘要映射。</li>
+            <li>提示词说明聚焦主体、情绪、动作、背景限制四类信息。</li>
+            <li>导入模式与 AI 模式共享标题、作者、版权、赞赏信息和结果展示。</li>
+            <li>错误文案使用明确动作词，例如“请填写”“请上传”“请至少选择”。</li>
+          </ul>
+        </article>
+      </section>
+
+      <section id="qualityChecks" class="docs-card card" aria-labelledby="qualityChecksTitle">
+        <div class="section-title">Quality</div>
+        <h2 id="qualityChecksTitle">兼容性与回归检查</h2>
+        <div class="table-scroll">
+          <table class="report-table">
+            <thead>
+              <tr>
+                <th>检查项</th>
+                <th>基线</th>
+                <th>当前结论</th>
+                <th>说明</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>桌面 Chromium</td>
+                <td>Chrome / Edge 新版</td>
+                <td><span class="report-status report-status-inline" data-tone="success">通过基线</span></td>
+                <td>主流程、内部页、Swagger 均可加载。</td>
+              </tr>
+              <tr>
+                <td>移动端布局</td>
+                <td>720px 以下单列</td>
+                <td><span class="report-status report-status-inline" data-tone="success">通过基线</span></td>
+                <td>卡片、表单、预览区使用响应式约束。</td>
+              </tr>
+              <tr>
+                <td>键盘与可访问性</td>
+                <td>Tab / Enter / aria</td>
+                <td><span class="report-status report-status-inline" data-tone="success">通过基线</span></td>
+                <td>保留跳转链接、错误摘要、字段回跳和 focus ring。</td>
+              </tr>
+              <tr>
+                <td>自动化回归</td>
+                <td>npm test</td>
+                <td><span class="report-status report-status-inline" data-tone="info">提交前运行</span></td>
+                <td>覆盖 provider、配置、主流程、导入、懒加载 adapter 等核心路径。</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <ul class="spec-list">
+          <li>主流程重点验证：AI/导入切换、必填校验、生成取消、结果恢复、ZIP 下载。</li>
+          <li>本地 ComfyUI 路径重点验证：懒启动、离开取消、空闲停止、退出清理。</li>
+          <li>后续若引入拖拽上传、动画或图表，需要补充专项兼容性用例。</li>
+        </ul>
+      </section>
+
+      <section id="performanceBaseline" class="docs-card card" aria-labelledby="performanceBaselineTitle">
+        <div class="section-title">Performance</div>
+        <h2 id="performanceBaselineTitle">性能基线</h2>
+        <p class="muted">该模块基于浏览器 Performance API 自动采集，用于本地快速观察趋势，不替代线上 RUM 数据。</p>
+        <div class="detail-grid" id="runtimeMetricGrid" data-tone="info" aria-live="polite">
+          <div class="detail-item">
+            <span class="muted">TTFB</span>
+            <strong id="metricTtfb">-</strong>
+          </div>
+          <div class="detail-item">
+            <span class="muted">DOMContentLoaded</span>
+            <strong id="metricDcl">-</strong>
+          </div>
+          <div class="detail-item">
+            <span class="muted">Load</span>
+            <strong id="metricLoad">-</strong>
+          </div>
+          <div class="detail-item">
+            <span class="muted">DOM 节点数</span>
+            <strong id="metricDomNodes">-</strong>
+          </div>
+          <div class="detail-item">
+            <span class="muted">首屏资源条目</span>
+            <strong id="metricResources">-</strong>
+          </div>
+          <div class="detail-item">
+            <span class="muted">脚本大小</span>
+            <strong id="metricAppJs">-</strong>
+          </div>
+          <div class="detail-item">
+            <span class="muted">样式大小</span>
+            <strong id="metricCss">-</strong>
+          </div>
+        </div>
+        <ul class="spec-list">
+          <li>主流程仍由单份 CSS 与单份 app.js 驱动，未引入前端框架运行时。</li>
+          <li>内部页合并后减少静态 HTML 数量，降低文档导航和测试维护成本。</li>
+          <li>若后续接入真实埋点，可补充首屏耗时、生成等待时长和下载成功率。</li>
+        </ul>
+      </section>
+
+      <section class="docs-card card" aria-labelledby="keyboardCheatsheetTitle">
+        <div class="section-title">Keyboard</div>
+        <h2 id="keyboardCheatsheetTitle">键盘操作速查表</h2>
+        <div data-include="/partials/keyboard-cheatsheet.html"></div>
+      </section>
+    </main>
+    <script src="/include.js"></script>
+    <script>
+      (function () {
+        function formatMs(value) {
+          if (typeof value !== "number" || !Number.isFinite(value)) return "-";
+          return Math.round(value) + " ms";
+        }
+
+        function formatBytes(bytes) {
+          if (typeof bytes !== "number" || !Number.isFinite(bytes) || bytes <= 0) return "-";
+          if (bytes < 1024) return bytes + " B";
+          if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + " KB";
+          return (bytes / 1024 / 1024).toFixed(2) + " MB";
+        }
+
+        function setText(id, value) {
+          var el = document.getElementById(id);
+          if (el) el.textContent = value;
+        }
+
+        var navEntry = performance.getEntriesByType && performance.getEntriesByType("navigation")[0];
+        if (navEntry) {
+          setText("metricTtfb", formatMs(navEntry.responseStart));
+          setText("metricDcl", formatMs(navEntry.domContentLoadedEventEnd));
+          setText("metricLoad", formatMs(navEntry.loadEventEnd));
+        }
+
+        setText("metricDomNodes", String(document.getElementsByTagName("*").length));
+
+        var resources = performance.getEntriesByType && performance.getEntriesByType("resource");
+        if (resources && Array.isArray(resources)) {
+          setText("metricResources", String(resources.length));
+          var appJs = resources.find(function (item) {
+            return typeof item.name === "string" && item.name.indexOf("/app.js") !== -1;
+          });
+          var css = resources.find(function (item) {
+            return typeof item.name === "string" && item.name.indexOf("/styles.css") !== -1;
+          });
+          if (appJs) setText("metricAppJs", formatBytes(appJs.transferSize || appJs.encodedBodySize));
+          if (css) setText("metricCss", formatBytes(css.transferSize || css.encodedBodySize));
+        }
+      })();
+    </script>
+  </body>
+</html>
