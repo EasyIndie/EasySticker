@@ -13,7 +13,7 @@ export class DoubaoAiProvider implements AiProvider {
     private readonly model: string
   ) {}
 
-  async generateImage(input: AiGenerateInput): Promise<AiGenerateOutput> {
+  async generateImage(input: AiGenerateInput, signal?: AbortSignal): Promise<AiGenerateOutput> {
     const endpoint = `${this.baseUrl.replace(/\/+$/, "")}/images/generations`;
     
     // 构造请求体，参考用户的 Python snippet 提取核心参数
@@ -47,7 +47,8 @@ export class DoubaoAiProvider implements AiProvider {
         "content-type": "application/json",
         authorization: `Bearer ${this.apiKey}`
       },
-      body: JSON.stringify(body)
+      body: JSON.stringify(body),
+      signal
     });
 
     if (!res.ok) {

@@ -27,6 +27,36 @@ export interface PromptConfig {
       outputFormat?: "png" | "jpeg" | "webp";
       moderation?: "low" | "auto";
       inputFidelity?: "low" | "high";
+      comfy?: {
+        qualityPreset?: string;
+        checkpoint?: string;
+        promptPrefix?: string;
+        promptSuffix?: string;
+        negativePrompt?: string;
+        negativePromptAppend?: string;
+        qualityPresets?: Record<string, {
+          steps?: number;
+          cfg?: number;
+          denoise?: number;
+          samplerName?: string;
+          scheduler?: string;
+          checkpoint?: string;
+          promptPrefix?: string;
+          promptSuffix?: string;
+          negativePrompt?: string;
+          negativePromptAppend?: string;
+        }>;
+      };
+      autoStart?: {
+        command: string;
+        args?: string[];
+        cwd?: string;
+        env?: Record<string, string>;
+        healthUrl?: string;
+        cancelUrl?: string;
+        startupTimeoutMs?: number;
+        idleMs?: number;
+      };
       [key: string]: any;
     }>;
   };

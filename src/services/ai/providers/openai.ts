@@ -18,14 +18,14 @@ export class OpenAiImageProvider implements AiProvider {
     private readonly options: OpenAiImageOptions = {}
   ) {}
 
-  async generateImage(input: AiGenerateInput): Promise<AiGenerateOutput> {
+  async generateImage(input: AiGenerateInput, signal?: AbortSignal): Promise<AiGenerateOutput> {
     const hasReference = Boolean(input.referenceImageBase64 || input.referenceImageUrl);
     const endpoint = `${this.baseUrl.replace(/\/+$/, "")}/images/${hasReference ? "edits" : "generations"}`;
     const prompt = this.buildPrompt(input);
 
     const res = hasReference
-      ? await this.createEdit(endpoint, input, prompt)
-      : await this.createGeneration(endpoint, input, prompt);
+      ? await this.createEdit(endpoint, input, prompt, signal)
+      : await this.createGeneration(endpoint, input, prompt, signal);
 
     if (!res.ok) {
       const message = await this.readErrorMessage(res, "openai provider error");
@@ -41,7 +41,7 @@ export class OpenAiImageProvider implements AiProvider {
     }
 
     if (typeof first?.url === "string" && first.url.length > 0) {
-      const imageRes = await fetch(first.url);
+      const imageRes = await fetch(first.url, { signal });
       if (!imageRes.ok) throw createHttpError(502, `openai image download failed: ${imageRes.status}`);
       return {
         mime: imageRes.headers.get("content-type") || this.mimeFromOutputFormat(),
@@ -53,7 +53,7 @@ export class OpenAiImageProvider implements AiProvider {
     throw createHttpError(502, "openai provider returned no image data");
   }
 
-  private async createGeneration(endpoint: string, input: AiGenerateInput, prompt: string) {
+  private async createGeneration(endpoint: string, input: AiGenerateInput, prompt: string, signal?: AbortSignal) {
     const body: Record<string, unknown> = {
       model: this.model,
       prompt,
@@ -72,11 +72,12 @@ export class OpenAiImageProvider implements AiProvider {
         "content-type": "application/json",
         authorization: `Bearer ${this.apiKey}`
       },
-      body: JSON.stringify(body)
+      body: JSON.stringify(body),
+      signal
     });
   }
 
-  private async createEdit(endpoint: string, input: AiGenerateInput, prompt: string) {
+  private async createEdit(endpoint: string, input: AiGenerateInput, prompt: string, signal?: AbortSignal) {
     if (input.referenceImageUrl && !input.referenceImageBase64) {
       const body: Record<string, unknown> = {
         model: this.model,
@@ -94,7 +95,8 @@ export class OpenAiImageProvider implements AiProvider {
           "content-type": "application/json",
           authorization: `Bearer ${this.apiKey}`
         },
-        body: JSON.stringify(body)
+        body: JSON.stringify(body),
+        signal
       });
     }
 
@@ -114,7 +116,8 @@ export class OpenAiImageProvider implements AiProvider {
       headers: {
         authorization: `Bearer ${this.apiKey}`
       },
-      body: form
+      body: form,
+      signal
     });
   }
 

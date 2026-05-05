@@ -27,6 +27,24 @@
 
       <section class="flow">
         <article class="card step-card">
+          <div class="step-index">00</div>
+          <div class="step-head">
+            <h2>选择创建方式</h2>
+            <p class="muted">按素材现状选择入口，后续预览、校验、metadata 和 ZIP 下载保持一致。</p>
+          </div>
+          <div class="mode-selector" role="radiogroup" aria-label="创建方式">
+            <label class="mode-option">
+              <input id="creationModeAi" name="creationMode" type="radio" value="ai" checked />
+              <span>AI 生成</span>
+            </label>
+            <label class="mode-option">
+              <input id="creationModeImport" name="creationMode" type="radio" value="import" />
+              <span>导入已有图片</span>
+            </label>
+          </div>
+        </article>
+
+        <article id="aiSourceSection" class="card step-card">
           <div class="step-index">01</div>
           <div class="step-head">
             <h2>上传参考图</h2>
@@ -55,43 +73,95 @@
           </div>
         </article>
 
+        <article id="importSourceSection" class="card step-card" hidden>
+          <div class="step-index">01B</div>
+          <div class="step-head">
+            <h2>导入已有表情图</h2>
+            <p class="muted">已有成品图片时，可直接批量导入并自动规范为微信 240 × 240 表情图。</p>
+          </div>
+          <form id="importForm" class="step-body">
+            <label class="upload-panel" for="importFiles">
+              <span class="upload-title">批量选择图片</span>
+              <span class="upload-text">支持 PNG、JPG、WebP、GIF，建议一次导入 8-24 张。</span>
+              <input
+                id="importFiles"
+                name="stickers"
+                type="file"
+                accept="image/png,image/jpeg,image/webp,image/gif"
+                multiple
+                aria-describedby="importHint"
+              />
+              <span id="importHint" class="field-hint">导入后会统一居中、等比缩放、补透明边，并转换为符合微信表情包规格的 PNG。</span>
+            </label>
+            <div class="config-grid import-extra-grid" aria-label="扩展资源导入">
+              <label class="field" for="importCover">
+                <span class="section-title">Cover<span class="optional-mark">可选</span></span>
+                <input id="importCover" type="file" accept="image/png,image/jpeg,image/webp,image/gif" />
+                <div class="field-hint">未上传时自动使用第 1 张主表情生成 240 × 240。</div>
+              </label>
+              <label class="field" for="importIcon">
+                <span class="section-title">Icon<span class="optional-mark">可选</span></span>
+                <input id="importIcon" type="file" accept="image/png,image/jpeg,image/webp,image/gif" />
+                <div class="field-hint">未上传时自动从 Cover 或第 1 张主表情生成 50 × 50。</div>
+              </label>
+              <label class="field" for="importBanner">
+                <span class="section-title">Banner<span class="optional-mark">可选</span></span>
+                <input id="importBanner" type="file" accept="image/png,image/jpeg,image/webp,image/gif" />
+                <div class="field-hint">上传后处理为 750 × 400。</div>
+              </label>
+              <label class="field" for="importRewardGuide">
+                <span class="section-title">赞赏引导图<span class="optional-mark">可选</span></span>
+                <input id="importRewardGuide" type="file" accept="image/png,image/jpeg,image/webp,image/gif" />
+                <div class="field-hint">上传后处理为 750 × 400，并自动包含赞赏资源。</div>
+              </label>
+              <label class="field" for="importRewardThanks">
+                <span class="section-title">赞赏答谢图<span class="optional-mark">可选</span></span>
+                <input id="importRewardThanks" type="file" accept="image/png,image/jpeg,image/webp,image/gif" />
+                <div class="field-hint">上传后处理为 750 × 400，并自动包含赞赏资源。</div>
+              </label>
+            </div>
+          </form>
+          <div id="importState" class="status-chip" aria-live="polite">等待导入</div>
+        </article>
+
         <article class="card step-card">
           <div class="step-index">02</div>
           <div class="step-head">
-            <h2>编辑提示词</h2>
-            <p class="muted">根据上传图，补充生成提示词、风格和元信息。</p>
+            <h2>配置与信息</h2>
+            <p class="muted">AI 模式补充生成参数；两种模式共享标题、作者、版权和赞赏信息。</p>
           </div>
-          <label class="field" for="wechatAiProvider">
-            <span class="section-title"><span class="required-mark">*</span>AI 提供商选择</span>
-            <select id="wechatAiProvider" class="style-options" style="padding: 8px; border-radius: var(--radius-sm); border: 1px solid var(--color-border-subtle); background: var(--surface-card); color: var(--color-text);">
-              <option value="mock" selected>加载中...</option>
-            </select>
-          </label>
-          <label class="field" for="wechatAiPrompt">
-            <span class="section-title"><span class="required-mark">*</span>提示词</span>
-            <textarea
-              id="wechatAiPrompt"
-              rows="5"
-              aria-describedby="promptHint"
-              placeholder="例如：基于参考图主体，生成一组适用于微信聊天场景的可爱表情，补充开心、委屈、赞同等情绪动作，背景干净，主体完整。"
-            ></textarea>
-            <div id="wechatAiPromptError" class="field-error" hidden></div>
-          </label>
-          <div class="field">
-            <span id="wechatAiStyleLabel" class="section-title"><span class="required-mark">*</span>风格选择</span>
-            <div
-              id="wechatAiStyleOptions"
-              class="style-options"
-              role="group"
-              aria-labelledby="wechatAiStyleLabel"
-              aria-describedby="wechatAiStyleHint"
-              tabindex="-1"
-            ></div>
-            <div id="wechatAiStyleChipHelp" class="sr-only">左右/上下箭头移动焦点，Home/End 快速跳首/跳尾，Enter 或空格切换选中风格。</div>
-            <div id="wechatAiStyleHint" class="field-hint">请选择 1 种生成风格，系统会按选中风格推荐提示词。</div>
-            <div id="wechatAiStyleError" class="field-error" hidden></div>
-          </div>
-          <div class="config-grid">
+          <div id="aiConfigFields">
+            <label class="field" for="wechatAiProvider">
+              <span class="section-title"><span class="required-mark">*</span>AI 提供商选择</span>
+              <select id="wechatAiProvider" class="style-options" style="padding: 8px; border-radius: var(--radius-sm); border: 1px solid var(--color-border-subtle); background: var(--surface-card); color: var(--color-text);">
+                <option value="mock" selected>加载中...</option>
+              </select>
+            </label>
+            <label class="field" for="wechatAiPrompt">
+              <span class="section-title"><span class="required-mark">*</span>提示词</span>
+              <textarea
+                id="wechatAiPrompt"
+                rows="5"
+                aria-describedby="promptHint"
+                placeholder="例如：基于参考图主体，生成一组适用于微信聊天场景的可爱表情，补充开心、委屈、赞同等情绪动作，背景干净，主体完整。"
+              ></textarea>
+              <div id="wechatAiPromptError" class="field-error" hidden></div>
+            </label>
+            <div class="field">
+              <span id="wechatAiStyleLabel" class="section-title"><span class="required-mark">*</span>风格选择</span>
+              <div
+                id="wechatAiStyleOptions"
+                class="style-options"
+                role="group"
+                aria-labelledby="wechatAiStyleLabel"
+                aria-describedby="wechatAiStyleHint"
+                tabindex="-1"
+              ></div>
+              <div id="wechatAiStyleChipHelp" class="sr-only">左右/上下箭头移动焦点，Home/End 快速跳首/跳尾，Enter 或空格切换选中风格。</div>
+              <div id="wechatAiStyleHint" class="field-hint">请选择 1 种生成风格，系统会按选中风格推荐提示词。</div>
+              <div id="wechatAiStyleError" class="field-error" hidden></div>
+            </div>
+            <div class="config-grid">
             <label class="field" for="wechatAiCount">
               <span class="section-title"><span class="required-mark">*</span>贴纸数量</span>
               <div class="stepper-row">
@@ -110,6 +180,8 @@
               <div id="wechatAiCountHint" class="field-hint">推荐 8-24 张，系统会额外补齐封面、图标和横幅资源。</div>
               <div id="wechatAiCountError" class="field-error" hidden></div>
             </label>
+            </div>
+          </div>
             <div class="field">
               <span class="section-title">赞赏功能<span class="optional-mark">可选</span></span>
               <label class="toggle-row" for="wechatAiRewardEnabled">
@@ -118,7 +190,6 @@
               </label>
               <div id="wechatAiRewardEnabledHint" class="field-hint">额外生成 2 张 750 × 400 资源。</div>
             </div>
-          </div>
           <label id="wechatAiRewardMessageField" class="field" for="wechatAiRewardMessage" hidden>
             <span class="section-title"><span class="required-mark">*</span>赞赏引导语</span>
             <input

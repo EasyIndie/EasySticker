@@ -25,6 +25,7 @@ async function withTimeout<T>(timeoutMs: number, fn: () => Promise<T>): Promise<
 }
 
 function isRetryable(err: any) {
+  if (err?.name === "AbortError" || err?.statusCode === 499) return false;
   const status = typeof err?.statusCode === "number" ? err.statusCode : 0;
   return err?.code === "ETIMEDOUT" || status === 429 || (status >= 500 && status <= 599);
 }
@@ -40,11 +41,12 @@ export function buildMinimalClient(provider: AiProvider, opts?: Partial<Options>
   };
 
   return {
-    async generateImage(input: AiGenerateInput): Promise<AiGenerateOutput> {
+    async generateImage(input: AiGenerateInput, signal?: AbortSignal): Promise<AiGenerateOutput> {
       let attempt = 0;
       while (true) {
+        if (signal?.aborted) throw Object.assign(new Error("生成任务已取消"), { statusCode: 499 });
         try {
-          const out = await withTimeout(options.timeoutMs, () => provider.generateImage(input));
+          const out = await withTimeout(options.timeoutMs, () => provider.generateImage(input, signal));
           return out;
         } catch (err: any) {
           if (attempt >= options.retryMax || !isRetryable(err)) throw err;

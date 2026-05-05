@@ -44,11 +44,33 @@ describe("http ai provider", () => {
       height: 64,
       referenceImageTransport: "multipart",
       referenceImageBase64: Buffer.from("fake-image").toString("base64"),
-      referenceImageMime: "image/png"
+      referenceImageMime: "image/png",
+      providerOptions: { comfy: { qualityPreset: "standard" } }
     });
 
     expect(result.mime).toContain("image/png");
     const bodyText = lastBody.toString("utf8");
     expect(bodyText).toContain("referenceImage");
+  });
+
+  it("passes provider options to json http providers", async () => {
+    const provider = new HttpAiProvider(endpoint);
+    await provider.generateImage({
+      prompt: "json",
+      width: 64,
+      height: 64,
+      providerOptions: {
+        comfy: {
+          qualityPreset: "quality",
+          qualityPresets: {
+            quality: { steps: 28, cfg: 6, denoise: 0.5 }
+          }
+        }
+      }
+    });
+
+    const payload = JSON.parse(lastBody.toString("utf8"));
+    expect(payload.providerOptions.comfy.qualityPreset).toBe("quality");
+    expect(payload.providerOptions.comfy.qualityPresets.quality.steps).toBe(28);
   });
 });
