@@ -1,4 +1,5 @@
 import crypto from "node:crypto";
+import fs from "node:fs/promises";
 import path from "node:path";
 import Fastify, {
   type FastifyError,
@@ -23,6 +24,21 @@ export type AppConfig = {
   dataDir: string;
   logLevel: string;
 };
+
+const DEV_INTERNAL_LINK = [
+  '          <nav class="hero-actions" aria-label="开发快捷入口">',
+  '            <a class="hero-link" href="/internal.html">内部开发页</a>',
+  "          </nav>"
+].join("\n");
+
+async function renderIndexHtml() {
+  const html = await fs.readFile(path.join(process.cwd(), "public", "index.html"), "utf8");
+  if (process.env.NODE_ENV === "production") return html;
+  return html.replace('          <span class="badge">微信 AI 表情流程</span>', [
+    '          <span class="badge">微信 AI 表情流程</span>',
+    DEV_INTERNAL_LINK
+  ].join("\n"));
+}
 
 export function buildApp(config: AppConfig): FastifyInstance {
   const app = Fastify({
@@ -55,6 +71,14 @@ export function buildApp(config: AppConfig): FastifyInstance {
   app.register(multipart, {
     limits: { fileSize: 25 * 1024 * 1024 }
   });
+
+  async function serveIndex(_req: FastifyRequest, reply: FastifyReply) {
+    reply.header("content-type", "text/html; charset=utf-8");
+    return renderIndexHtml();
+  }
+
+  app.get("/", serveIndex);
+  app.get("/index.html", serveIndex);
 
   app.register(staticPlugin, {
     root: path.join(process.cwd(), "public"),
