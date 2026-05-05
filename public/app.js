@@ -413,13 +413,11 @@ function clearPersistedPackResult() {
 
 function sanitizePersistedPackResult(raw) {
   if (!raw || typeof raw !== "object") {
-    console.log("sanitize failed: not object", raw);
     return null;
   }
 
   const result = raw.result;
   if (!result || typeof result !== "object" || typeof result.packId !== "string" || typeof result.downloadUrl !== "string") {
-    console.log("sanitize failed: result invalid", result);
     return null;
   }
 
@@ -533,7 +531,6 @@ function restorePersistedPackResult() {
 
     const restored = sanitizePersistedPackResult(JSON.parse(rawText));
     if (!restored) {
-      console.log("sanitizePersistedPackResult returned null");
       clearPersistedPackResult();
       return false;
     }

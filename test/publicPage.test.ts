@@ -511,8 +511,9 @@ describe("public page", () => {
     expect(html).toContain("兼容性与回归检查");
     expect(html).toContain("性能基线");
     expect(html).toContain("键盘操作速查表");
-    expect(html).toContain('data-include="/partials/keyboard-cheatsheet.html"');
-    expect(html).toContain('<script src="/include.js"></script>');
+    expect(html).toContain("Ctrl + Enter");
+    expect(html).not.toContain('data-include="/partials/keyboard-cheatsheet.html"');
+    expect(html).not.toContain('<script src="/include.js"></script>');
     expect(html).toContain("导出确认卡");
     expect(html).toContain('href="/"');
     expect(html).toContain('href="#componentGuide"');
@@ -1174,10 +1175,6 @@ describe("public page", () => {
       stopPropagation: () => undefined,
       target: { closest: (selector: string) => (selector === '[data-action="copy-export-info"]' ? {} : null) }
     } as unknown as Event);
-
-    if (clipboard.value === "") {
-      console.log("globalNotice textContent:", elements.get("globalNotice")?.textContent);
-    }
 
     expect(clipboard.value).toContain("标题：猫咪日常");
     expect(clipboard.value).toContain("packId：pack-copy");
