@@ -1328,14 +1328,14 @@ function resetAllState() {
   availableStyles = [...DEFAULT_STYLE_OPTIONS];
   currentRewardEnabled = false;
   currentRewardMessage = "";
-  currentCreationMode = "ai";
+  currentCreationMode = "import";
   hasGenerationAttempted = false;
   lastPackResult = null;
 
   uploadForm.reset();
   importForm?.reset?.();
-  if (creationModeAi) creationModeAi.checked = true;
-  if (creationModeImport) creationModeImport.checked = false;
+  if (creationModeImport) creationModeImport.checked = true;
+  if (creationModeAi) creationModeAi.checked = false;
   wechatAiPrompt.value = "";
   wechatAiTitle.value = "";
   wechatAiAuthor.value = "";
