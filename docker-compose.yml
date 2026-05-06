@@ -1,0 +1,10 @@
+services:
+  easysticker:
+    build: .
+    container_name: easysticker
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./data:/app/data
+      - ./prompt-config.json:/app/prompt-config.json
+    restart: unless-stopped
