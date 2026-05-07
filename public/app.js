@@ -56,6 +56,12 @@ const globalNotice = document.getElementById("globalNotice");
 const toastNotice = document.getElementById("toastNotice");
 const generateErrorSummary = document.getElementById("generateErrorSummary");
 const generateErrorList = document.getElementById("generateErrorList");
+const generationProgressWrap = document.getElementById("generationProgressWrap");
+const generationProgressBar = document.getElementById("generationProgressBar");
+const generationProgressPct = document.getElementById("generationProgressPct");
+const historySection = document.getElementById("historySection");
+const historyList = document.getElementById("historyList");
+const clearHistoryBtn = document.getElementById("clearHistory");
 const originalPreviewPlaceholder = document.getElementById("originalPreviewPlaceholder");
 
 let DEFAULT_STICKER_COUNT = 8;
@@ -63,6 +69,8 @@ let MIN_STICKER_COUNT = 8;
 let MAX_STICKER_COUNT = 24;
 let DEFAULT_STYLE_OPTIONS = ["扁平插画", "3D 卡通", "日系 Q 版", "像素风", "国潮风"];
 const LAST_WECHAT_PACK_STORAGE_KEY = "easysticker:last-wechat-pack";
+const PACK_HISTORY_STORAGE_KEY = "easysticker:pack-history";
+const MAX_HISTORY = 10;
 const BASE_EXTRA_ASSET_DEFS = [
   {
     key: "coverAssetId",
@@ -160,6 +168,8 @@ const FIELD_A11Y_CONFIGS = {
   
   let currentUploadId = null;
   let currentStyles = [];
+  let lastProgressTotal = 0;
+  let lastProgressCurrent = 0;
   let availableStyles = [...DEFAULT_STYLE_OPTIONS];
   let currentRewardEnabled = false;
   let currentRewardMessage = "";
@@ -519,6 +529,7 @@ function persistLastGeneratedResult(result) {
   } catch {
     // ignore storage errors
   }
+  addToPackHistory(result);
 }
 
 function restorePersistedPackResult() {
@@ -584,6 +595,124 @@ function restorePersistedPackResult() {
   }
 }
 
+// ========== Pack History (localStorage array) ==========
+
+function getPackHistory() {
+  const storage = getStorage();
+  if (!storage) return [];
+  try {
+    const raw = storage.getItem(PACK_HISTORY_STORAGE_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed.slice(0, MAX_HISTORY) : [];
+  } catch {
+    return [];
+  }
+}
+
+function savePackHistory(history) {
+  const storage = getStorage();
+  if (!storage) return;
+  try {
+    storage.setItem(PACK_HISTORY_STORAGE_KEY, JSON.stringify(history.slice(0, MAX_HISTORY)));
+  } catch {
+    // ignore quota errors
+  }
+}
+
+function addToPackHistory(result) {
+  if (!result?.packId || !result?.downloadUrl) return;
+  const history = getPackHistory();
+  // dedup by packId
+  const filtered = history.filter((h) => h.packId !== result.packId);
+  const entry = {
+    packId: result.packId,
+    downloadUrl: result.downloadUrl,
+    downloadFilename: result.downloadFilename || `${result.packId}.zip`,
+    title: result?.meta?.title || "未命名表情包",
+    author: result?.meta?.author || "",
+    stickerCount: result?.stickers?.length || result?.meta?.count || 0,
+    styles: Array.isArray(result?.meta?.styles) ? result.meta.styles.join(", ") : "",
+    createdAt: new Date().toISOString(),
+    rewardEnabled: Boolean(result?.meta?.rewardEnabled),
+    versionText: result?.meta?.version || "",
+    metadataJson: typeof result.metadataJson === "string" ? result.metadataJson.slice(0, 500) : ""
+  };
+  savePackHistory([entry, ...filtered]);
+  renderPackHistory();
+}
+
+function renderPackHistory() {
+  const history = getPackHistory();
+  if (!historySection || !historyList) return;
+  if (history.length === 0) {
+    historySection.hidden = true;
+    return;
+  }
+  historySection.hidden = false;
+  
+  if (history.length === 0) {
+    historyList.innerHTML = '<div class="history-empty">暂无历史记录</div>';
+    return;
+  }
+
+  historyList.innerHTML = history
+    .map(
+      (entry) => `
+      <div class="history-item" data-pack-id="${escapeAttr(entry.packId)}">
+        <div class="history-item-meta">
+          <div class="history-item-title">${escapeHtml(entry.title)}</div>
+          <div class="history-item-sub">${escapeHtml(entry.author ? entry.author + " · " : "")}${entry.stickerCount} 张${entry.styles ? " · " + escapeHtml(entry.styles) : ""}${entry.rewardEnabled ? " · 含赞赏" : ""} · ${formatTimeAgo(entry.createdAt) || "刚刚"}</div>
+        </div>
+        <div class="history-item-actions">
+          <button type="button" class="secondary history-dl-btn" data-pack-id="${escapeAttr(entry.packId)}" data-dl-url="${escapeAttr(entry.downloadUrl)}" data-filename="${escapeAttr(entry.downloadFilename)}">下载</button>
+        </div>
+      </div>
+    `
+    )
+    .join("");
+    
+  // bind download buttons
+  historyList.querySelectorAll(".history-dl-btn").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const url = btn.dataset.dlUrl;
+      const filename = btn.dataset.filename;
+      if (url) {
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = filename || "pack.zip";
+        a.click();
+      }
+    });
+  });
+}
+
+function clearPackHistory() {
+  savePackHistory([]);
+  renderPackHistory();
+  setNotice("历史记录已清空", "info");
+}
+
+function formatTimeAgo(iso) {
+  if (!iso) return "";
+  try {
+    const diff = Date.now() - new Date(iso).getTime();
+    const minutes = Math.floor(diff / 60000);
+    if (minutes < 1) return "刚刚";
+    if (minutes < 60) return minutes + " 分钟前";
+    const hours = Math.floor(minutes / 60);
+    if (hours < 24) return hours + " 小时前";
+    const days = Math.floor(hours / 24);
+    return days + " 天前";
+  } catch {
+    return "";
+  }
+}
+
+function escapeAttr(str) {
+  return String(str).replace(/"/g, "&quot;").replace(/'/g, "&#39;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
 function setBusy(button, busy, text) {
   button.disabled = busy;
   button.dataset.label = button.dataset.label || button.textContent;
@@ -594,6 +723,48 @@ function setButtonLabel(button, text) {
   if (!button) return;
   button.textContent = text;
   delete button.dataset.label;
+}
+
+function updateGenerationProgress(current, total) {
+  lastProgressCurrent = current;
+  lastProgressTotal = total;
+  if (!generationProgressWrap || !generationProgressBar || !generationProgressPct) return;
+  generationProgressWrap.hidden = false;
+  const pct = total > 0 ? Math.round((current / total) * 100) : 0;
+  generationProgressBar.style.setProperty("--progress-width", pct + "%");
+  generationProgressPct.textContent = pct + "%";
+}
+
+function resetGenerationProgress() {
+  lastProgressCurrent = 0;
+  lastProgressTotal = 0;
+  if (generationProgressWrap) generationProgressWrap.hidden = true;
+  if (generationProgressBar) generationProgressBar.style.setProperty("--progress-width", "0%");
+  if (generationProgressPct) generationProgressPct.textContent = "0%";
+}
+
+function getFriendlyErrorHint(error) {
+  const msg = (error instanceof Error ? error.message : String(error)).toLowerCase();
+  if (msg.includes("timed out") || msg.includes("timeout") || msg.includes("超时")) {
+    return "生成超时，建议减少贴纸数量或尝试切换到其他 AI 提供商。";
+  }
+  if (msg.includes("api key") || msg.includes("unauthorized") || msg.includes("401") || msg.includes("403") || msg.includes("认证") || msg.includes("token")) {
+    return "AI 服务认证失败，请检查 prompt-config.json 中的 API Key 配置是否正确。";
+  }
+  if (msg.includes("rate limit") || msg.includes("429") || msg.includes("频率")) {
+    return "AI 服务触发频率限制，请稍后再试或降低并发数。";
+  }
+  if (msg.includes("network") || msg.includes("fetch") || msg.includes("econnrefused") || msg.includes("enotfound") || msg.includes("网络")) {
+    return "网络连接异常，请检查服务器网络和 AI 提供商服务状态。";
+  }
+  if (msg.includes("validation") || msg.includes("校验") || msg.includes("validate")) {
+    return "生成结果未通过微信规格校验，尝试更换风格或参考图。";
+  }
+  if (msg.includes("cancel") || msg.includes("取消")) {
+    return "生成已取消。";
+  }
+  // default
+  return "请检查 AI 提供商配置，或尝试使用其他提供商。如果持续失败，检查 prompt-config.json 配置。";
 }
 
 function setStatus(node, text, tone = "idle") {
@@ -1620,6 +1791,7 @@ async function generateWechatPack() {
   hasGenerationAttempted = true;
   setGenerateButtonsBusy(true);
   setStatus(generateState, "生成中...", "loading");
+  resetGenerationProgress();
   setNotice("正在生成微信表情并打包，请稍候...", "info");
   wechatAiZipLink.innerHTML = "";
   
@@ -1684,11 +1856,13 @@ async function generateWechatPack() {
       if (eventName === "start") {
         totalCount = Number(data?.count || stickerCount);
         setStatus(generateState, `生成中 (0/${totalCount})`, "loading");
+        updateGenerationProgress(0, totalCount);
         return;
       }
       if (eventName === "progress") {
         const current = Number(data?.current || 0);
         setStatus(generateState, `生成中 (${current}/${totalCount})`, "loading");
+        updateGenerationProgress(current, totalCount);
         return;
       }
       if (eventName === "sticker") {
@@ -1696,6 +1870,7 @@ async function generateWechatPack() {
         renderPreview(stickers, "loading");
         const current = Number(data?.current || stickers.length);
         setStatus(generateState, `生成中 (${current}/${totalCount})`, "loading");
+        updateGenerationProgress(current, totalCount);
         return;
       }
       if (eventName === "extra") {
@@ -1706,6 +1881,7 @@ async function generateWechatPack() {
         renderExtraAssets(extras, "loading");
         const current = Number(data?.current || 0);
         setStatus(generateState, `生成中 (${current}/${totalCount})`, "loading");
+        updateGenerationProgress(current, totalCount);
         return;
       }
       if (eventName === "done") {
@@ -1727,6 +1903,7 @@ async function generateWechatPack() {
         renderDownload(json?.packId, json?.downloadUrl, json?.downloadFilename);
         renderActions(json);
         persistLastGeneratedResult(json);
+        resetGenerationProgress();
         setStatus(generateState, "生成完成", "success");
         setNotice("表情包已生成完成，可以先预览，再下载 ZIP。", "success");
         setFeedback(
@@ -1745,14 +1922,17 @@ async function generateWechatPack() {
         sseAbortController = null;
         if (msg.includes("取消")) {
           cancelRequested = true;
+          resetGenerationProgress();
           setStatus(generateState, "已取消", "error");
           setNotice("已取消本次生成。", "error");
           setFeedback("本次生成已取消，可直接点击重新生成再次尝试。", "error");
           setGenerateButtonsBusy(false);
           return;
         }
-        const err = new Error(msg || "生成失败，请稍后重试。");
+        const hint = getFriendlyErrorHint(msg);
+        const err = new Error(msg || "生成失败");
         err.isServerError = true;
+        err.userHint = hint;
         throw err;
       }
     };
@@ -1825,7 +2005,9 @@ async function generateWechatPack() {
         renderMetadataPreview(null, "error");
       }
       setStatus(generateState, "生成失败", "error");
-      setNotice(error instanceof Error ? error.message : "生成失败，请稍后重试。", "error");
+      const errMsg = error instanceof Error ? error.message : "生成失败";
+      const errHint = error?.userHint || getFriendlyErrorHint(error);
+      setNotice(errMsg + " " + errHint, "error");
       renderPreview([], "error");
       renderExtraAssets({}, "error");
       setFeedback("本次生成失败，可直接点击重新生成再次尝试。", "error");
@@ -2089,6 +2271,10 @@ resetSubmit.addEventListener("click", () => {
   resetAllState();
 });
 
+clearHistoryBtn?.addEventListener("click", () => {
+  clearPackHistory();
+});
+
 originalPreview.addEventListener("error", () => {
   originalPreview.removeAttribute("src");
   syncOriginalPreviewSlot();
@@ -2133,6 +2319,7 @@ async function initApp() {
   resetGenerationResult({ clearPersisted: false });
   setPromptHint(currentStyles);
   restorePersistedPackResult();
+  renderPackHistory();
 }
 
 initApp();

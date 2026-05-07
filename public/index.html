@@ -68,7 +68,7 @@
         </article>
 
         <article id="importSourceSection" class="card step-card" hidden>
-          <div class="step-index">01B</div>
+          <div class="step-index">01</div>
           <div class="step-head">
             <h2>导入已有表情图</h2>
             <p class="muted">已有成品图片时，可直接批量导入并自动规范为微信 240 × 240 表情图。</p>
@@ -267,6 +267,10 @@
             <button id="resetSubmit" type="button" class="secondary">一键重置</button>
           </form>
           <div id="generateState" class="status-chip" aria-live="polite">等待生成</div>
+          <div id="generationProgressWrap" class="generation-progress-wrap" hidden>
+            <div class="generation-progress-bar" id="generationProgressBar"></div>
+            <span id="generationProgressPct" class="generation-progress-pct">0%</span>
+          </div>
         </article>
 
         <article class="card step-card">
@@ -341,6 +345,18 @@
       </section>
     </main>
     <div id="toastNotice" class="toast-notice" data-tone="info" data-visible="false" aria-live="assertive"></div>
+
+    <section class="card step-card" id="historySection" hidden>
+      <div class="step-index">H</div>
+      <div class="step-head">
+        <h2>历史记录</h2>
+        <p class="muted">最近生成的表情包，点击可重新下载。最多保留最近 10 个。</p>
+      </div>
+      <div class="step-body">
+        <button id="clearHistory" type="button" class="secondary">清空历史</button>
+      </div>
+      <div id="historyList" class="history-list"></div>
+    </section>
 
     <script src="/app.js"></script>
   </body>

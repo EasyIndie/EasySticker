@@ -38,5 +38,20 @@
     "tsup": "^8.4.0",
     "typescript": "^5.8.2",
     "vitest": "^3.0.9"
-  }
+  },
+  "description": "AI-powered WeChat sticker auto-production pipeline \u2014 upload reference, generate expressions, auto-validate, one-click ZIP export",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "ssh://gogit@gogs.home.jokerhub.cn:3333/joker/EasySticker.git"
+  },
+  "keywords": [
+    "wechat",
+    "sticker",
+    "emoji",
+    "ai",
+    "expression-pack",
+    "opensource",
+    "self-hosted"
+  ]
 }

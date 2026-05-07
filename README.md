@@ -1,182 +1,230 @@
-# EasySticker
+<p align="center">
+  <img src="docs/assets/logo.svg" width="120" alt="EasySticker" />
+</p>
 
-Node.js + TypeScript 的表情包自动化生产与打包服务（Fastify）。
+<h1 align="center">EasySticker</h1>
 
-## 本地运行
+<p align="center">
+  <strong>微信表情包 AI 自动化生产线</strong>
+  <br />
+  上传一张参考图 → AI 生成全套表情 → 自动校验打包 → 一键下载 ZIP
+</p>
+
+<p align="center">
+  <a href="#-quick-start">快速开始</a> •
+  <a href="#-features">功能</a> •
+  <a href="#-configuration">配置</a> •
+  <a href="#-architecture">架构</a> •
+  <a href="#-faq">FAQ</a>
+</p>
+
+<p align="center">
+  <span style="color: #07c160;">⚡ 开源 · 自托管 · Node.js</span>
+  <br />
+  <span>支持 Doubao · OpenAI · HuggingFace · ComfyUI · 自定义 HTTP</span>
+</p>
+
+---
+
+## 📸 Demo
+
+| Web UI 首页 | AI 生图流程 | 预览与下载 |
+|-------------|-------------|-----------|
+| ![Web UI](docs/screenshots/ui-hero.png) | ![AI Generate](docs/screenshots/ai-generate.png) | ![Preview](docs/screenshots/preview.png) |
+
+> 💡 访问 [Demo 站点](https://home.jokerhub.cn:3002) 在线体验（需自备 AI API Key）
+
+---
+
+## 🎯 解决的问题
+
+制作一套微信表情包需要经历「设计→切图→调尺寸→补封面/图标/横幅→写元数据→校验→打包」一系列繁琐步骤。EasySticker 把整个过程压缩为 **上传 → 生成 → 下载** 三步。
+
+**核心价值：**
+- ⏱ **从 2-3 小时 → 5 分钟**：手工做一套 24 张表情包从设计到出包至少 2 小时，AI 生成只需几分钟
+- 📐 **自动微信合规**：240×240 表情图、750×400 横幅、50×50 图标、PNG 格式、压缩级别……全部自动处理
+- 🧩 **配套资源一站式补齐**：封面图、聊天面板图标、详情页横幅、赞赏引导图/答谢图，一次生成全齐
+- 🔐 **数据不外传**：自托管部署，参考图和生成结果全部留在你自己的服务器
+
+---
+
+## ✨ Features
+
+### 🎨 AI 生成流程
+| 功能 | 说明 |
+|------|------|
+| **图生图** | 上传参考人物/角色，AI 基于角色生成多组情绪表情 |
+| **多风格** | 支持 Q 版可爱、像素风、手绘涂鸦、3D 毛绒等多种风格（可自定义） |
+| **多 AI 后端** | 豆包大模型、OpenAI、HuggingFace、ComfyUI、自定义 HTTP，自由切换 |
+| **SSE 实时推送** | 生成进度逐张展示，含进度条和百分比 |
+| **智能提示词** | 上传参考图后自动生成推荐提示词 |
+| **赞赏图** | 可选开启赞赏，自动生成引导图和答谢图 |
+
+### 📦 导入流程
+| 功能 | 说明 |
+|------|------|
+| **批量导入** | PNG/JPG/WebP/GIF 批量导入，自动缩放 |
+| **自动补齐** | 补全封面、图标、横幅、赞赏图 |
+| **元数据编辑** | 标题、作者、版权、版本号、赞赏语，完整可编辑 |
+
+### 🔧 导出与校验
+| 功能 | 说明 |
+|------|------|
+| **微信规格校验** | 自动校验尺寸、格式、压缩级别，确保符合开放平台规范 |
+| **结构化 ZIP** | 聊天表情 + 封面图标 + 横幅 + metadata.json，开箱即提交 |
+| **多平台** | 后端同时支持 WeChat / Telegram / WhatsApp 规格校验 |
+| **Swagger API** | 完整的 OpenAPI 文档（[localhost:3000/docs](http://localhost:3000/docs)） |
+
+---
+
+## 🚀 Quick Start
+
+### 前置条件
+- Node.js 20+
+- npm
+
+### 1. 克隆并安装
+```bash
+git clone https://github.com/<your>/EasySticker.git
+cd EasySticker
+npm install
+```
+
+### 2. 配置 AI 提供商
+复制配置模板并填入你的 API Key：
 
 ```bash
-# 安装依赖
-npm i
-
-# 开发模式运行 (热更新)
-npm run dev
-
-# 生产模式运行
-npm run prod
+cp prompt-config.default.json prompt-config.json
 ```
 
-- Web UI: http://localhost:3000/
-- API 文档: http://localhost:3000/docs
-
-## 配置文件 (prompt-config.json)
-
-所有系统和 AI 相关的参数均通过根目录下的 JSON 配置文件进行集中管理。
-
-系统启动时会优先读取 **`prompt-config.json`**（用户自定义配置，建议添加到 `.gitignore`）。如果不存在或部分字段缺失，则会自动回退并深度合并 **`prompt-config.default.json`** 中的出厂默认配置。
-
-### 1. 服务器与系统配置
-在配置文件的 `server` 节点下可以设置运行端口、数据目录和日志级别等：
-```json
-{
-  "server": {
-    "host": "0.0.0.0",
-    "port": 3000,
-    "dataDir": "data",
-    "logLevel": "info"
-  }
-}
-```
-
-### 2. AI 模型提供商配置
-系统支持同时配置多个 AI 模型提供商，并在前端自由切换（生产环境下会自动隐藏 mock 选项）。在配置文件的 `ai` 节点下进行配置：
+编辑 `prompt-config.json`，配置至少一个 AI 提供商（以火山引擎豆包为例）：
 
 ```json
 {
   "ai": {
-    "defaultProvider": "doubao", // 默认选中的提供商 ID
-    "referenceMode": "base64",   // 参考图传输模式: base64 | url | assetId | multipart
+    "defaultProvider": "doubao",
     "providers": {
-      // 1. 豆包大模型 (火山引擎 Ark)
       "doubao": {
         "type": "doubao",
         "name": "豆包大模型",
         "baseUrl": "https://ark.cn-beijing.volces.com/api/v3",
         "model": "doubao-seedream-5-0-260128",
         "apiKey": "YOUR_ARK_API_KEY"
-      },
-      // 2. OpenAI 图片生成
-      "openai": {
-        "type": "openai",
-        "name": "OpenAI 图片生成",
-        "baseUrl": "https://api.openai.com/v1",
-        "model": "gpt-image-1.5",
-        "apiKey": "YOUR_OPENAI_API_KEY",
-        "background": "transparent",
-        "quality": "auto",
-        "outputFormat": "png",
-        "moderation": "auto",
-        "inputFidelity": "high"
-      },
-      // 3. HuggingFace Inference
-      "hf": {
-        "type": "hf",
-        "name": "HuggingFace",
-        "endpoint": "https://router.huggingface.co/hf-inference/models/black-forest-labs/FLUX.1-schnell",
-        "apiKey": "YOUR_HF_TOKEN"
-      },
-      // 4. 通用 HTTP 服务 (对接私有部署或第三方 API)
-      "my-custom-api": {
-        "type": "http",
-        "name": "公司内部模型",
-        "endpoint": "http://internal-api.company.com/generate",
-        "apiKey": "YOUR_CUSTOM_KEY"
       }
     }
   }
 }
 ```
-**说明：**
-- 每个 Provider 必须声明底层驱动 `type`（如 `doubao`, `hf`, `http`, `mock` 等）。
-- `key`（如上文的 `my-custom-api`）可以自由命名，作为该提供商的唯一 ID。
-- `name` 字段用于前端下拉框的友好展示。
-- 只有参数配置完整（如填写了正确的 `apiKey` 或 `endpoint`）的提供商才会在前端页面中显示。
-- OpenAI Provider 会在无参考图时调用图片生成接口，在有参考图时调用图片编辑接口；本项目默认通过 `referenceMode: "base64"` 传递参考图。
 
-## AI 最小流程（微信）
-
-接口：
-- `POST /api/wechat/prompt`：返回提示词模板与风格列表
-- `POST /api/wechat/generate/start`：发起批量生成任务
-- `GET /api/wechat/generate/stream`：获取生成进度的 SSE 数据流
-
-## 本地 mock AI HTTP 服务（联调用）
-
-你可以启动一个独立的 Mock HTTP 服务来测试 `http` 类型的提供商：
-
+### 3. 启动
 ```bash
-npm run mock-ai
-```
-配合使用：在 `prompt-config.json` 中添加一个 `type: "http"` 的 provider，并将其 `endpoint` 指向 `http://127.0.0.1:8787`。
+# 开发模式（热更新）
+npm run dev
 
-HTTP 契约详情见：
-- [ai-http-contract.md](file:///Users/bytedance/Documents/EasySticker/spec/ai-http-contract.md)
-
-## 本地 ComfyUI 接入
-
-如果使用 ComfyUI Desktop，可以让 EasySticker 在真正生成时自动启动本地适配器，无需手动常驻 `comfy-adapter`：
-
-```json
-{
-  "ai": {
-    "defaultProvider": "comfy-local",
-    "referenceMode": "base64",
-    "imageSize": { "width": 512, "height": 512 },
-    "settings": {
-      "timeoutMs": 300000,
-      "retryMax": 0,
-      "retryBaseMs": 1000
-    },
-    "providers": {
-      "comfy-local": {
-        "type": "http",
-        "name": "本地 ComfyUI",
-        "endpoint": "http://127.0.0.1:8787/generate",
-        "autoStart": {
-          "command": "npm",
-          "args": ["run", "comfy-adapter"],
-          "cwd": ".",
-          "healthUrl": "http://127.0.0.1:8787/health",
-          "cancelUrl": "http://127.0.0.1:8787/cancel",
-          "startupTimeoutMs": 20000,
-          "idleMs": 120000
-        }
-      }
-    }
-  }
-}
+# 生产模式
+npm run prod
 ```
 
-使用前只需要保持 ComfyUI Desktop 运行在 `http://127.0.0.1:8000`，并确保 `comfy/workflow_api.json` 指向可用 checkpoint。`autoStart.idleMs` 表示适配器空闲多久后自动停止；设为 `0` 可禁用自动停止。`cancelUrl` 用于页面离开或手动取消时中断本地 ComfyUI 当前任务。
+打开 http://localhost:3000/ 即可使用。
 
-### 本地 ComfyUI 表情包质量档位
-
-`comfy-local` provider 支持通过 `comfy.qualityPreset` 选择本地图生图参数，适合微信人物表情包的默认档位如下：
-
-```json
-{
-  "comfy": {
-    "qualityPreset": "standard",
-    "qualityPresets": {
-      "fast": { "steps": 16, "cfg": 5.5, "denoise": 0.4, "samplerName": "dpmpp_2m", "scheduler": "karras" },
-      "standard": { "steps": 22, "cfg": 5.5, "denoise": 0.45, "samplerName": "dpmpp_2m", "scheduler": "karras" },
-      "quality": { "steps": 28, "cfg": 6, "denoise": 0.5, "samplerName": "dpmpp_2m", "scheduler": "karras" },
-      "expressive": { "steps": 26, "cfg": 6.5, "denoise": 0.6, "samplerName": "dpmpp_2m", "scheduler": "karras" }
-    }
-  }
-}
-```
-
-调参建议：人物不像参考图时降低 `denoise`；动作和表情不够夸张时提高到 `expressive`；最终批量出图时用 `quality`。如果下载了更适合贴纸的 checkpoint，可在 `comfy.checkpoint` 或对应 preset 里填写 ComfyUI 识别到的模型名。
-
-## Docker 部署
-
-在构建和运行 Docker 容器时，建议通过挂载卷的方式将你的自定义 `prompt-config.json` 注入到容器中：
-
+### Docker 部署
 ```bash
 docker build -t easysticker .
-
 docker run -d -p 3000:3000 \
   -v "$PWD/data:/app/data" \
   -v "$PWD/prompt-config.json:/app/prompt-config.json" \
   easysticker
 ```
+
+---
+
+## 🔧 支持的 AI 提供商
+
+| 提供商 | 类型 | 说明 | 成本 |
+|--------|------|------|------|
+| **豆包大模型** (火山引擎) | `doubao` | 中文理解好，生图质量稳定，推荐优先使用 | 按量付费（便宜） |
+| **OpenAI** | `openai` | DALL-E / gpt-image-1.5，参考图强编辑 | 按量付费（中等） |
+| **HuggingFace** | `hf` | FLUX.1-schnell，开源模型，免费额度 | 免费额度 / 付费 |
+| **ComfyUI 本地** | `http` | 本地图生图，数据不出门，可精调参数 | 自备 GPU |
+| **自定义 HTTP** | `http` | 对接私有部署或第三方 API | 自定 |
+
+配置详情见 [prompt-config.json 参考文档](spec/prompt-config-reference.md)（或当前 README 下方完整说明）。
+
+---
+
+## 🏗 Architecture
+
+```
+┌─────────────┐    ┌──────────────────┐    ┌──────────────┐
+│   Web UI    │    │   Fastify API    │    │  AI Provider │
+│  (原生 JS)   │───▶│  (Node.js + TS)  │────│  (插件化)     │
+│             │    │                  │    │ ┌──────────┐ │
+│  · 上传参考图 │    │  · 图生图流水线   │    │ │ Doubao   │ │
+│  · 编辑信息  │    │  · 表情校验      │    │ │ OpenAI   │ │
+│  · 预览下载  │    │  · ZIP 打包     │    │ │ HF       │ │
+│  · 历史记录  │    │  · SSE 流推送   │    │ │ ComfyUI  │ │
+└─────────────┘    │  · 元数据注入    │    │ │ HTTP     │ │
+                   └───────┬──────────┘    │ └──────────┘ │
+                           │                └──────────────┘
+                           ▼
+                   ┌──────────────┐
+                   │  Sharp 图片   │
+                   │  处理引擎     │
+                   │  缩放/校验/    │
+                   │  格式转换     │
+                   └──────────────┘
+```
+
+**技术栈：** Node.js 20 · TypeScript · Fastify · Sharp · SSE · Docker
+
+---
+
+## 📋 配置参考
+
+所有系统参数通过 `prompt-config.json` 集中管理，默认可选配置文件。如果该文件不存在，系统将自动使用 `prompt-config.default.json` 中的出厂默认值并深度合并。
+
+### 关键配置
+- **server.port / host**：服务监听地址
+- **ai.defaultProvider**：默认 AI 提供商 ID
+- **ai.providers**：各 AI 提供商的 endpoint、apiKey、model 等
+- **ai.imageSize**：生成图的宽高（默认 1024×1024）
+- **emotions**：情绪词列表，按顺序分配给每张贴纸
+- **templates.sticker / templates.extra**：提示词模板（可用 `{prompt}`, `{emotion}`, `{style}`, `{customPrompt}` 变量）
+
+完整配置说明见 **[prompt-config.default.json](prompt-config.default.json)** 文件注释。
+
+---
+
+## 🤔 FAQ
+
+**Q: 需要自己的 AI API Key 吗？**
+A: 是的。EasySticker 不自带 AI 能力，需要配置至少一个 AI 提供商（豆包、OpenAI、HF 等）。启动 Mock 模式可用于联调测试。
+
+**Q: 生成的图片存储在哪里？**
+A: 全部存储在服务器的 `data/` 目录下。TTL 1 小时后自动清理。历史记录存在浏览器 localStorage 中。
+
+**Q: 支持微信表情开放平台提审吗？**
+A: 输出 ZIP 包完全符合微信表情开放平台的上架规范，可以直接用该 ZIP 提交审核。目前不支持通过 API 自动提审。
+
+**Q: 支持商用吗？**
+A: 项目采用 MIT 许可证，可自由使用和修改。注意：生成的图片版权取决于底层的 AI 模型服务条款，请自行确认。
+
+**Q: 生图质量不满意怎么办？**
+A: 可以调整提示词、更换风格、切换 AI 提供商。ComfyUI 用户可通过 qualityPreset 调参（fast / standard / quality / expressive）。
+
+---
+
+## 🤝 社区
+
+- 提交 Issue 或 PR：[GitHub Issues](https://github.com/<your>/EasySticker/issues)
+- 技术交流 / 问题讨论：[Discussion](https://github.com/<your>/EasySticker/discussions)
+
+## 📄 License
+
+MIT © 2025 EasySticker Contributors
+
+---
+
+<p align="center">
+  <sub>Made with ❤️ for the WeChat sticker community</sub>
+</p>
