@@ -3,7 +3,7 @@ import http from "node:http";
 import os from "node:os";
 import path from "node:path";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
-import * as promptConfigModule from "../src/services/wechat/promptConfig";
+import * as promptConfigModule from "../src/services/generate/promptConfig";
 import sharp from "sharp";
 import { buildApp } from "../src/app";
 
@@ -133,7 +133,7 @@ describe("pipeline", () => {
 
     const promptRes = await app.inject({
       method: "POST",
-      url: "/api/wechat/prompt",
+      url: "/api/generate/prompt",
       payload: { referenceAssetId: upload.uploadId },
       headers: { "content-type": "application/json" }
     });
@@ -141,7 +141,7 @@ describe("pipeline", () => {
 
     const startRes = await app.inject({
       method: "POST",
-      url: "/api/wechat/generate/start",
+      url: "/api/generate/start",
       payload: {
         referenceAssetId: upload.uploadId,
         prompt: "test",
@@ -166,7 +166,7 @@ describe("pipeline", () => {
     expect(typeof startJson.taskId).toBe("string");
     const streamRes = await app.inject({
       method: "GET",
-      url: `/api/wechat/generate/stream?taskId=${encodeURIComponent(startJson.taskId)}`
+      url: `/api/generate/stream?taskId=${encodeURIComponent(startJson.taskId)}`
     });
     expect(streamRes.statusCode).toBe(200);
     const events = parseSseEvents(streamRes.body);
@@ -259,7 +259,7 @@ describe("pipeline", () => {
 
     const importRes = await app.inject({
       method: "POST",
-      url: "/api/wechat/import",
+      url: "/api/generate/import",
       payload: mp.body,
       headers: { "content-type": `multipart/form-data; boundary=${mp.boundary}` }
     });
@@ -365,7 +365,7 @@ describe("pipeline", () => {
 
       const startRes = await app.inject({
         method: "POST",
-        url: "/api/wechat/generate/start",
+        url: "/api/generate/start",
         payload: { referenceAssetId: upload.uploadId, prompt: "http-test", provider: "http", stickerCount: 8, styles: ["flat"] },
         headers: { "content-type": "application/json" }
       });
@@ -373,7 +373,7 @@ describe("pipeline", () => {
       const startJson = startRes.json();
       const streamRes = await app.inject({
         method: "GET",
-        url: `/api/wechat/generate/stream?taskId=${encodeURIComponent(startJson.taskId)}`
+        url: `/api/generate/stream?taskId=${encodeURIComponent(startJson.taskId)}`
       });
       expect(streamRes.statusCode).toBe(200);
       const events = parseSseEvents(streamRes.body);

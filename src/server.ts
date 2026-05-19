@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { buildApp } from "./app";
-import { loadPromptConfig } from "./services/wechat/promptConfig";
+import { loadPromptConfig } from "./services/generate/promptConfig";
 
 async function main() {
   const config = loadPromptConfig();

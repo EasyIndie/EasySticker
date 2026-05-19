@@ -63,10 +63,22 @@ const historySection = document.getElementById("historySection");
 const historyList = document.getElementById("historyList");
 const clearHistoryBtn = document.getElementById("clearHistory");
 const originalPreviewPlaceholder = document.getElementById("originalPreviewPlaceholder");
+const platformSelector = document.getElementById("platformSelector");
+const platformRadios = document.querySelectorAll('input[name="platform"]');
 
-let DEFAULT_STICKER_COUNT = 8;
-let MIN_STICKER_COUNT = 8;
-let MAX_STICKER_COUNT = 24;
+function getSelectedPlatform() {
+  const checked = document.querySelector('input[name="platform"]:checked');
+  return checked ? checked.value : "wechat_stickers";
+}
+
+function setSelectedPlatform(value) {
+  platformRadios.forEach(r => { r.checked = r.value === value; });
+}
+
+function setPlatformDisabled(disabled) {
+  platformRadios.forEach(r => { r.disabled = disabled; });
+}
+
 let DEFAULT_STYLE_OPTIONS = ["扁平插画", "3D 卡通", "日系 Q 版", "像素风", "国潮风"];
 const LAST_WECHAT_PACK_STORAGE_KEY = "easysticker:last-wechat-pack";
 const PACK_HISTORY_STORAGE_KEY = "easysticker:pack-history";
@@ -113,13 +125,80 @@ const REWARD_EXTRA_ASSET_DEFS = [
     wide: true
   }
 ];
+
+// ========== Multi-Platform Support ==========
+const PLATFORM_SPECS = {
+  wechat_stickers: {
+    minCount: 8, maxCount: 24, defaultCount: 8,
+    showsStyle: true, showsPrompt: true,
+    showsReward: true, showsExtraAssets: true, showsMetadata: true,
+    showsTitle: true, showsAuthor: true, showsVersion: true, showsCopyright: true,
+    previewLabel: "240 × 240", fileFormat: "PNG",
+    extraAssetDefs: [...BASE_EXTRA_ASSET_DEFS, ...REWARD_EXTRA_ASSET_DEFS],
+    outputFormat: "png",
+    exportHint: "此 ZIP 中包含符合微信表情包规范的资源文件。",
+    platformLabel: "微信表情包",
+    countHint: "推荐 8-24 张，系统会额外补齐封面、图标和横幅资源。",
+    heroText: "上传参考图，补充提示词，一键生成可预览、可下载的微信表情包。",
+    importDesc: "已有成品图片时，可直接批量导入并自动规范为微信 240 × 240 表情图。",
+    importHint: "导入后会统一居中、等比缩放、补透明边，并转换为符合微信表情包规格的 PNG。",
+    importHeading: "导入已有表情图",
+    importUploadText: "支持 PNG、JPG、WebP、GIF，建议一次导入 8-24 张。",
+    importAccept: "image/png,image/jpeg,image/webp,image/gif",
+    generateDesc: "基于上传图和提示词自动生成并打包。"
+  },
+  telegram_static: {
+    minCount: 1, maxCount: 50, defaultCount: 8,
+    showsStyle: true, showsPrompt: true,
+    showsReward: false, showsExtraAssets: false, showsMetadata: false,
+    showsTitle: true, showsAuthor: true, showsVersion: false, showsCopyright: false,
+    previewLabel: "≤ 512 × 512", fileFormat: "PNG",
+    extraAssetDefs: [],
+    outputFormat: "png",
+    exportHint: "此 ZIP 中包含 PNG 贴纸文件，可直接用于 Telegram。",
+    platformLabel: "Telegram 贴纸",
+    countHint: "推荐 1-50 张。",
+    heroText: "上传参考图，补充提示词，一键生成可预览、可下载的 Telegram 贴纸包。",
+    importDesc: "已有成品图片时，可直接批量导入并自动规范为 Telegram 贴纸规格。",
+    importHint: "导入后会统一居中、等比缩放、补透明边，并转换为符合 Telegram 贴纸规格的 PNG。",
+    importHeading: "导入贴纸图",
+    importUploadText: "支持 PNG，建议一次导入 1-50 张。",
+    importAccept: "image/png",
+    generateDesc: "基于上传图和提示词自动生成并打包。"
+  },
+  whatsapp_webp: {
+    minCount: 1, maxCount: 30, defaultCount: 8,
+    showsStyle: true, showsPrompt: true,
+    showsReward: false, showsExtraAssets: false, showsMetadata: false,
+    showsTitle: true, showsAuthor: true, showsVersion: false, showsCopyright: false,
+    previewLabel: "512 × 512", fileFormat: "WebP",
+    extraAssetDefs: [],
+    outputFormat: "webp",
+    exportHint: "此 ZIP 中包含 .webp 贴纸文件，可直接用于 WhatsApp。",
+    platformLabel: "WhatsApp 贴纸",
+    countHint: "推荐 1-30 张。",
+    heroText: "上传参考图，补充提示词，一键生成可预览、可下载的 WhatsApp 贴纸包。",
+    importDesc: "已有成品图片时，可直接批量导入并自动规范为 WhatsApp 贴纸规格。",
+    importHint: "导入后会统一居中、等比缩放、补透明边，并转换为符合 WhatsApp 贴纸规格的 WebP。",
+    importHeading: "导入贴纸图",
+    importUploadText: "支持 WebP，建议一次导入 1-30 张。",
+    importAccept: "image/webp",
+    generateDesc: "基于上传图和提示词自动生成并打包。"
+  }
+};
+let currentPlatform = "wechat_stickers";
+
+let DEFAULT_STICKER_COUNT = PLATFORM_SPECS.wechat_stickers.defaultCount;
+let MIN_STICKER_COUNT = PLATFORM_SPECS.wechat_stickers.minCount;
+let MAX_STICKER_COUNT = PLATFORM_SPECS.wechat_stickers.maxCount;
+let STICKER_PREVIEW_SPEC = PLATFORM_SPECS.wechat_stickers.previewLabel;
+
 const PLACEHOLDER_STATE_TEXT = {
   idle: "等待生成",
   loading: "生成中，完成后自动展示",
   error: "生成失败，可点击重新生成",
   success: "本次结果未返回该资源"
 };
-const STICKER_PREVIEW_SPEC = "240 × 240";
 const FIELD_A11Y_CONFIGS = {
   prompt: {
     key: "prompt",
@@ -248,6 +327,102 @@ const CONFIRM_CARD_STATE = {
   }
 };
 
+// ========== Platform UI Sync ==========
+function syncPlatformUI() {
+  const spec = PLATFORM_SPECS[currentPlatform];
+
+  // Update global limits
+  MIN_STICKER_COUNT = spec.minCount;
+  MAX_STICKER_COUNT = spec.maxCount;
+  DEFAULT_STICKER_COUNT = spec.defaultCount;
+  STICKER_PREVIEW_SPEC = spec.previewLabel;
+
+  // Update count stepper attributes
+  if (wechatAiCount) {
+    wechatAiCount.min = spec.minCount;
+    wechatAiCount.max = spec.maxCount;
+    const currentVal = Number(wechatAiCount.value || DEFAULT_STICKER_COUNT);
+    setCountValue(currentVal);
+  }
+
+  // Show/hide platform-specific fields
+  const rewardField = document.getElementById("wechatAiRewardField");
+  if (rewardField) rewardField.hidden = !spec.showsReward;
+
+  const importExtraSection = document.getElementById("importExtraSection");
+  if (importExtraSection) importExtraSection.hidden = !spec.showsExtraAssets;
+
+  const metadataSection = document.getElementById("wechatAiMetadataSection");
+  if (metadataSection) metadataSection.hidden = !spec.showsMetadata;
+
+  const versionField = document.getElementById("wechatAiVersionField");
+  if (versionField) versionField.hidden = !spec.showsVersion;
+
+  const copyrightField = document.getElementById("wechatAiCopyrightField");
+  if (copyrightField) copyrightField.hidden = !spec.showsCopyright;
+
+  const titleField = document.getElementById("wechatAiTitleField");
+  if (titleField) titleField.hidden = !spec.showsTitle;
+
+  const authorField = document.getElementById("wechatAiAuthorField");
+  if (authorField) authorField.hidden = !spec.showsAuthor;
+
+  // Update count hint text
+  const countHint = document.getElementById("wechatAiCountHint");
+  if (countHint) countHint.textContent = spec.countHint;
+
+  // Update hero elements
+  const heroBadge = document.getElementById("heroBadge");
+  if (heroBadge) heroBadge.textContent = spec.platformLabel + " AI 表情流程";
+
+  const heroText = document.getElementById("heroText");
+  if (heroText) heroText.textContent = spec.heroText;
+
+  // Update import section
+  const importSectionDesc = document.getElementById("importSectionDesc");
+  if (importSectionDesc) importSectionDesc.textContent = spec.importDesc;
+
+  const importHint = document.getElementById("importHint");
+  if (importHint) importHint.textContent = spec.importHint;
+
+  const importHeading = document.getElementById("importHeading");
+  if (importHeading) importHeading.textContent = spec.importHeading;
+
+  const importUploadText = document.getElementById("importUploadText");
+  if (importUploadText) importUploadText.textContent = spec.importUploadText;
+
+  const importFiles = document.getElementById("importFiles");
+  if (importFiles) importFiles.accept = spec.importAccept;
+
+  // Update generate section description
+  const generateSectionDesc = document.getElementById("generateSectionDesc");
+  if (generateSectionDesc) generateSectionDesc.textContent = spec.generateDesc;
+
+  // Update prompt hint
+  setPromptHint(currentStyles);
+
+  // Update preview spec labels on existing rendered items
+  document.querySelectorAll(".preview-spec").forEach(el => {
+    el.textContent = STICKER_PREVIEW_SPEC;
+  });
+
+  // Lock/unlock platform selector
+  setPlatformDisabled(hasGenerationAttempted && lastPackResult ? true : false);
+  if (getSelectedPlatform() !== currentPlatform) {
+    setSelectedPlatform(currentPlatform);
+  }
+
+  // Reset validation since limits changed
+  clearGenerateValidation();
+
+  // If reward was enabled but platform doesn't support, disable it
+  if (!spec.showsReward && currentRewardEnabled) {
+    currentRewardEnabled = false;
+    if (wechatAiRewardEnabled) wechatAiRewardEnabled.checked = false;
+    syncRewardFields();
+  }
+}
+
 function getFieldConfig(target) {
   if (!target?.id) return null;
   return Object.values(FIELD_A11Y_CONFIGS).find((config) => config.target?.id === target.id) ?? null;
@@ -287,9 +462,6 @@ function syncGenerateErrorSummary() {
   }
 
   generateErrorSummary.hidden = false;
-  if (typeof generateErrorSummary.focus === "function") {
-    generateErrorSummary.focus();
-  }
 }
 
 function jumpToInvalidField(fieldKey) {
@@ -335,9 +507,16 @@ function initializeFieldAccessibility() {
 
 function setPromptHint(styles = []) {
   const count = Number(wechatAiCount.value || DEFAULT_STICKER_COUNT);
+  const spec = PLATFORM_SPECS[currentPlatform];
+  let extraText = "";
+  if (spec.showsExtraAssets) {
+    extraText = currentRewardEnabled
+      ? "，并附带赞赏引导图和感谢图"
+      : "，并自动补齐封面、图标和横幅";
+  }
   promptHint.textContent = Array.isArray(styles) && styles.length
-    ? `已加载推荐风格：${styles.join("、")}。建议在提示词中补充主体、情绪、动作和背景限制。当前生成 ${count} 张表情${currentRewardEnabled ? "，并附带赞赏引导图和感谢图" : ""}。`
-    : `建议在提示词中补充主体、情绪、动作和背景限制。当前生成 ${count} 张表情，并自动补齐封面、图标和横幅${currentRewardEnabled ? "，以及赞赏引导图和感谢图" : ""}。`;
+    ? `已加载推荐风格：${styles.join("、")}。建议在提示词中补充主体、情绪、动作和背景限制。当前生成 ${count} 张表情${extraText}。`
+    : `建议在提示词中补充主体、情绪、动作和背景限制。当前生成 ${count} 张表情${extraText}。`;
 }
 
 function syncOriginalPreviewSlot() {
@@ -377,9 +556,9 @@ function renderStyleOptions(styles = DEFAULT_STYLE_OPTIONS) {
   availableStyles = Array.isArray(styles) && styles.length ? [...new Set(styles.filter(Boolean))] : [...DEFAULT_STYLE_OPTIONS];
   currentStyles = currentStyles.filter((item) => availableStyles.includes(item));
   if (!currentStyles.length) {
-    currentStyles = [availableStyles[0]]; // 默认选择第一个风格
+    currentStyles = [availableStyles[0]];
   } else if (currentStyles.length > 1) {
-    currentStyles = [currentStyles[0]]; // 强制单选
+    currentStyles = [currentStyles[0]];
   }
 
   wechatAiStyleOptions.innerHTML = "";
@@ -393,7 +572,6 @@ function renderStyleOptions(styles = DEFAULT_STYLE_OPTIONS) {
     button.setAttribute("aria-describedby", "wechatAiStyleChipHelp wechatAiStyleHint");
     button.textContent = style;
     button.addEventListener("click", () => {
-      // 单选逻辑：点击任何项都直接变为唯一选中项
       currentStyles = [style];
       setFieldInvalid(wechatAiStyleOptions, false);
       renderStyleOptions(availableStyles);
@@ -431,6 +609,11 @@ function sanitizePersistedPackResult(raw) {
     return null;
   }
 
+  // Backward compat: if no platform field, default to wechat_stickers
+  const platform = (typeof raw.platform === "string" && PLATFORM_SPECS[raw.platform])
+    ? raw.platform
+    : "wechat_stickers";
+
   const stickers = Array.isArray(result.stickers)
     ? result.stickers
         .filter((item) => item && typeof item === "object" && typeof item.label === "string" && typeof item.url === "string")
@@ -443,6 +626,7 @@ function sanitizePersistedPackResult(raw) {
     : [];
 
   return {
+    platform,
     uploadId: typeof raw.uploadId === "string" ? raw.uploadId : null,
     prompt: typeof raw.prompt === "string" ? raw.prompt : "",
     provider: typeof raw.provider === "string" ? raw.provider : undefined,
@@ -490,7 +674,8 @@ function persistLastGeneratedResult(result) {
   if (!storage || !result?.packId || !result?.downloadUrl) return;
 
   const payload = {
-    version: 1,
+    version: 2,
+    platform: currentPlatform,
     savedAt: new Date().toISOString(),
     uploadId: currentUploadId,
     prompt: wechatAiPrompt.value,
@@ -546,6 +731,10 @@ function restorePersistedPackResult() {
       return false;
     }
 
+    // Restore platform
+    currentPlatform = restored.platform;
+    setSelectedPlatform(currentPlatform);
+
     currentUploadId = restored.uploadId;
     if (restored.provider) {
       currentAiProvider = restored.provider;
@@ -565,6 +754,8 @@ function restorePersistedPackResult() {
     wechatAiCount.value = String(restored.stickerCount || DEFAULT_STICKER_COUNT);
     wechatAiRewardEnabled.checked = currentRewardEnabled;
     currentRewardMessage = restored.rewardMessage;
+
+    syncPlatformUI();
     syncRewardFields();
     renderStyleOptions(currentStyles);
     setPromptHint(currentStyles);
@@ -623,12 +814,14 @@ function savePackHistory(history) {
 function addToPackHistory(result) {
   if (!result?.packId || !result?.downloadUrl) return;
   const history = getPackHistory();
-  // dedup by packId
   const filtered = history.filter((h) => h.packId !== result.packId);
+  const spec = PLATFORM_SPECS[currentPlatform];
   const entry = {
     packId: result.packId,
     downloadUrl: result.downloadUrl,
     downloadFilename: result.downloadFilename || `${result.packId}.zip`,
+    platform: currentPlatform,
+    platformLabel: spec.platformLabel,
     title: result?.meta?.title || "未命名表情包",
     author: result?.meta?.author || "",
     stickerCount: result?.stickers?.length || result?.meta?.count || 0,
@@ -662,7 +855,7 @@ function renderPackHistory() {
       <div class="history-item" data-pack-id="${escapeAttr(entry.packId)}">
         <div class="history-item-meta">
           <div class="history-item-title">${escapeHtml(entry.title)}</div>
-          <div class="history-item-sub">${escapeHtml(entry.author ? entry.author + " · " : "")}${entry.stickerCount} 张${entry.styles ? " · " + escapeHtml(entry.styles) : ""}${entry.rewardEnabled ? " · 含赞赏" : ""} · ${formatTimeAgo(entry.createdAt) || "刚刚"}</div>
+          <div class="history-item-sub">${escapeHtml(entry.author ? entry.author + " · " : "")}${entry.stickerCount} 张${entry.styles ? " · " + escapeHtml(entry.styles) : ""}${entry.rewardEnabled ? " · 含赞赏" : ""}${entry.platformLabel ? " · " + escapeHtml(entry.platformLabel) : ""} · ${formatTimeAgo(entry.createdAt) || "刚刚"}</div>
         </div>
         <div class="history-item-actions">
           <button type="button" class="secondary history-dl-btn" data-pack-id="${escapeAttr(entry.packId)}" data-dl-url="${escapeAttr(entry.downloadUrl)}" data-filename="${escapeAttr(entry.downloadFilename)}">下载</button>
@@ -672,7 +865,6 @@ function renderPackHistory() {
     )
     .join("");
     
-  // bind download buttons
   historyList.querySelectorAll(".history-dl-btn").forEach((btn) => {
     btn.addEventListener("click", () => {
       const url = btn.dataset.dlUrl;
@@ -758,12 +950,11 @@ function getFriendlyErrorHint(error) {
     return "网络连接异常，请检查服务器网络和 AI 提供商服务状态。";
   }
   if (msg.includes("validation") || msg.includes("校验") || msg.includes("validate")) {
-    return "生成结果未通过微信规格校验，尝试更换风格或参考图。";
+    return "生成结果未通过平台规格校验，尝试更换风格或参考图。";
   }
   if (msg.includes("cancel") || msg.includes("取消")) {
     return "生成已取消。";
   }
-  // default
   return "请检查 AI 提供商配置，或尝试使用其他提供商。如果持续失败，检查 prompt-config.json 配置。";
 }
 
@@ -844,16 +1035,17 @@ function validateGenerateInputs() {
   const rewardMessage = wechatAiRewardMessage.value.trim();
   const stickerCount = Number(wechatAiCount.value || DEFAULT_STICKER_COUNT);
   const errors = [];
+  const spec = PLATFORM_SPECS[currentPlatform];
 
   if (!prompt) {
     errors.push({ target: wechatAiPrompt, message: "请先填写提示词。" });
   }
 
-  if (!title) {
+  if (spec.showsTitle && !title) {
     errors.push({ target: wechatAiTitle, message: "请填写表情包标题。" });
   }
 
-  if (!author) {
+  if (spec.showsAuthor && !author) {
     errors.push({ target: wechatAiAuthor, message: "请填写作者名。" });
   }
 
@@ -861,7 +1053,7 @@ function validateGenerateInputs() {
     errors.push({ target: wechatAiCount, message: `贴纸数量需在 ${MIN_STICKER_COUNT}-${MAX_STICKER_COUNT} 张之间。` });
   }
 
-  if (!currentStyles.length) {
+  if (spec.showsStyle && !currentStyles.length) {
     errors.push({ target: wechatAiStyleOptions, message: "请至少选择一种风格。" });
   }
 
@@ -1075,7 +1267,7 @@ function escapeHtml(text) {
 }
 
 function getExportInfoData(result) {
-  const title = result?.meta?.title ?? "未命名表情包";
+  const title = result?.meta?.title ?? "未填写";
   const author = result?.meta?.author ?? "未填写";
   const version = result?.meta?.version ?? "未填写";
   const copyright = result?.meta?.copyright ?? "未填写";
@@ -1086,6 +1278,7 @@ function getExportInfoData(result) {
   const count = result?.stickers?.length ?? result?.meta?.count ?? DEFAULT_STICKER_COUNT;
   const styles = Array.isArray(result?.meta?.styles) && result.meta.styles.length ? result.meta.styles.join("、") : "默认";
   const referenceMode = result?.meta?.referenceMode ?? "base64";
+  const spec = PLATFORM_SPECS[currentPlatform];
 
   return {
     title,
@@ -1097,15 +1290,17 @@ function getExportInfoData(result) {
     packId,
     filename,
     items: [
+      { label: "平台", value: spec.platformLabel },
       { label: "标题", value: title },
-      { label: "作者", value: author },
-      { label: "版本", value: version },
-      { label: "版权", value: copyright },
+      ...(spec.showsAuthor ? [{ label: "作者", value: author }] : []),
+      ...(spec.showsVersion ? [{ label: "版本", value: version }] : []),
+      ...(spec.showsCopyright ? [{ label: "版权", value: copyright }] : []),
       { label: "贴纸数量", value: `${count} 张` },
-      { label: "赞赏功能", value: rewardEnabled },
+      ...(spec.showsReward ? [{ label: "赞赏功能", value: rewardEnabled }] : []),
       ...(result?.meta?.rewardEnabled ? [{ label: "赞赏引导语", value: rewardMessage }] : []),
       { label: "风格", value: styles },
       { label: "参考图方式", value: referenceMode },
+      { label: "文件格式", value: spec.fileFormat },
       { label: "packId", value: packId },
       { label: "导出文件", value: filename }
     ]
@@ -1139,30 +1334,31 @@ function buildMetadataPreviewText(result) {
     return result.metadataJson;
   }
 
+  const spec = PLATFORM_SPECS[currentPlatform];
   const metadata = {
     schema: "easysticker-pack@0.1",
     packId: result?.packId ?? null,
-    presetId: "wechat_stickers",
+    presetId: currentPlatform,
     createdAt: null,
     metadata: {
       ...(result?.meta?.title ? { title: result.meta.title } : {}),
       ...(result?.meta?.author ? { author: result.meta.author } : {}),
-      ...(result?.meta?.version ? { version: result.meta.version } : {}),
-      ...(result?.meta?.copyright ? { copyright: result.meta.copyright } : {}),
-      ...(result?.meta?.rewardMessage ? { rewardMessage: result.meta.rewardMessage } : {})
+      ...(spec.showsVersion && result?.meta?.version ? { version: result.meta.version } : {}),
+      ...(spec.showsCopyright && result?.meta?.copyright ? { copyright: result.meta.copyright } : {}),
+      ...(spec.showsReward && result?.meta?.rewardMessage ? { rewardMessage: result.meta.rewardMessage } : {})
     },
-    extras: {
+    extras: spec.showsExtraAssets ? {
       coverAssetId: result?.extras?.coverAssetId ?? null,
       bannerAssetId: result?.extras?.bannerAssetId ?? null,
       iconAssetId: result?.extras?.iconAssetId ?? null,
       rewardGuideAssetId: result?.extras?.rewardGuideAssetId ?? null,
       rewardThanksAssetId: result?.extras?.rewardThanksAssetId ?? null
-    },
+    } : {},
     assets: Array.isArray(result?.stickers)
       ? result.stickers.map((item) => ({
           assetId: item.assetId ?? null,
-          filename: `${item.label ?? "sticker"}.png`,
-          zipPath: `assets/${item.label ?? "sticker"}.png`
+          filename: `${item.label ?? "sticker"}.${spec.outputFormat}`,
+          zipPath: `assets/${item.label ?? "sticker"}.${spec.outputFormat}`
         }))
       : []
   };
@@ -1213,6 +1409,8 @@ function buildAssetUrl(assetId) {
 }
 
 function getExtraAssetDefs(extras = {}) {
+  const spec = PLATFORM_SPECS[currentPlatform];
+  if (!spec.showsExtraAssets) return [];
   const rewardAssetPresent = Boolean(extras?.rewardGuideAssetId || extras?.rewardThanksAssetId);
   return currentRewardEnabled || rewardAssetPresent
     ? [...BASE_EXTRA_ASSET_DEFS, ...REWARD_EXTRA_ASSET_DEFS]
@@ -1278,7 +1476,6 @@ function createPreviewCard(sticker, tone = "success") {
   const card = document.createElement("article");
   card.className = "preview-item";
   
-  // 如果有真实图片数据，当前卡片就应该被视为 success 状态展示图片
   const isRealSticker = Boolean(sticker?.url);
   const cardTone = isRealSticker ? "success" : tone;
   
@@ -1305,7 +1502,6 @@ function createPreviewCard(sticker, tone = "success") {
   const description = document.createElement("p");
   description.className = "preview-description";
   description.textContent = content.description;
-  // 识别提示词的换行
   description.style.whiteSpace = "pre-wrap";
 
   head.appendChild(title);
@@ -1370,6 +1566,7 @@ function syncCreationMode() {
   regenerateSubmit.hidden = currentCreationMode !== "ai";
   cancelGenerate.hidden = true;
   clearGenerateValidation();
+  syncPlatformUI();
   if (currentCreationMode === "import") {
     setStatus(generateState, "等待导入", "idle");
     setNotice("请选择已有表情图，系统会自动标准化并打包。", "info");
@@ -1388,7 +1585,18 @@ function renderExtraAssets(extras = {}, tone = "idle") {
   wechatAiRewardGuide.innerHTML = "";
   wechatAiRewardThanks.innerHTML = "";
 
-  for (const item of getExtraAssetDefs(extras)) {
+  const defs = getExtraAssetDefs(extras);
+
+  // Hide all extra sections, they'll be shown if needed
+  const sectionCoverIcon = document.getElementById("sectionCoverIcon");
+  if (sectionCoverIcon) sectionCoverIcon.hidden = true;
+  sectionBanner.hidden = true;
+  sectionRewardGuide.hidden = true;
+  sectionRewardThanks.hidden = true;
+
+  if (!defs.length) return;
+
+  for (const item of defs) {
     const assetId = extras?.[item.key];
     const card = document.createElement("article");
     card.className = `preview-item${item.wide ? " preview-item-wide" : ""}`;
@@ -1436,19 +1644,12 @@ function renderExtraAssets(extras = {}, tone = "idle") {
     card.appendChild(head);
     card.appendChild(media);
 
-    // 将卡片添加到对应的容器中，并显示区块
     if (item.key === "coverAssetId") {
       wechatAiCover.appendChild(card);
-      if (assetId) {
-        const sectionCoverIcon = document.getElementById("sectionCoverIcon");
-        if (sectionCoverIcon) sectionCoverIcon.hidden = false;
-      }
+      if (assetId && sectionCoverIcon) sectionCoverIcon.hidden = false;
     } else if (item.key === "iconAssetId") {
       wechatAiIcon.appendChild(card);
-      if (assetId) {
-        const sectionCoverIcon = document.getElementById("sectionCoverIcon");
-        if (sectionCoverIcon) sectionCoverIcon.hidden = false;
-      }
+      if (assetId && sectionCoverIcon) sectionCoverIcon.hidden = false;
     } else if (item.key === "bannerAssetId") {
       wechatAiBanner.appendChild(card);
       if (assetId) sectionBanner.hidden = false;
@@ -1467,7 +1668,6 @@ function resetGenerationResult({ clearPersisted = true } = {}) {
   clearGenerateValidation();
   wechatAiPreview.innerHTML = "";
   
-  // 隐藏所有额外资源区块
   const sectionCoverIcon = document.getElementById("sectionCoverIcon");
   if (sectionCoverIcon) sectionCoverIcon.hidden = true;
   sectionBanner.hidden = true;
@@ -1480,7 +1680,11 @@ function resetGenerationResult({ clearPersisted = true } = {}) {
   renderPreview([], "idle");
   renderExtraAssets({}, "idle");
 
-  setFeedback("等待生成后展示 cover、icon、banner 与表情预览。", "idle");
+  const spec = PLATFORM_SPECS[currentPlatform];
+  const feedbackText = spec.showsExtraAssets
+    ? "等待生成后展示 cover、icon、banner 与表情预览。"
+    : "等待生成后展示贴纸预览。";
+  setFeedback(feedbackText, "idle");
   setExportInfo("结果概览与导出信息", "生成后在这里查看标题、数量、风格、参考图方式与导出文件。");
   renderMetadataPreview(null);
   setStatus(generateState, "等待生成", "idle");
@@ -1494,6 +1698,9 @@ function resetGenerationResult({ clearPersisted = true } = {}) {
 }
 
 function resetAllState() {
+  currentPlatform = "wechat_stickers";
+  setSelectedPlatform("wechat_stickers");
+
   currentUploadId = null;
   currentStyles = [...DEFAULT_STYLE_OPTIONS];
   availableStyles = [...DEFAULT_STYLE_OPTIONS];
@@ -1515,10 +1722,12 @@ function resetAllState() {
   wechatAiCount.value = String(DEFAULT_STICKER_COUNT);
   wechatAiRewardEnabled.checked = false;
   wechatAiRewardMessage.value = "";
+  syncPlatformUI();
   syncRewardFields();
   originalPreview.removeAttribute("src");
   syncOriginalPreviewSlot();
 
+  setCountValue(DEFAULT_STICKER_COUNT);
   renderStyleOptions(DEFAULT_STYLE_OPTIONS);
   resetGenerationResult({ clearPersisted: true });
   setPromptHint(currentStyles);
@@ -1531,10 +1740,10 @@ function resetAllState() {
 function renderDownload(packId, downloadUrl, filename) {
   if (!downloadUrl) return;
   const resolvedFilename = filename || `${packId}.zip`;
+  const spec = PLATFORM_SPECS[currentPlatform];
   
   wechatAiZipLink.innerHTML = "";
   
-  // 主下载按钮
   const link = document.createElement("a");
   link.href = downloadUrl;
   link.className = "download-button";
@@ -1569,6 +1778,15 @@ function renderDownload(packId, downloadUrl, filename) {
   });
   
   wechatAiZipLink.appendChild(link);
+
+  // Platform export hint
+  const hint = document.createElement("p");
+  hint.className = "muted";
+  hint.style.marginTop = "12px";
+  hint.style.textAlign = "center";
+  hint.style.fontSize = "var(--font-13)";
+  hint.textContent = spec.exportHint;
+  wechatAiZipLink.appendChild(hint);
 }
 
 function renderActions(result) {
@@ -1593,7 +1811,6 @@ function renderPreview(stickers, tone = "success") {
 
   sectionPrimary.hidden = false;
 
-  // 增量 append：仅为新增的贴纸追加卡片
   const existingCount = wechatAiPreview.children.length;
   const needClearPlaceholder = existingCount === 1 && wechatAiPreview.firstChild?.dataset?.tone !== "success";
   if (needClearPlaceholder) {
@@ -1649,10 +1866,10 @@ async function suggestPrompt() {
   if (!currentUploadId) return;
 
   try {
-    const json = await requestJson("/api/wechat/prompt", {
+    const json = await requestJson("/api/generate/prompt", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ referenceAssetId: currentUploadId })
+      body: JSON.stringify({ referenceAssetId: currentUploadId, presetId: currentPlatform })
     });
 
     wechatAiPrompt.value = json.prompt ?? "";
@@ -1664,21 +1881,28 @@ async function suggestPrompt() {
   }
 }
 
+function getMetadataPayload() {
+  const spec = PLATFORM_SPECS[currentPlatform];
+  const title = spec.showsTitle ? wechatAiTitle.value.trim() : "";
+  const author = spec.showsAuthor ? wechatAiAuthor.value.trim() : "";
+  const version = spec.showsVersion ? wechatAiVersion.value.trim() : "";
+  const copyright = spec.showsCopyright ? wechatAiCopyright.value.trim() : "";
+  const rewardMessage = spec.showsReward ? wechatAiRewardMessage.value.trim() : "";
+
+  const result = {
+    ...(title ? { title } : {}),
+    ...(author ? { author } : {}),
+    ...(version ? { version } : {}),
+    ...(copyright ? { copyright } : {}),
+    ...(rewardMessage ? { rewardMessage } : {})
+  };
+
+  return Object.keys(result).length ? result : undefined;
+}
+
+// Backward compat alias
 function getWechatMetadataPayload() {
-  const title = wechatAiTitle.value.trim();
-  const author = wechatAiAuthor.value.trim();
-  const version = wechatAiVersion.value.trim();
-  const copyright = wechatAiCopyright.value.trim();
-  const rewardMessage = wechatAiRewardMessage.value.trim();
-  return title || author || version || copyright || rewardMessage
-    ? {
-        ...(title ? { title } : {}),
-        ...(author ? { author } : {}),
-        ...(version ? { version } : {}),
-        ...(copyright ? { copyright } : {}),
-        ...(rewardMessage ? { rewardMessage } : {})
-      }
-    : undefined;
+  return getMetadataPayload();
 }
 
 function renderCompletedPackResult(json, successMessage, feedbackMessage) {
@@ -1704,7 +1928,7 @@ function renderCompletedPackResult(json, successMessage, feedbackMessage) {
   renderMetadataPreview(json);
 }
 
-async function importWechatPack() {
+async function importPlatformPack() {
   const files = importFiles?.files;
   const count = Number(files?.length || 0);
   if (count < MIN_STICKER_COUNT || count > MAX_STICKER_COUNT) {
@@ -1713,18 +1937,21 @@ async function importWechatPack() {
     return;
   }
 
+  const spec = PLATFORM_SPECS[currentPlatform];
+
   setStatus(importState, "处理中...", "loading");
   setStatus(generateState, "正在导入", "loading");
   setNotice("正在标准化导入图片并打包。", "info");
   resetGenerationResult({ clearPersisted: true });
   renderPreview([], "loading");
   renderExtraAssets({}, "idle");
-  setFeedback("正在把导入图片转换为微信表情包规格。", "loading");
+  setFeedback(`正在把导入图片转换为${spec.platformLabel}规格。`, "loading");
   renderMetadataPreview(null, "loading");
   setGenerateButtonsBusy(true);
 
   try {
     const formData = new FormData();
+    formData.append("presetId", currentPlatform);
     for (const file of Array.from(files)) {
       formData.append("stickers", file);
     }
@@ -1741,14 +1968,14 @@ async function importWechatPack() {
     if (currentRewardEnabled || importRewardGuide?.files?.[0] || importRewardThanks?.files?.[0]) {
       formData.append("includeReward", "true");
     }
-    const metadata = getWechatMetadataPayload();
+    const metadata = getMetadataPayload();
     if (metadata) {
       for (const [key, value] of Object.entries(metadata)) {
         formData.append(key, value);
       }
     }
 
-    const json = await requestJson("/api/wechat/import", {
+    const json = await requestJson("/api/generate/import", {
       method: "POST",
       body: formData
     });
@@ -1757,7 +1984,7 @@ async function importWechatPack() {
     renderCompletedPackResult(
       json,
       "图片已导入并标准化，可以预览后下载 ZIP。",
-      "已将导入图片统一处理为微信表情包规格，可继续核对并下载 ZIP。"
+      `已将导入图片统一处理为${spec.platformLabel}规格，可继续核对并下载 ZIP。`
     );
   } catch (error) {
     setStatus(importState, "导入失败", "error");
@@ -1772,7 +1999,12 @@ async function importWechatPack() {
   }
 }
 
-async function generateWechatPack() {
+// Backward compat alias
+async function importWechatPack() {
+  await importPlatformPack();
+}
+
+async function generatePlatformPack() {
   if (!currentUploadId) {
     setNotice("请先上传参考图。", "error");
     setStatus(generateState, "缺少参考图", "error");
@@ -1787,15 +2019,15 @@ async function generateWechatPack() {
   const prompt = wechatAiPrompt.value.trim();
   const rewardMessage = wechatAiRewardMessage.value.trim();
   const stickerCount = Number(wechatAiCount.value || DEFAULT_STICKER_COUNT);
+  const spec = PLATFORM_SPECS[currentPlatform];
 
   hasGenerationAttempted = true;
   setGenerateButtonsBusy(true);
   setStatus(generateState, "生成中...", "loading");
   resetGenerationProgress();
-  setNotice("正在生成微信表情并打包，请稍候...", "info");
+  setNotice(`正在生成${spec.platformLabel}并打包，请稍候...`, "info");
   wechatAiZipLink.innerHTML = "";
   
-  // 隐藏所有额外资源区块，准备新的流式生成
   const sectionCoverIcon = document.getElementById("sectionCoverIcon");
   if (sectionCoverIcon) sectionCoverIcon.hidden = true;
   sectionBanner.hidden = true;
@@ -1807,27 +2039,31 @@ async function generateWechatPack() {
 
   renderPreview([], "loading");
   renderExtraAssets({}, "loading");
-  setFeedback(
-    currentRewardEnabled
-      ? "正在生成 cover、icon、banner、赞赏引导图、赞赏感谢图与表情预览。"
-      : "正在生成 cover、icon、banner 与表情预览。",
-    "loading"
-  );
+  const loadingFeedback = spec.showsExtraAssets
+    ? (currentRewardEnabled
+        ? "正在生成 cover、icon、banner、赞赏引导图、赞赏感谢图与表情预览。"
+        : "正在生成 cover、icon、banner 与表情预览。")
+    : "正在生成贴纸与表情预览。";
+  setFeedback(loadingFeedback, "loading");
   setExportInfo("结果概览与导出信息", "正在生成中，请稍候。");
   renderMetadataPreview(null, "loading");
+
+  // Lock platform selector once generation starts
+  setPlatformDisabled(true);
 
   try {
     const payload = {
       referenceAssetId: currentUploadId,
+      presetId: currentPlatform,
       prompt,
       provider: wechatAiProvider ? wechatAiProvider.value : "mock",
       styles: currentStyles.length ? currentStyles : undefined,
       stickerCount,
       enableReward: currentRewardEnabled,
-      includeCover: true,
-      includeIcon: true,
-      includeBanner: true,
-      metadata: getWechatMetadataPayload()
+      includeCover: spec.showsExtraAssets,
+      includeIcon: spec.showsExtraAssets,
+      includeBanner: spec.showsExtraAssets,
+      metadata: getMetadataPayload()
     };
 
     const stickers = [];
@@ -1836,7 +2072,7 @@ async function generateWechatPack() {
 
     cancelRequested = false;
     sseAbortController = new AbortController();
-    const startRes = await fetch("/api/wechat/generate/start", {
+    const startRes = await fetch("/api/generate/start", {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify(payload)
@@ -1897,7 +2133,6 @@ async function generateWechatPack() {
         renderPreview(stickers, "success");
         renderExtraAssets(json?.extras ?? {}, "success");
         
-        const exportConfirmPanel = document.getElementById("exportConfirmPanel");
         if (exportConfirmPanel) exportConfirmPanel.hidden = false;
         
         renderDownload(json?.packId, json?.downloadUrl, json?.downloadFilename);
@@ -1906,12 +2141,12 @@ async function generateWechatPack() {
         resetGenerationProgress();
         setStatus(generateState, "生成完成", "success");
         setNotice("表情包已生成完成，可以先预览，再下载 ZIP。", "success");
-        setFeedback(
-          currentRewardEnabled
-            ? "已生成 cover、icon、banner、赞赏引导图、赞赏感谢图与表情预览，可继续重新生成当前方案。"
-            : "已生成 cover、icon、banner 与表情预览，可继续重新生成当前方案。",
-          "success"
-        );
+        const successFeedback = spec.showsExtraAssets
+          ? (currentRewardEnabled
+              ? "已生成 cover、icon、banner、赞赏引导图、赞赏感谢图与表情预览，可继续重新生成当前方案。"
+              : "已生成 cover、icon、banner 与表情预览，可继续重新生成当前方案。")
+          : "已生成贴纸与表情预览，可继续重新生成当前方案。";
+        setFeedback(successFeedback, "success");
 
         renderExportInfo(json);
         renderMetadataPreview(json);
@@ -1940,7 +2175,7 @@ async function generateWechatPack() {
     for (let attempt = 0; attempt <= maxRetries && !completed && !cancelRequested; attempt++) {
       const headers = { accept: "text/event-stream" };
       if (lastEventId > 0) headers["Last-Event-ID"] = String(lastEventId);
-      const res = await fetch(`/api/wechat/generate/stream?taskId=${encodeURIComponent(currentTaskId)}`, {
+      const res = await fetch(`/api/generate/stream?taskId=${encodeURIComponent(currentTaskId)}`, {
         method: "GET",
         headers,
         signal: sseAbortController.signal
@@ -1992,14 +2227,12 @@ async function generateWechatPack() {
     }
   } catch (error) {
     if (cancelRequested) {
-      // 保留已渲染的部分结果，不清空
       setGenerateButtonsBusy(false);
     } else {
       if (lastPackResult) {
         renderActions(lastPackResult);
         renderExportInfo(lastPackResult);
         renderMetadataPreview(lastPackResult);
-        const exportConfirmPanel = document.getElementById("exportConfirmPanel");
         if (exportConfirmPanel) exportConfirmPanel.hidden = false;
       } else {
         renderMetadataPreview(null, "error");
@@ -2017,7 +2250,14 @@ async function generateWechatPack() {
     currentTaskId = null;
     sseAbortController = null;
     setGenerateButtonsBusy(false);
+    // Re-lock platform if result exists
+    setPlatformDisabled(lastPackResult ? true : false);
   }
+}
+
+// Backward compat alias
+async function generateWechatPack() {
+  await generatePlatformPack();
 }
 
 async function handleFileUpload() {
@@ -2053,7 +2293,7 @@ async function handleFileUpload() {
     setExportInfo("结果概览与导出信息", "参考图已就绪，下一步补充提示词并生成表情包。");
 
     try {
-      await suggestPrompt({ silent: true });
+      await suggestPrompt();
     } catch (promptError) {
       setNotice(
         promptError instanceof Error ? promptError.message : "参考图已上传，请手动生成提示词。",
@@ -2070,6 +2310,8 @@ async function handleFileUpload() {
   }
 }
 
+// ========== Event Listeners ==========
+
 fileInput?.addEventListener("change", async () => {
   if (fileInput.files?.length > 0) {
     await handleFileUpload();
@@ -2083,8 +2325,6 @@ uploadForm.addEventListener("submit", (event) => {
 importForm?.addEventListener("submit", async (event) => {
   event.preventDefault();
 });
-
-
 
 wechatAiPrompt.addEventListener("input", () => {
   setFieldInvalid(wechatAiPrompt, false);
@@ -2133,6 +2373,23 @@ wechatAiRewardEnabled.addEventListener("change", () => {
   renderExtraAssets(lastPackResult?.extras ?? {}, lastPackResult ? "success" : "idle");
 });
 
+// Platform selector
+// Platform selector via radio buttons
+platformRadios.forEach(radio => {
+  radio.addEventListener("change", () => {
+    const newPlatform = radio.value;
+    if (newPlatform && PLATFORM_SPECS[newPlatform] && newPlatform !== currentPlatform) {
+      currentPlatform = newPlatform;
+      syncPlatformUI();
+      // If we had a previous result, invalidate it since platform changed
+      if (lastPackResult) {
+        resetGenerationResult({ clearPersisted: true });
+        setNotice(`已切换到${PLATFORM_SPECS[currentPlatform].platformLabel}，请重新生成。`, "info");
+      }
+    }
+  });
+});
+
 function getSelectedAiProvider() {
   return wechatAiProvider ? wechatAiProvider.value : currentAiProvider;
 }
@@ -2149,9 +2406,9 @@ async function requestCancelCurrentGeneration(options = {}) {
   const keepalive = Boolean(options.keepalive);
   if (keepalive && navigator.sendBeacon) {
     const blob = new Blob([body], { type: "application/json" });
-    if (navigator.sendBeacon("/api/wechat/generate/cancel", blob)) return true;
+    if (navigator.sendBeacon("/api/generate/cancel", blob)) return true;
   }
-  await fetch("/api/wechat/generate/cancel", {
+  await fetch("/api/generate/cancel", {
     method: "POST",
     headers: { "content-type": "application/json" },
     body,
@@ -2230,9 +2487,9 @@ wechatAiForm.addEventListener("keydown", async (event) => {
   if (event?.ctrlKey && event?.key === "Enter") {
     event.preventDefault?.();
     if (currentCreationMode === "import") {
-      await importWechatPack();
+      await importPlatformPack();
     } else {
-      await generateWechatPack();
+      await generatePlatformPack();
     }
   }
 });
@@ -2248,15 +2505,15 @@ wechatAiRewardMessage.addEventListener("input", () => {
 wechatAiForm.addEventListener("submit", async (event) => {
   event.preventDefault();
   if (currentCreationMode === "import") {
-    await importWechatPack();
+    await importPlatformPack();
   } else {
-    await generateWechatPack();
+    await generatePlatformPack();
   }
 });
 
 regenerateSubmit.addEventListener("click", async () => {
   if (currentCreationMode !== "ai") return;
-  await generateWechatPack();
+  await generatePlatformPack();
 });
 
 wechatAiMetadataPreview.addEventListener("click", async (event) => {
@@ -2287,7 +2544,29 @@ async function initApp() {
     const configRes = await fetch("/api/config");
     if (configRes.ok) {
       const config = await configRes.json();
-      if (config?.wechat) {
+
+      // Support new platforms format
+      if (config?.platforms) {
+        const wc = config.platforms.wechat_stickers;
+        if (wc) {
+          DEFAULT_STYLE_OPTIONS = wc.styles || DEFAULT_STYLE_OPTIONS;
+          const providerConfig = wc.ai || wc;
+          if (providerConfig.availableProviders && wechatAiProvider) {
+            wechatAiProvider.innerHTML = "";
+            providerConfig.availableProviders.forEach(p => {
+              const option = document.createElement("option");
+              option.value = p.id;
+              option.textContent = p.name;
+              wechatAiProvider.appendChild(option);
+            });
+          }
+          if (providerConfig.defaultProvider && wechatAiProvider) {
+            currentAiProvider = providerConfig.defaultProvider;
+            wechatAiProvider.value = currentAiProvider;
+          }
+        }
+      } else if (config?.wechat) {
+        // Backward compat: old wechat-only config
         DEFAULT_STYLE_OPTIONS = config.wechat.styles || DEFAULT_STYLE_OPTIONS;
         MIN_STICKER_COUNT = config.wechat.minStickerCount || MIN_STICKER_COUNT;
         MAX_STICKER_COUNT = config.wechat.maxStickerCount || MAX_STICKER_COUNT;
@@ -2302,7 +2581,6 @@ async function initApp() {
             wechatAiProvider.appendChild(option);
           });
         }
-
         if (config.wechat.defaultProvider && wechatAiProvider) {
           currentAiProvider = config.wechat.defaultProvider;
           wechatAiProvider.value = currentAiProvider;
@@ -2315,6 +2593,7 @@ async function initApp() {
 
   initializeFieldAccessibility();
   renderStyleOptions(DEFAULT_STYLE_OPTIONS);
+  syncPlatformUI();
   syncRewardFields();
   resetGenerationResult({ clearPersisted: false });
   setPromptHint(currentStyles);
