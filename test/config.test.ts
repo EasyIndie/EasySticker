@@ -1,6 +1,6 @@
 import { describe, expect, it, vi, afterEach } from "vitest";
 import { buildApp } from "../src/app";
-import * as promptConfigModule from "../src/services/wechat/promptConfig";
+import * as promptConfigModule from "../src/services/generate/promptConfig";
 
 describe("/api/config route validation", () => {
   const app = buildApp({ host: "127.0.0.1", port: 0, dataDir: "data", logLevel: "silent" });

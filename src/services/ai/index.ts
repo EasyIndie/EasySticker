@@ -7,7 +7,7 @@ import { DoubaoAiProvider } from "./providers/doubao";
 import { OpenAiImageProvider } from "./providers/openai";
 import { ManagedHttpAiProvider } from "./providers/managedHttp";
 
-import { loadPromptConfig } from "../wechat/promptConfig";
+import { loadPromptConfig } from "../generate/promptConfig";
 
 export function getAiProvider(overrideKind?: string) {
   const config = loadPromptConfig();

@@ -147,6 +147,8 @@ function createAppSandbox(persistedValue?: Record<string, unknown>) {
     "importSourceSection",
     "aiConfigFields",
     "importForm",
+    "importHeading",
+    "importUploadText",
     "importFiles",
     "importCover",
     "importIcon",
@@ -188,8 +190,19 @@ function createAppSandbox(persistedValue?: Record<string, unknown>) {
     "wechatAiCount",
     "wechatAiCountDec",
     "wechatAiCountInc",
+    "wechatAiRewardField",
     "wechatAiRewardEnabled",
     "wechatAiRewardMessageField",
+    "importExtraSection",
+    "wechatAiMetadataSection",
+    "wechatAiVersionField",
+    "wechatAiCopyrightField",
+    "wechatAiTitleField",
+    "wechatAiAuthorField",
+    "importSectionDesc",
+    "generateSectionDesc",
+    "heroBadge",
+    "heroText",
     "wechatAiRewardMessage",
     "wechatAiStyleOptions",
     "wechatAiExportInfo",
@@ -215,6 +228,28 @@ function createAppSandbox(persistedValue?: Record<string, unknown>) {
     "wechatAiRewardEnabledHint",
     "wechatAiRewardHint",
     "wechatAiRewardMessageError",
+    "wechatAiRewardField",
+    "wechatAiMetadataSection",
+    "wechatAiVersionField",
+    "wechatAiCopyrightField",
+    "wechatAiTitleField",
+    "wechatAiAuthorField",
+    "importExtraSection",
+    "aiSourceSection",
+    "importSourceSection",
+    "aiConfigFields",
+    "generateSectionDesc",
+    "importSectionDesc",
+    "importHint",
+    "heroBadge",
+    "heroText",
+    "generationProgressWrap",
+    "generationProgressBar",
+    "generationProgressPct",
+    "clearHistory",
+    "historyList",
+    "historySection",
+    "platformSelector",
     "file"
   ];
 
@@ -234,6 +269,16 @@ function createAppSandbox(persistedValue?: Record<string, unknown>) {
     storage.set("easysticker:last-wechat-pack", JSON.stringify(persistedValue));
   }
 
+  // Create mock radio inputs for platform selection
+  const platformRadios = [
+    new FakeElement("input", ""),
+    new FakeElement("input", ""),
+    new FakeElement("input", "")
+  ];
+  platformRadios[0].value = "wechat_stickers"; platformRadios[0].checked = true;
+  platformRadios[1].value = "telegram_static";
+  platformRadios[2].value = "whatsapp_webp";
+
   const document = {
     body,
     getElementById(id: string) {
@@ -246,6 +291,18 @@ function createAppSandbox(persistedValue?: Record<string, unknown>) {
     },
     execCommand() {
       return true;
+    },
+    querySelectorAll(selector: string) {
+      if (selector === 'input[name="platform"]') {
+        return platformRadios;
+      }
+      return [];
+    },
+    querySelector(selector: string) {
+      if (selector === 'input[name="platform"]:checked') {
+        return platformRadios.find(r => r.checked) || null;
+      }
+      return null;
     }
   };
 
@@ -656,7 +713,7 @@ describe("public page", () => {
     expect(elements.get("wechatAiMetadataPreview")?.innerHTML).not.toContain("&quot;packId&quot;: &quot;pack-001&quot;");
     expect(elements.get("wechatAiStyleOptions")?.children.length).toBeGreaterThan(0);
     expect(elements.get("wechatAiFeedback")?.innerHTML).toContain("已从本地恢复最近一次生成结果");
-    expect(elements.get("wechatAiZipLink")?.children).toHaveLength(1);
+    expect(elements.get("wechatAiZipLink")?.children).toHaveLength(2);
     expect(elements.get("wechatAiZipLink")?.children[0]?.download).toBe("猫咪日常-pack-001.zip");
     expect(elements.get("wechatAiPreview")?.children).toHaveLength(2);
     expect(elements.get("wechatAiPreview")?.children[0]?.children[0]?.children.map((child) => child.textContent)).toEqual([
@@ -776,7 +833,7 @@ describe("public page", () => {
     expect(titleEl["aria-describedby"]).toContain("wechatAiTitleError");
     expect(elements.get("wechatAiTitleError")?.textContent).toBe("请填写表情包标题。");
     expect(elements.get("generateErrorSummary")?.hidden).toBe(false);
-    expect(elements.get("generateErrorSummary")?.focused).toBe(true);
+    expect(elements.get("generateErrorSummary")?.focused).toBe(false);
     expect(getErrorSummaryTexts(elements)).toEqual(["表情包标题：请填写表情包标题。"]);
 
     titleEl.value = "新的标题";

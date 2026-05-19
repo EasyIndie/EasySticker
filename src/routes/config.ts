@@ -1,5 +1,6 @@
 import type { FastifyInstance } from "fastify";
-import { loadPromptConfig } from "../services/wechat/promptConfig";
+import { loadPromptConfig } from "../services/generate/promptConfig";
+import { PLATFORM_PRESETS } from "../services/platform/presets";
 
 export async function registerConfigRoutes(app: FastifyInstance) {
   app.get("/config", async (req, reply) => {
@@ -47,7 +48,72 @@ export async function registerConfigRoutes(app: FastifyInstance) {
       defaultProvider = "mock";
     }
 
+    // Build platforms map for new frontend (supports wechat/telegram/whatsapp)
+    const platforms: Record<string, unknown> = {};
+    for (const preset of PLATFORM_PRESETS) {
+      // Skip sub-presets like wechat_banner, wechat_cover, etc.
+      if (preset.id.startsWith("wechat_") && preset.id !== "wechat_stickers") continue;
+
+      const base = {
+        title: preset.title,
+        description: preset.description || "",
+        minCount: preset.minCount,
+        maxCount: preset.maxCount,
+        defaultCount: 8,
+        outputFormat: preset.outputFormat || "png",
+        ai: { defaultProvider, availableProviders }
+      };
+
+      if (preset.id === "wechat_stickers") {
+        platforms[preset.id] = {
+          ...base,
+          minCount: 8,
+          maxCount: 24,
+          supportsExtraAssets: true,
+          supportsReward: true,
+          supportsMetadata: true,
+          extraAssetTypes: ["cover", "icon", "banner", "rewardGuide", "rewardThanks"],
+          preset: {
+            allowedExts: preset.allowedExts,
+            maxBytes: preset.maxBytes,
+            exactWidth: preset.exactWidth,
+            exactHeight: preset.exactHeight
+          }
+        };
+      } else if (preset.id === "telegram_static") {
+        platforms[preset.id] = {
+          ...base,
+          supportsExtraAssets: false,
+          supportsReward: false,
+          supportsMetadata: false,
+          extraAssetTypes: [],
+          preset: {
+            allowedExts: preset.allowedExts,
+            maxBytes: preset.maxBytes,
+            maxWidth: preset.maxWidth,
+            maxHeight: preset.maxHeight,
+            requiredSquare: preset.requiredSquare
+          }
+        };
+      } else if (preset.id === "whatsapp_webp") {
+        platforms[preset.id] = {
+          ...base,
+          supportsExtraAssets: false,
+          supportsReward: false,
+          supportsMetadata: false,
+          extraAssetTypes: [],
+          preset: {
+            allowedExts: preset.allowedExts,
+            maxBytes: preset.maxBytes,
+            exactWidth: preset.exactWidth,
+            exactHeight: preset.exactHeight
+          }
+        };
+      }
+    }
+
     return {
+      // Old format for backward compat (tests reference data.wechat.*)
       wechat: {
         styles: promptConfig.global.styles,
         minStickerCount: 8,
@@ -55,7 +121,9 @@ export async function registerConfigRoutes(app: FastifyInstance) {
         defaultStickerCount: 8,
         defaultProvider,
         availableProviders
-      }
+      },
+      // New format for multi-platform frontend
+      platforms
     };
   });
 }
