@@ -25,19 +25,8 @@ export type AppConfig = {
   logLevel: string;
 };
 
-const DEV_INTERNAL_LINK = [
-  '          <nav class="hero-actions" aria-label="开发快捷入口">',
-  '            <a class="hero-link" href="/internal.html">内部开发页</a>',
-  "          </nav>"
-].join("\n");
-
 async function renderIndexHtml() {
-  const html = await fs.readFile(path.join(process.cwd(), "public", "index.html"), "utf8");
-  if (process.env.NODE_ENV === "production") return html;
-  return html.replace('          <span class="badge" id="heroBadge">微信 AI 表情流程</span>', [
-    '          <span class="badge" id="heroBadge">微信 AI 表情流程</span>',
-    DEV_INTERNAL_LINK
-  ].join("\n"));
+  return fs.readFile(path.join(process.cwd(), "public", "index.html"), "utf8");
 }
 
 export function buildApp(config: AppConfig): FastifyInstance {
