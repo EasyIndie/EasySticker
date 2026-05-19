@@ -57,6 +57,10 @@ async function main() {
 
   if (hasAdmin) {
     app.log.info({ email: adminEmail }, "Default admin account created");
+    // If no explicit API_TOKEN was configured, use the admin password as invite token
+    if (!process.env["API_TOKEN"] && !config.server?.security?.apiToken) {
+      appConfig.security!.apiToken = adminPassword;
+    }
     console.log(`\n🔑 Default admin: ${adminEmail} / ${adminPassword}\n`);
   }
 
