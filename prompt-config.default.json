@@ -5,7 +5,18 @@
     "dataDir": "data",
     "logLevel": "info",
     "taskTtlMs": 3600000,
-    "taskGcIntervalMs": 600000
+    "taskGcIntervalMs": 600000,
+    "security": {
+      "apiToken": "",
+      "enableAuth": true,
+      "rateLimit": {
+        "maxRequests": 30,
+        "windowMs": 60000
+      },
+      "dailyQuota": {
+        "maxGenerations": 100
+      }
+    }
   },
   "ai": {
     "defaultProvider": "picsum",
@@ -69,15 +80,42 @@
           "promptPrefix": "wechat sticker, chibi person, single character, big head, expressive face, exaggerated emotion, cute emoji pose, thick clean outline, simple flat color, centered composition, transparent background, high quality",
           "negativePromptAppend": "realistic photo, complex background, multiple people, extra face, extra hands, bad hands, cropped head, out of frame",
           "qualityPresets": {
-            "fast": { "steps": 16, "cfg": 5.5, "denoise": 0.4, "samplerName": "dpmpp_2m", "scheduler": "karras" },
-            "standard": { "steps": 22, "cfg": 5.5, "denoise": 0.45, "samplerName": "dpmpp_2m", "scheduler": "karras" },
-            "quality": { "steps": 28, "cfg": 6, "denoise": 0.5, "samplerName": "dpmpp_2m", "scheduler": "karras" },
-            "expressive": { "steps": 26, "cfg": 6.5, "denoise": 0.6, "samplerName": "dpmpp_2m", "scheduler": "karras" }
+            "fast": {
+              "steps": 16,
+              "cfg": 5.5,
+              "denoise": 0.4,
+              "samplerName": "dpmpp_2m",
+              "scheduler": "karras"
+            },
+            "standard": {
+              "steps": 22,
+              "cfg": 5.5,
+              "denoise": 0.45,
+              "samplerName": "dpmpp_2m",
+              "scheduler": "karras"
+            },
+            "quality": {
+              "steps": 28,
+              "cfg": 6,
+              "denoise": 0.5,
+              "samplerName": "dpmpp_2m",
+              "scheduler": "karras"
+            },
+            "expressive": {
+              "steps": 26,
+              "cfg": 6.5,
+              "denoise": 0.6,
+              "samplerName": "dpmpp_2m",
+              "scheduler": "karras"
+            }
           }
         },
         "autoStart": {
           "command": "npm",
-          "args": ["run", "comfy-adapter"],
+          "args": [
+            "run",
+            "comfy-adapter"
+          ],
           "cwd": ".",
           "healthUrl": "http://127.0.0.1:8787/health",
           "cancelUrl": "http://127.0.0.1:8787/cancel",
@@ -90,15 +128,39 @@
   "global": {
     "prompt": "基于参考图中的人物主体，生成微信聊天场景可用的表情包贴纸。要求：单人主体，Q版大头，表情夸张，动作明确，主体居中，干净粗描边，颜色简洁，背景透明或纯净，避免水印和复杂背景，不要生成长文字",
     "negativePrompt": "文字、水印、二维码、品牌logo、复杂背景、多人、写实照片、低清晰度、锯齿、模糊、坏手、畸形、裁切头部、出框",
-    "styles": ["扁平插画", "3D 卡通", "日系 Q 版", "像素风", "国潮风"]
+    "styles": [
+      "扁平插画",
+      "3D 卡通",
+      "日系 Q 版",
+      "像素风",
+      "国潮风"
+    ]
   },
   "emotions": [
-    "开心，大笑，挥手打招呼", "点赞，竖起大拇指", "比心，双手比心", "害羞，捂脸",
-    "感谢，双手合十", "哭泣，流泪", "生气，双手抱胸", "疑问，头上带有问号",
-    "睡觉，打呼噜", "奋斗，头绑发带加油", "震惊，下巴掉下来", "无奈，摊手",
-    "期待，星星眼", "庆祝，撒花", "拒绝，双手打叉", "吃瓜，拿爆米花",
-    "叹气，扶额", "庆祝，举起酒杯", "思考，手托下巴", "疲惫，瘫倒",
-    "偷笑，捂嘴", "抱抱，张开双臂", "冷汗，流汗", "期待，搓手"
+    "开心，大笑，挥手打招呼",
+    "点赞，竖起大拇指",
+    "比心，双手比心",
+    "害羞，捂脸",
+    "感谢，双手合十",
+    "哭泣，流泪",
+    "生气，双手抱胸",
+    "疑问，头上带有问号",
+    "睡觉，打呼噜",
+    "奋斗，头绑发带加油",
+    "震惊，下巴掉下来",
+    "无奈，摊手",
+    "期待，星星眼",
+    "庆祝，撒花",
+    "拒绝，双手打叉",
+    "吃瓜，拿爆米花",
+    "叹气，扶额",
+    "庆祝，举起酒杯",
+    "思考，手托下巴",
+    "疲惫，瘫倒",
+    "偷笑，捂嘴",
+    "抱抱，张开双臂",
+    "冷汗，流汗",
+    "期待，搓手"
   ],
   "templates": {
     "sticker": "{{prompt}}\n当前表情主题与动作：{{emotion}}\n风格：{{style}}\n画面要求：人物面部清晰，动作一眼可读，适合作为微信聊天表情，240px 缩略图下仍然清楚",
