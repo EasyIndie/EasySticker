@@ -19,7 +19,38 @@
         <div id="globalNotice" class="notice" role="status" aria-live="polite">先上传一张主体清晰的图片。</div>
       </header>
 
+      <nav id="stepNav" class="step-nav" aria-label="操作步骤">
+        <ol class="step-nav-list">
+          <li class="step-nav-item active" data-step="0">
+            <span class="step-nav-number">1</span>
+            <span class="step-nav-label">选择平台</span>
+          </li>
+          <li class="step-nav-item" data-step="1">
+            <span class="step-nav-number">2</span>
+            <span class="step-nav-label">上传参考图</span>
+          </li>
+          <li class="step-nav-item" data-step="2">
+            <span class="step-nav-number">3</span>
+            <span class="step-nav-label">配置参数</span>
+          </li>
+          <li class="step-nav-item" data-step="3">
+            <span class="step-nav-number">4</span>
+            <span class="step-nav-label">生成</span>
+          </li>
+          <li class="step-nav-item" data-step="4">
+            <span class="step-nav-number">5</span>
+            <span class="step-nav-label">预览下载</span>
+          </li>
+        </ol>
+      </nav>
+
+      <div id="mobileViewTabs" class="mobile-view-tabs" hidden>
+        <button type="button" class="mobile-tab active" data-view="config" aria-pressed="true">⚙️ 配置</button>
+        <button type="button" class="mobile-tab" data-view="preview" aria-pressed="false">🖼️ 预览</button>
+      </div>
+
       <section class="flow">
+        <div class="config-area">
         <article class="card step-card">
           <div class="step-index">00</div>
           <div class="step-head">
@@ -296,6 +327,9 @@
           </div>
         </article>
 
+        </div><!-- /.config-area -->
+
+        <div class="preview-area">
         <article class="card step-card">
           <div class="step-index">04</div>
           <div class="step-head">
@@ -365,7 +399,21 @@
             <div id="wechatAiZipLink" class="download-slot"></div>
           </section>
         </article>
+        </div><!-- /.preview-area -->
       </section>
+
+      <div id="stickyActionBar" class="sticky-action-bar" hidden>
+        <div class="sticky-action-bar-inner">
+          <div class="sticky-action-left">
+            <span id="stickyStatus" class="sticky-status"></span>
+          </div>
+          <div class="sticky-action-right">
+            <button type="button" id="stickyRegenerate" class="sticky-action-btn secondary">🔄 重新生成</button>
+            <button type="button" id="stickyDownload" class="sticky-action-btn">📥 下载 ZIP</button>
+            <button type="button" id="stickyReset" class="sticky-action-btn secondary">↺ 重置</button>
+          </div>
+        </div>
+      </div>
     </main>
     <div id="toastNotice" class="toast-notice" data-tone="info" data-visible="false" aria-live="assertive"></div>
 
