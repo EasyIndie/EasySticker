@@ -6,6 +6,7 @@
 export type SecurityConfig = {
   apiToken?: string;
   enableAuth?: boolean;
+  jwtSecret?: string;
   rateLimit?: {
     maxRequests: number;
     windowMs: number;

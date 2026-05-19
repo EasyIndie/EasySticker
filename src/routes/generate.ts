@@ -83,6 +83,22 @@ export async function registerGenerateRoutes(app: FastifyInstance) {
       return { error: "BadRequest", message: "invalid request body", issues: parsed.error.issues };
     }
     const task = createTask();
+
+    // Daily quota check + usage logging for authenticated users
+    try {
+      await req.jwtVerify().catch(() => {});
+      const user = req.user as any;
+      if (user && user.email) {
+        app.usageStore.maybeRotate();
+        const quota = app.usageStore.checkDailyQuota(user.email, 100);
+        if (!quota.allowed) {
+          reply.status(429);
+          return { error: "QuotaExceeded", message: "今日生成配额已用完，明天再来吧。" };
+        }
+        app.usageStore.log({ email: user.email, action: "generate", success: true });
+      }
+    } catch {}
+
     const abortController = new AbortController();
     setTaskCancelHandler(task.id, () => abortController.abort());
 
