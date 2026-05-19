@@ -5,17 +5,17 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>EasySticker</title>
     <meta name="theme-color" content="#07c160" />
-    <link rel="stylesheet" href="/styles.css" />
+    <link rel="stylesheet" href="/styles.css?v=2" />
   </head>
   <body>
     <a href="#mainContent" class="skip-link">跳到主要内容</a>
     <main id="mainContent" class="page" role="main">
       <header class="hero card">
         <div class="hero-topline">
-          <span class="badge">微信 AI 表情流程</span>
+          <span class="badge" id="heroBadge">微信 AI 表情流程</span>
         </div>
         <h1>EasySticker</h1>
-        <p class="hero-text">上传参考图，补充提示词，一键生成可预览、可下载的微信表情包。</p>
+        <p class="hero-text" id="heroText">上传参考图，补充提示词，一键生成可预览、可下载的微信表情包。</p>
         <div id="globalNotice" class="notice" role="status" aria-live="polite">先上传一张主体清晰的图片。</div>
       </header>
 
@@ -23,8 +23,31 @@
         <article class="card step-card">
           <div class="step-index">00</div>
           <div class="step-head">
-            <h2>选择创建方式</h2>
-            <p class="muted">按素材现状选择入口，后续预览、校验、metadata 和 ZIP 下载保持一致。</p>
+            <h2>选择创建方式与平台</h2>
+            <p class="muted">按素材现状选择入口，选择目标平台后，后续预览、校验、metadata 和 ZIP 下载保持一致。</p>
+          </div>
+          <div class="field">
+            <span class="section-title">目标平台</span>
+            <div class="platform-selector" id="platformSelector" role="radiogroup" aria-label="目标平台">
+              <label class="platform-option" data-platform="wechat_stickers">
+                <input type="radio" name="platform" value="wechat_stickers" checked />
+                <span class="platform-icon">💬</span>
+                <span class="platform-name">微信</span>
+                <span class="platform-spec">240×240 PNG</span>
+              </label>
+              <label class="platform-option" data-platform="telegram_static">
+                <input type="radio" name="platform" value="telegram_static" />
+                <span class="platform-icon">✈️</span>
+                <span class="platform-name">Telegram</span>
+                <span class="platform-spec">512×512 PNG</span>
+              </label>
+              <label class="platform-option" data-platform="whatsapp_webp">
+                <input type="radio" name="platform" value="whatsapp_webp" />
+                <span class="platform-icon">📱</span>
+                <span class="platform-name">WhatsApp</span>
+                <span class="platform-spec">512×512 WebP</span>
+              </label>
+            </div>
           </div>
           <div class="mode-selector" role="radiogroup" aria-label="创建方式">
             <label class="mode-option">
@@ -70,13 +93,13 @@
         <article id="importSourceSection" class="card step-card" hidden>
           <div class="step-index">01</div>
           <div class="step-head">
-            <h2>导入已有表情图</h2>
-            <p class="muted">已有成品图片时，可直接批量导入并自动规范为微信 240 × 240 表情图。</p>
+            <h2 id="importHeading">导入已有表情图</h2>
+            <p class="muted" id="importSectionDesc">已有成品图片时，可直接批量导入并自动规范为微信 240 × 240 表情图。</p>
           </div>
           <form id="importForm" class="step-body">
             <label class="upload-panel" for="importFiles">
               <span class="upload-title">批量选择图片</span>
-              <span class="upload-text">支持 PNG、JPG、WebP、GIF，建议一次导入 8-24 张。</span>
+              <span class="upload-text" id="importUploadText">支持 PNG、JPG、WebP、GIF，建议一次导入 8-24 张。</span>
               <input
                 id="importFiles"
                 name="stickers"
@@ -87,7 +110,7 @@
               />
               <span id="importHint" class="field-hint">导入后会统一居中、等比缩放、补透明边，并转换为符合微信表情包规格的 PNG。</span>
             </label>
-            <div class="config-grid import-extra-grid" aria-label="扩展资源导入">
+            <div class="config-grid import-extra-grid" id="importExtraSection" aria-label="扩展资源导入">
               <label class="field" for="importCover">
                 <span class="section-title">Cover<span class="optional-mark">可选</span></span>
                 <input id="importCover" type="file" accept="image/png,image/jpeg,image/webp,image/gif" />
@@ -176,7 +199,7 @@
             </label>
             </div>
           </div>
-            <div class="field">
+            <div class="field" id="wechatAiRewardField">
               <span class="section-title">赞赏功能<span class="optional-mark">可选</span></span>
               <label class="toggle-row" for="wechatAiRewardEnabled">
                 <input id="wechatAiRewardEnabled" type="checkbox" aria-describedby="wechatAiRewardEnabledHint" />
@@ -197,7 +220,7 @@
             <div id="wechatAiRewardMessageError" class="field-error" hidden></div>
           </label>
           <div class="config-grid">
-            <label class="field" for="wechatAiTitle">
+            <label class="field" id="wechatAiTitleField" for="wechatAiTitle">
               <span class="section-title"><span class="required-mark">*</span>表情包标题</span>
               <input
                 id="wechatAiTitle"
@@ -209,7 +232,7 @@
               <div id="wechatAiTitleHint" class="field-hint">用于导出信息、下载文件名和组件库文档示例展示。</div>
               <div id="wechatAiTitleError" class="field-error" hidden></div>
             </label>
-            <label class="field" for="wechatAiAuthor">
+            <label class="field" id="wechatAiAuthorField" for="wechatAiAuthor">
               <span class="section-title"><span class="required-mark">*</span>作者名</span>
               <input
                 id="wechatAiAuthor"
@@ -223,8 +246,8 @@
             </label>
           </div>
           
-          <div class="config-grid">
-            <label class="field" for="wechatAiVersion">
+          <div class="config-grid" id="wechatAiMetadataSection">
+            <label class="field" id="wechatAiVersionField" for="wechatAiVersion">
               <span class="section-title">版本信息<span class="optional-mark">可选</span></span>
               <input
                 id="wechatAiVersion"
@@ -235,7 +258,7 @@
               />
               <div id="wechatAiVersionHint" class="field-hint">建议用于区分发布批次或活动版本，例如季度版、联名版或 A/B 测试版本。</div>
             </label>
-            <label class="field" for="wechatAiCopyright">
+            <label class="field" id="wechatAiCopyrightField" for="wechatAiCopyright">
               <span class="section-title">版权信息<span class="optional-mark">可选</span></span>
               <input
                 id="wechatAiCopyright"
@@ -358,6 +381,6 @@
       <div id="historyList" class="history-list"></div>
     </section>
 
-    <script src="/app.js"></script>
+    <script src="/app.js?v=3"></script>
   </body>
 </html>

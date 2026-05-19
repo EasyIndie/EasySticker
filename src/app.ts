@@ -15,7 +15,7 @@ import { buildLogger } from "./lib/logger";
 import { registerUploadRoutes } from "./routes/uploads";
 import { registerAssetRoutes } from "./routes/assets";
 import { registerPackRoutes } from "./routes/packs";
-import { registerWeChatAiRoutes } from "./routes/wechatAi";
+import { registerGenerateRoutes } from "./routes/generate";
 import { registerConfigRoutes } from "./routes/config";
 
 export type AppConfig = {
@@ -34,8 +34,8 @@ const DEV_INTERNAL_LINK = [
 async function renderIndexHtml() {
   const html = await fs.readFile(path.join(process.cwd(), "public", "index.html"), "utf8");
   if (process.env.NODE_ENV === "production") return html;
-  return html.replace('          <span class="badge">微信 AI 表情流程</span>', [
-    '          <span class="badge">微信 AI 表情流程</span>',
+  return html.replace('          <span class="badge" id="heroBadge">微信 AI 表情流程</span>', [
+    '          <span class="badge" id="heroBadge">微信 AI 表情流程</span>',
     DEV_INTERNAL_LINK
   ].join("\n"));
 }
@@ -97,7 +97,7 @@ export function buildApp(config: AppConfig): FastifyInstance {
   app.register(registerUploadRoutes, { prefix: "/api" });
   app.register(registerAssetRoutes, { prefix: "/api" });
   app.register(registerPackRoutes, { prefix: "/api" });
-  app.register(registerWeChatAiRoutes, { prefix: "/api" });
+  app.register(registerGenerateRoutes, { prefix: "/api" });
   app.register(registerConfigRoutes, { prefix: "/api" });
 
   return app;

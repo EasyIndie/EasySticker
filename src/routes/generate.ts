@@ -1,7 +1,8 @@
 import { type FastifyInstance } from "fastify";
 import { z } from "zod";
-import { generateWeChatAssetsAndPack, getWeChatPromptTemplate } from "../services/wechat/aiFlow";
-import { importWeChatStickerPack } from "../services/wechat/importFlow";
+import { generateAssetsAndPack, getPromptTemplate } from "../services/generate/flow";
+import { importStickerPack } from "../services/generate/import";
+import { getPlatformPreset } from "../services/platform/presets";
 import {
   createTask,
   getTask,
@@ -11,21 +12,31 @@ import {
   getEventsSince,
   ensureTaskGc,
   cancelTask,
-  setTaskCancelHandler
-} from "../services/wechat/tasks";
+  setTaskCancelHandler,
+  type TaskEvent
+} from "../services/generate/tasks";
 
-import { loadPromptConfig } from "../services/wechat/promptConfig";
+import { loadPromptConfig } from "../services/generate/promptConfig";
+
+function buildCountSchema(presetId: string) {
+  const preset = getPlatformPreset(presetId);
+  const min = preset?.minCount ?? 1;
+  const max = preset?.maxCount ?? 50;
+  return z.number().int().min(min).max(max);
+}
 
 const promptSchema = z.object({
-  referenceAssetId: z.string().min(1)
+  referenceAssetId: z.string().min(1),
+  presetId: z.string().min(1).default("wechat_stickers")
 });
 
 const generateSchema = z.object({
+  presetId: z.string().min(1).default("wechat_stickers"),
   referenceAssetId: z.string().min(1),
   prompt: z.string().min(1),
   provider: z.string().optional(),
   styles: z.array(z.string().min(1)).optional(),
-  stickerCount: z.number().int().min(8).max(24).optional(),
+  stickerCount: z.number().int().min(1).max(50).optional(),
   enableReward: z.boolean().optional(),
   includeCover: z.boolean().optional(),
   includeIcon: z.boolean().optional(),
@@ -41,63 +52,31 @@ const generateSchema = z.object({
     .optional()
 });
 
-export async function registerWeChatAiRoutes(app: FastifyInstance) {
+const cancelSchema = z.object({
+  taskId: z.string().min(1)
+});
+
+export async function registerGenerateRoutes(app: FastifyInstance) {
   const config = loadPromptConfig();
   const serverConfig = config.server || {};
   ensureTaskGc(serverConfig.taskTtlMs ?? 10 * 60 * 1000, serverConfig.taskGcIntervalMs ?? 60 * 1000);
-  app.post("/wechat/prompt", async (req, reply) => {
+
+  app.post("/generate/prompt", async (req, reply) => {
     const parsed = promptSchema.safeParse(req.body);
     if (!parsed.success) {
       reply.status(400);
       return { error: "BadRequest", message: "invalid request body", issues: parsed.error.issues };
     }
-    return getWeChatPromptTemplate(parsed.data.referenceAssetId);
+    return getPromptTemplate(parsed.data.referenceAssetId);
   });
 
-  app.post("/wechat/import", async (req, reply) => {
-    const result = await importWeChatStickerPack(app, req);
+  app.post("/generate/import", async (req, reply) => {
+    const presetId = (req.body as any)?.presetId || "wechat_stickers";
+    const result = await importStickerPack(app, presetId, req);
     return result;
   });
 
-  app.post("/wechat/generate", async (req, reply) => {
-    const parsed = generateSchema.safeParse(req.body);
-    if (!parsed.success) {
-      reply.status(400);
-      return { error: "BadRequest", message: "invalid request body", issues: parsed.error.issues };
-    }
-    reply.hijack();
-    const raw = reply.raw;
-    raw.setHeader("content-type", "text/event-stream; charset=utf-8");
-    raw.setHeader("cache-control", "no-cache, no-transform");
-    raw.setHeader("connection", "keep-alive");
-    raw.setHeader("x-accel-buffering", "no");
-    raw.flushHeaders?.();
-
-    let closed = false;
-    const abortController = new AbortController();
-    req.raw.on("close", () => {
-      closed = true;
-      abortController.abort();
-    });
-
-    function send(event: string, data: unknown) {
-      if (closed) return;
-      raw.write(`event: ${event}\n`);
-      raw.write(`data: ${JSON.stringify(data)}\n\n`);
-    }
-
-    try {
-      await generateWeChatAssetsAndPack(app, parsed.data, send, undefined, abortController.signal);
-    } catch (error) {
-      send("error", {
-        message: error instanceof Error ? error.message : "生成失败，请稍后重试。"
-      });
-    } finally {
-      if (!closed) raw.end();
-    }
-  });
-
-  app.post("/wechat/generate/start", async (req, reply) => {
+  app.post("/generate/start", async (req, reply) => {
     const parsed = generateSchema.safeParse(req.body);
     if (!parsed.success) {
       reply.status(400);
@@ -106,11 +85,12 @@ export async function registerWeChatAiRoutes(app: FastifyInstance) {
     const task = createTask();
     const abortController = new AbortController();
     setTaskCancelHandler(task.id, () => abortController.abort());
-    // run in background
+
     setImmediate(async () => {
       try {
-        await generateWeChatAssetsAndPack(
+        await generateAssetsAndPack(
           app,
+          parsed.data.presetId,
           parsed.data,
           (event, data) => appendEvent(task, event, data),
           () => Boolean(getTask(task.id)?.canceled),
@@ -118,7 +98,7 @@ export async function registerWeChatAiRoutes(app: FastifyInstance) {
         );
       } catch (error) {
         if (getTask(task.id)?.canceled) return;
-        console.error("[WeChatAI] Task generation failed:", task.id, error);
+        console.error("[Generate] Task generation failed:", task.id, error);
         appendEvent(task, "error", {
           message: error instanceof Error ? error.message : "生成失败，请稍后重试。"
         });
@@ -127,7 +107,7 @@ export async function registerWeChatAiRoutes(app: FastifyInstance) {
     return { taskId: task.id };
   });
 
-  app.get("/wechat/generate/stream", async (req, reply) => {
+  app.get("/generate/stream", async (req, reply) => {
     const { taskId } = (req.query ?? {}) as { taskId?: string };
     if (!taskId) {
       reply.status(400);
@@ -148,8 +128,8 @@ export async function registerWeChatAiRoutes(app: FastifyInstance) {
 
     let closed = false;
     let pingInterval: NodeJS.Timeout;
-    let listener: ((ev: { id: number; event: string; data: unknown }) => void) | undefined;
-    
+    let listener: (ev: TaskEvent) => void;
+
     req.raw.on("close", () => {
       closed = true;
       clearInterval(pingInterval);
@@ -160,7 +140,7 @@ export async function registerWeChatAiRoutes(app: FastifyInstance) {
       if (!closed) {
         raw.write(`: ping\n\n`);
       }
-    }, 10000); // 10秒发一次心跳注释
+    }, 10000);
 
     function send(ev: { id: number; event: string; data: unknown }) {
       if (closed) return;
@@ -180,7 +160,7 @@ export async function registerWeChatAiRoutes(app: FastifyInstance) {
       }
     }
 
-    listener = (ev: { id: number; event: string; data: unknown }) => {
+    listener = (ev: TaskEvent) => {
       send(ev);
       if (ev.event === "done" || ev.event === "error") {
         removeListener(task, listener);
@@ -190,14 +170,13 @@ export async function registerWeChatAiRoutes(app: FastifyInstance) {
     addListener(task, listener);
   });
 
-  app.post("/wechat/generate/cancel", async (req, reply) => {
-    const body = (req.body ?? {}) as { taskId?: string };
-    const { taskId } = body;
-    if (!taskId) {
+  app.post("/generate/cancel", async (req, reply) => {
+    const parsed = cancelSchema.safeParse(req.body);
+    if (!parsed.success) {
       reply.status(400);
-      return { error: "BadRequest", message: "missing taskId" };
+      return { error: "BadRequest", message: "invalid request body", issues: parsed.error.issues };
     }
-    const ok = cancelTask(taskId);
+    const ok = cancelTask(parsed.data.taskId);
     if (!ok) {
       reply.status(404);
       return { error: "NotFound", message: "task not found" };

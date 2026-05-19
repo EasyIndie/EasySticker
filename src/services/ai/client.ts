@@ -1,5 +1,5 @@
 import { type AiProvider, type AiGenerateInput, type AiGenerateOutput } from "./provider";
-import { loadPromptConfig } from "../wechat/promptConfig";
+import { loadPromptConfig } from "../generate/promptConfig";
 
 type Options = {
   timeoutMs: number;

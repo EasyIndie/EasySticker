@@ -1,6 +1,6 @@
 import { describe, expect, it, vi, afterEach } from "vitest";
 import { getAiProvider } from "../src/services/ai/index";
-import * as promptConfigModule from "../src/services/wechat/promptConfig";
+import * as promptConfigModule from "../src/services/generate/promptConfig";
 
 describe("getAiProvider validation", () => {
   afterEach(() => {
