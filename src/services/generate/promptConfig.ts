@@ -67,6 +67,18 @@ export interface PromptConfig {
     logLevel?: string;
     taskTtlMs?: number;
     taskGcIntervalMs?: number;
+    security?: {
+      apiToken?: string;
+      enableAuth?: boolean;
+      rateLimit?: {
+        maxRequests: number;
+        windowMs: number;
+      };
+      dailyQuota?: {
+        maxGenerations: number;
+      };
+      corsAllowOrigin?: string;
+    };
   };
   global: {
     prompt: string;
