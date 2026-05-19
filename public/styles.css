@@ -386,8 +386,11 @@ button.secondary:hover {
   gap: var(--space-3);
 }
 
-#heroBadge {
+.hero-topline-right {
   margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
 }
 
 .hero h1 {
@@ -1491,7 +1494,7 @@ select {
     align-self: flex-end;
   }
 
-  #heroBadge {
+  .hero-topline-right {
     align-self: flex-end;
   }
 
