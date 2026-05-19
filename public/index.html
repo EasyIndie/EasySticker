@@ -402,6 +402,18 @@
         </div><!-- /.preview-area -->
       </section>
 
+      <section class="card step-card" id="historySection" hidden>
+        <div class="step-index">H</div>
+        <div class="step-head">
+          <h2>历史记录</h2>
+          <p class="muted">最近生成的表情包，点击可重新下载。最多保留最近 10 个。</p>
+        </div>
+        <div class="step-body">
+          <button id="clearHistory" type="button" class="secondary">清空历史</button>
+        </div>
+        <div id="historyList" class="history-list"></div>
+      </section>
+
       <div id="stickyActionBar" class="sticky-action-bar" hidden>
         <div class="sticky-action-bar-inner">
           <div class="sticky-action-left">
@@ -417,17 +429,7 @@
     </main>
     <div id="toastNotice" class="toast-notice" data-tone="info" data-visible="false" aria-live="assertive"></div>
 
-    <section class="card step-card" id="historySection" hidden>
-      <div class="step-index">H</div>
-      <div class="step-head">
-        <h2>历史记录</h2>
-        <p class="muted">最近生成的表情包，点击可重新下载。最多保留最近 10 个。</p>
-      </div>
-      <div class="step-body">
-        <button id="clearHistory" type="button" class="secondary">清空历史</button>
-      </div>
-      <div id="historyList" class="history-list"></div>
-    </section>
+    <!-- moved inside main.page above -->
 
     <script src="/app.js?v=3"></script>
   </body>
