@@ -10,6 +10,35 @@
   <body>
     <a href="#mainContent" class="skip-link">跳到主要内容</a>
 
+    <!-- User Auth Overlay -->
+    <div id="authOverlay" class="auth-overlay" aria-modal="true" role="dialog" aria-label="登录" hidden>
+      <div class="auth-box">
+        <div class="auth-header">
+          <h2 id="authTitle">登录 EasySticker</h2>
+          <p class="muted" id="authSubtitle">输入邮箱和密码进入工作台</p>
+        </div>
+        <form id="authForm" class="auth-form">
+          <label class="field">
+            <span class="section-title">邮箱</span>
+            <input id="loginEmail" type="email" placeholder="your@email.com" required />
+          </label>
+          <label class="field">
+            <span class="section-title">密码</span>
+            <input id="loginPassword" type="password" placeholder="密码" required />
+          </label>
+          <div id="authError" class="field-error" hidden></div>
+          <button type="submit" class="auth-btn" id="authSubmit">登录</button>
+          <p class="auth-switch" id="authSwitch">
+            没有账户？<a href="#" id="authToggle">注册</a>
+          </p>
+        </form>
+        <div class="auth-quota" id="authQuotaBar" hidden>
+          <span>今日生成配额：</span>
+          <span id="quotaDisplay">- / 100</span>
+        </div>
+      </div>
+    </div>
+
     <!-- Drop Zone Overlay -->
     <div id="dropZone" class="drop-zone-overlay" aria-hidden="true">
       <div class="drop-zone-content">
@@ -24,7 +53,9 @@
         <div class="hero-topline">
           <span class="badge" id="heroBadge">AI 表情流程</span>
           <div class="hero-topline-right">
+            <span class="badge badge-neutral" id="userBadge" hidden>未登录</span>
             <span class="badge badge-neutral">内部开发页</span>
+            <button type="button" id="loginBtn" class="hero-btn" aria-label="登录" title="登录">👤</button>
             <button type="button" id="darkModeToggle" class="hero-btn" aria-label="切换深色模式" title="切换深色模式">🌙</button>
           </div>
         </div>
