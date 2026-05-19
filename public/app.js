@@ -2799,10 +2799,16 @@ async function initApp() {
   restorePersistedPackResult();
   renderPackHistory();
 
-  // === UX: init step nav, sticky bar, mobile tabs ===
+  // === UX: init step nav, sticky bar, tabs ===
   updateStepNav(0, []);
   initStickyBar();
   initViewTabs();
+
+  // === Dark mode, drop zone, lightbox, keyboard shortcuts ===
+  initDarkMode();
+  initDropZone();
+  initLightbox();
+  initKeyboardShortcuts();
 }
 
 // ========== Phase 1-3: UX Improvements ==========
@@ -3042,6 +3048,112 @@ renderPackHistory = function () {
 
     actionsEl.appendChild(restoreBtn);
   });
-};
+}
+
+// ========== Dark Mode ==========
+function initDarkMode() {
+  var toggle = document.getElementById("darkModeToggle");
+  if (!toggle) return;
+  var saved = localStorage.getItem("easysticker-theme");
+  var prefersDark = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches;
+  var theme = saved || (prefersDark ? "dark" : "light");
+  document.documentElement.setAttribute("data-theme", theme);
+  toggle.textContent = theme === "dark" ? "☀️" : "🌙";
+  var meta = document.getElementById("themeMeta");
+  if (meta) meta.content = theme === "dark" ? "#111827" : "#07c160";
+  toggle.addEventListener("click", function () {
+    var next = document.documentElement.getAttribute("data-theme") === "dark" ? "light" : "dark";
+    document.documentElement.setAttribute("data-theme", next);
+    localStorage.setItem("easysticker-theme", next);
+    toggle.textContent = next === "dark" ? "☀️" : "🌙";
+    if (meta) meta.content = next === "dark" ? "#111827" : "#07c160";
+  });
+}
+
+// ========== Drag & Drop Upload ==========
+function initDropZone() {
+  var dropZone = document.getElementById("dropZone");
+  if (!dropZone) return;
+  var dragCounter = 0;
+  ["dragenter", "dragover", "dragleave", "drop"].forEach(function (evt) {
+    document.addEventListener(evt, function (e) { e.preventDefault(); e.stopPropagation(); }, false);
+  });
+  document.addEventListener("dragenter", function (e) {
+    dragCounter++;
+    if (dragCounter === 1) dropZone.classList.add("drag-active");
+  }, false);
+  document.addEventListener("dragleave", function (e) {
+    dragCounter--;
+    if (dragCounter === 0) dropZone.classList.remove("drag-active");
+  }, false);
+  document.addEventListener("drop", function (e) {
+    dragCounter = 0;
+    dropZone.classList.remove("drag-active");
+    var files = e.dataTransfer && e.dataTransfer.files;
+    if (files && files.length > 0) {
+      var fileInput = document.getElementById("file");
+      if (fileInput) {
+        fileInput.files = files;
+        var event = new Event("change", { bubbles: true });
+        fileInput.dispatchEvent(event);
+      }
+    }
+  }, false);
+}
+
+// ========== Lightbox ==========
+function initLightbox() {
+  var lightbox = document.getElementById("lightbox");
+  var backdrop = document.getElementById("lightboxBackdrop");
+  var closeBtn = document.getElementById("lightboxClose");
+  var lightboxImg = document.getElementById("lightboxImage");
+  if (!lightbox || !backdrop || !closeBtn || !lightboxImg) return;
+
+  // Delegate click on preview images
+  document.addEventListener("click", function (e) {
+    var target = e.target.closest(".preview-item img");
+    if (!target) return;
+    var src = target.getAttribute("src") || target.src;
+    if (!src) return;
+    lightboxImg.src = src;
+    lightbox.hidden = false;
+    document.body.style.overflow = "hidden";
+  });
+
+  function closeLightbox() {
+    lightbox.hidden = true;
+    lightboxImg.src = "";
+    document.body.style.overflow = "";
+  }
+
+  backdrop.addEventListener("click", closeLightbox);
+  closeBtn.addEventListener("click", closeLightbox);
+  lightbox._close = closeLightbox;
+}
+
+// ========== Keyboard Shortcuts ==========
+function initKeyboardShortcuts() {
+  document.addEventListener("keydown", function (e) {
+    // Escape: close lightbox
+    if (e.key === "Escape") {
+      var lightbox = document.getElementById("lightbox");
+      if (lightbox && !lightbox.hidden && lightbox._close) {
+        e.preventDefault();
+        lightbox._close();
+        return;
+      }
+    }
+    // Ctrl+Enter / Cmd+Enter on textareas: trigger generate
+    if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
+      var active = document.activeElement;
+      if (active && (active.tagName === "TEXTAREA" || active.tagName === "INPUT")) {
+        e.preventDefault();
+        if (currentCreationMode === "ai") {
+          generatePlatformPack();
+        }
+      }
+    }
+  });
+}
 
 initApp();
