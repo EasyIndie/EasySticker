@@ -70,7 +70,7 @@ const stickyStatus = document.getElementById("stickyStatus");
 const stickyRegenerate = document.getElementById("stickyRegenerate");
 const stickyDownload = document.getElementById("stickyDownload");
 const stickyReset = document.getElementById("stickyReset");
-const mobileViewTabs = document.getElementById("mobileViewTabs");
+const viewTabs = document.getElementById("viewTabs");
 const configArea = document.querySelector(".config-area");
 const previewArea = document.querySelector(".preview-area");
 
@@ -439,25 +439,14 @@ function scrollToStep(stepIndex) {
 
 // ========== Mobile View Tabs ==========
 function syncMobileView(view) {
-  if (!configArea || !previewArea || !mobileViewTabs) return;
+  if (!configArea || !previewArea || !viewTabs) return;
 
-  const tabs = mobileViewTabs.querySelectorAll(".mobile-tab");
+  const tabs = viewTabs.querySelectorAll(".view-tab");
   tabs.forEach(t => {
     t.classList.toggle("active", t.dataset.view === view);
     t.setAttribute("aria-pressed", t.dataset.view === view ? "true" : "false");
   });
 
-  currentMobileView = view;
-
-  const isMobile = window.innerWidth < 768;
-  if (!isMobile) {
-    configArea.hidden = false;
-    previewArea.hidden = false;
-    mobileViewTabs.hidden = true;
-    return;
-  }
-
-  mobileViewTabs.hidden = false;
   configArea.hidden = view !== "config";
   previewArea.hidden = view !== "preview";
 
@@ -467,8 +456,8 @@ function syncMobileView(view) {
 }
 
 function initMobileViewTabs() {
-  if (!mobileViewTabs) return;
-  mobileViewTabs.querySelectorAll(".mobile-tab").forEach(tab => {
+  if (!viewTabs) return;
+  viewTabs.querySelectorAll(".view-tab").forEach(tab => {
     tab.addEventListener("click", () => {
       syncMobileView(tab.dataset.view);
     });
@@ -1907,7 +1896,7 @@ function resetAllState() {
   document.querySelectorAll(".step-card.collapsed").forEach(function (c) { expandStepCard(c); });
   updateStepNav(0, []);
   hideStickyActionBar();
-  syncMobileView("config");
+  syncViewTab("config");
 
   uploadForm.reset();
   importForm?.reset?.();
@@ -2357,7 +2346,7 @@ async function generatePlatformPack() {
         if (stepCards[2]) collapseStepCard(stepCards[2], "配置已完成" + (json?.meta?.count ? "，" + json.meta.count + " 张" : ""), "success");
         updateStepNav(4, [0, 1, 2, 3]);
         showStickyActionBar("生成完成");
-        syncMobileView("preview");
+        syncViewTab("preview");
       }
       if (eventName === "error") {
         const msg = String(data?.message || "");
@@ -2813,8 +2802,7 @@ async function initApp() {
   // === UX: init step nav, sticky bar, mobile tabs ===
   updateStepNav(0, []);
   initStickyBar();
-  initMobileTabs();
-  initResizeHandler();
+  initViewTabs();
 }
 
 // ========== Phase 1-3: UX Improvements ==========
@@ -2909,35 +2897,21 @@ function scrollToStep(stepIndex) {
 }
 
 // ---- Mobile View Tabs ----
-function syncMobileView(view) {
+function syncViewTab(view) {
   var configArea = document.querySelector(".config-area");
   var previewArea = document.querySelector(".preview-area");
-  var mobileTabs = document.getElementById("mobileViewTabs");
-  if (!configArea || !previewArea) return;
+  var tabsEl = document.getElementById("viewTabs");
+  if (!configArea || !previewArea || !tabsEl) return;
 
-  var isMobile = window.innerWidth < 768;
+  var tabs = tabsEl.querySelectorAll(".view-tab");
+  tabs.forEach(function (t) {
+    var active = t.dataset.view === view;
+    t.classList.toggle("active", active);
+    t.setAttribute("aria-pressed", active ? "true" : "false");
+  });
 
-  if (mobileTabs) {
-    if (isMobile) {
-      mobileTabs.hidden = false;
-      var tabs = mobileTabs.querySelectorAll(".mobile-tab");
-      tabs.forEach(function (t) {
-        var active = t.dataset.view === view;
-        t.classList.toggle("active", active);
-        t.setAttribute("aria-pressed", active ? "true" : "false");
-      });
-    } else {
-      mobileTabs.hidden = true;
-    }
-  }
-
-  if (isMobile) {
-    configArea.hidden = view !== "config";
-    previewArea.hidden = view !== "preview";
-  } else {
-    configArea.hidden = false;
-    previewArea.hidden = false;
-  }
+  configArea.hidden = view !== "config";
+  previewArea.hidden = view !== "preview";
 }
 
 // ---- Sticky Action Bar ----
@@ -3023,39 +2997,12 @@ function initStickyBar() {
 }
 
 // Mobile tab handlers
-function initMobileTabs() {
-  var tabs = document.querySelectorAll(".mobile-tab");
+function initViewTabs() {
+  var tabs = document.querySelectorAll(".view-tab");
   tabs.forEach(function (tab) {
     tab.addEventListener("click", function () {
-      syncMobileView(tab.dataset.view);
+      syncViewTab(tab.dataset.view);
     });
-  });
-}
-
-// Responsive resize handler
-var _resizeTimer;
-function initResizeHandler() {
-  if (typeof window.addEventListener !== "function") return;
-  window.addEventListener("resize", function () {
-    clearTimeout(_resizeTimer);
-    _resizeTimer = setTimeout(function () {
-      var isMobile = window.innerWidth < 768;
-      if (!isMobile) {
-        var configArea = document.querySelector(".config-area");
-        var previewArea = document.querySelector(".preview-area");
-        if (configArea) configArea.hidden = false;
-        if (previewArea) previewArea.hidden = false;
-        var mobileTabs = document.getElementById("mobileViewTabs");
-        if (mobileTabs) mobileTabs.hidden = true;
-      } else {
-        var mobileTabs2 = document.getElementById("mobileViewTabs");
-        if (mobileTabs2) {
-          mobileTabs2.hidden = false;
-          var activeTab = mobileTabs2.querySelector(".mobile-tab.active");
-          syncMobileView(activeTab ? activeTab.dataset.view : "config");
-        }
-      }
-    }, 200);
   });
 }
 

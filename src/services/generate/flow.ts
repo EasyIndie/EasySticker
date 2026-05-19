@@ -62,7 +62,11 @@ async function convertToPlatformFormat(
     return pipeline.webp({ quality: 30 }).toBuffer();
   }
 
-  return pipeline.png({ compressionLevel: 9, adaptiveFiltering: true }).toBuffer();
+  const png = await pipeline.clone().png({ compressionLevel: 9, adaptiveFiltering: true }).toBuffer();
+  const maxBytes = presetId === "telegram_static" ? 512 * 1024 : Infinity;
+  if (png.length <= maxBytes) return png;
+  // 超大文件改用 palette 量化压缩（适用于 PNG）
+  return pipeline.png({ compressionLevel: 9, palette: true }).toBuffer();
 }
 
 async function toBannerPng(input: Buffer) {
