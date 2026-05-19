@@ -68,6 +68,8 @@ class FakeElement {
     this.focused = false;
     this.files = { length: 0 };
     this.listeners = new Map();
+    this._children = [];
+    this._childrenById = new Map();
     this.classList = {
       add: (...tokens: string[]) => {
         const classes = new Set(this.className.split(/\s+/).filter(Boolean));
@@ -112,6 +114,14 @@ class FakeElement {
 
   removeAttribute(name: string) {
     (this as unknown as Record<string, string>)[name] = "";
+  }
+
+  querySelectorAll(_selector: string) {
+    return [] as FakeElement[];
+  }
+
+  querySelector(_selector: string) {
+    return null;
   }
 
   select() {
@@ -250,7 +260,14 @@ function createAppSandbox(persistedValue?: Record<string, unknown>) {
     "historyList",
     "historySection",
     "platformSelector",
-    "file"
+    "file",
+    "stickyActionBar",
+    "stickyStatus",
+    "stickyRegenerate",
+    "stickyDownload",
+    "stickyReset",
+    "stepNav",
+    "mobileViewTabs"
   ];
 
   const elements = new Map(ids.map((id) => [id, new FakeElement("div", id)]));

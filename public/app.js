@@ -65,6 +65,14 @@ const clearHistoryBtn = document.getElementById("clearHistory");
 const originalPreviewPlaceholder = document.getElementById("originalPreviewPlaceholder");
 const platformSelector = document.getElementById("platformSelector");
 const platformRadios = document.querySelectorAll('input[name="platform"]');
+const stickyActionBar = document.getElementById("stickyActionBar");
+const stickyStatus = document.getElementById("stickyStatus");
+const stickyRegenerate = document.getElementById("stickyRegenerate");
+const stickyDownload = document.getElementById("stickyDownload");
+const stickyReset = document.getElementById("stickyReset");
+const mobileViewTabs = document.getElementById("mobileViewTabs");
+const configArea = document.querySelector(".config-area");
+const previewArea = document.querySelector(".preview-area");
 
 function getSelectedPlatform() {
   const checked = document.querySelector('input[name="platform"]:checked');
@@ -187,6 +195,15 @@ const PLATFORM_SPECS = {
   }
 };
 let currentPlatform = "wechat_stickers";
+let currentMobileView = "config";
+
+const STEP_NAV_ITEMS = [
+  { step: 0, label: "选择平台" },
+  { step: 1, label: "上传参考图" },
+  { step: 2, label: "配置参数" },
+  { step: 3, label: "生成" },
+  { step: 4, label: "预览下载" }
+];
 
 let DEFAULT_STICKER_COUNT = PLATFORM_SPECS.wechat_stickers.defaultCount;
 let MIN_STICKER_COUNT = PLATFORM_SPECS.wechat_stickers.minCount;
@@ -326,6 +343,182 @@ const CONFIRM_CARD_STATE = {
     }
   }
 };
+
+// ========== Scroll Helpers ==========
+function scrollToElement(el, options = {}) {
+  if (!el) return;
+  const prefersReducedMotion = Boolean(window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches);
+  try {
+    el.scrollIntoView({
+      behavior: prefersReducedMotion ? "auto" : "smooth",
+      block: options.block || "start"
+    });
+  } catch {
+    el.scrollIntoView();
+  }
+}
+
+// ========== Step Card Collapse ==========
+function collapseStepCard(cardEl, summaryText, tone = "success") {
+  if (!cardEl || cardEl.classList.contains("collapsed")) return;
+
+  let summary = cardEl.querySelector(".step-summary");
+  if (!summary) {
+    summary = document.createElement("div");
+    summary.className = "step-summary";
+
+    const statusDot = document.createElement("span");
+    statusDot.className = "step-summary-status";
+    statusDot.dataset.tone = tone;
+
+    const textEl = document.createElement("span");
+    textEl.className = "step-summary-text";
+
+    const editBtn = document.createElement("button");
+    editBtn.type = "button";
+    editBtn.className = "step-summary-edit secondary";
+    editBtn.textContent = "展开修改";
+    editBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      expandStepCard(cardEl);
+    });
+
+    summary.appendChild(statusDot);
+    summary.appendChild(textEl);
+    summary.appendChild(editBtn);
+    cardEl.querySelector(".step-head").appendChild(summary);
+  }
+
+  cardEl.querySelector(".step-summary-text").textContent = summaryText;
+  cardEl.querySelector(".step-summary-status").dataset.tone = tone;
+  cardEl.classList.add("collapsed");
+}
+
+function expandStepCard(cardEl) {
+  if (!cardEl || !cardEl.classList.contains("collapsed")) return;
+  cardEl.classList.remove("collapsed");
+}
+
+function expandAllStepCards() {
+  document.querySelectorAll(".step-card.collapsed").forEach(card => {
+    card.classList.remove("collapsed");
+  });
+}
+
+// ========== Step Navigation ==========
+function updateStepNav(activeStep, completedSteps = []) {
+  const nav = document.getElementById("stepNav");
+  if (!nav) return;
+
+  const items = nav.querySelectorAll(".step-nav-item");
+  items.forEach((item, idx) => {
+    item.classList.remove("active", "completed");
+    if (idx === activeStep) item.classList.add("active");
+    else if (completedSteps.includes(idx)) item.classList.add("completed");
+
+    item.onclick = () => {
+      const targetStep = parseInt(item.dataset.step);
+      scrollToStep(targetStep);
+    };
+  });
+}
+
+function scrollToStep(stepIndex) {
+  if (stepIndex <= 3) {
+    const cards = configArea?.querySelectorAll(".step-card");
+    if (cards && cards[stepIndex]) {
+      scrollToElement(cards[stepIndex], { block: "start" });
+    }
+  } else if (stepIndex === 4) {
+    const cards = previewArea?.querySelectorAll(".step-card");
+    if (cards && cards[0]) {
+      scrollToElement(cards[0], { block: "start" });
+    }
+  }
+}
+
+// ========== Mobile View Tabs ==========
+function syncMobileView(view) {
+  if (!configArea || !previewArea || !mobileViewTabs) return;
+
+  const tabs = mobileViewTabs.querySelectorAll(".mobile-tab");
+  tabs.forEach(t => {
+    t.classList.toggle("active", t.dataset.view === view);
+    t.setAttribute("aria-pressed", t.dataset.view === view ? "true" : "false");
+  });
+
+  currentMobileView = view;
+
+  const isMobile = window.innerWidth < 768;
+  if (!isMobile) {
+    configArea.hidden = false;
+    previewArea.hidden = false;
+    mobileViewTabs.hidden = true;
+    return;
+  }
+
+  mobileViewTabs.hidden = false;
+  configArea.hidden = view !== "config";
+  previewArea.hidden = view !== "preview";
+
+  if (view === "preview") {
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+}
+
+function initMobileViewTabs() {
+  if (!mobileViewTabs) return;
+  mobileViewTabs.querySelectorAll(".mobile-tab").forEach(tab => {
+    tab.addEventListener("click", () => {
+      syncMobileView(tab.dataset.view);
+    });
+  });
+}
+
+// ========== Sticky Action Bar ==========
+function showStickyBar(packTitle, packId, downloadUrl, downloadFilename) {
+  if (!stickyActionBar) return;
+  if (stickyStatus) stickyStatus.textContent = packTitle ? `✅ ${packTitle}` : "✅ 已生成";
+  stickyActionBar.hidden = false;
+
+  // Wire download
+  if (stickyDownload && downloadUrl) {
+    const newDownload = stickyDownload.cloneNode(true);
+    stickyDownload.parentNode.replaceChild(newDownload, stickyDownload);
+    const stickyDownloadRef = document.getElementById("stickyDownload");
+    if (stickyDownloadRef) {
+      stickyDownloadRef.addEventListener("click", () => {
+        const a = document.createElement("a");
+        a.href = downloadUrl;
+        a.download = downloadFilename || `${packId}.zip`;
+        a.click();
+      });
+    }
+  }
+}
+
+function hideStickyBar() {
+  if (stickyActionBar) stickyActionBar.hidden = true;
+}
+
+function initStickyBarButtons() {
+  if (stickyRegenerate) {
+    stickyRegenerate.addEventListener("click", async () => {
+      if (currentCreationMode === "ai") {
+        expandAllStepCards();
+        scrollToElement(document.querySelector(".config-area"), { block: "start" });
+        await generatePlatformPack();
+      }
+    });
+  }
+  if (stickyReset) {
+    stickyReset.addEventListener("click", () => {
+      expandAllStepCards();
+      resetAllState();
+      hideStickyBar();
+    });
+  }
+}
 
 // ========== Platform UI Sync ==========
 function syncPlatformUI() {
@@ -1710,6 +1903,12 @@ function resetAllState() {
   hasGenerationAttempted = false;
   lastPackResult = null;
 
+  // === UX: expand all cards, reset nav, hide sticky bar ===
+  document.querySelectorAll(".step-card.collapsed").forEach(function (c) { expandStepCard(c); });
+  updateStepNav(0, []);
+  hideStickyActionBar();
+  syncMobileView("config");
+
   uploadForm.reset();
   importForm?.reset?.();
   if (creationModeImport) creationModeImport.checked = true;
@@ -2150,6 +2349,15 @@ async function generatePlatformPack() {
 
         renderExportInfo(json);
         renderMetadataPreview(json);
+
+        // === UX: collapse config, show sticky bar, update nav ===
+        var stepCards = document.querySelectorAll(".step-card");
+        if (stepCards[0]) collapseStepCard(stepCards[0], "已选择 " + (PLATFORM_SPECS[currentPlatform] ? PLATFORM_SPECS[currentPlatform].platformLabel : currentPlatform), "success");
+        if (stepCards[1]) collapseStepCard(stepCards[1], "参考图已上传", "success");
+        if (stepCards[2]) collapseStepCard(stepCards[2], "配置已完成" + (json?.meta?.count ? "，" + json.meta.count + " 张" : ""), "success");
+        updateStepNav(4, [0, 1, 2, 3]);
+        showStickyActionBar("生成完成");
+        syncMobileView("preview");
       }
       if (eventName === "error") {
         const msg = String(data?.message || "");
@@ -2291,6 +2499,8 @@ async function handleFileUpload() {
     setStatus(uploadState, "上传成功", "success");
     setNotice("参考图已上传，正在为你准备推荐提示词。", "success");
     setExportInfo("结果概览与导出信息", "参考图已就绪，下一步补充提示词并生成表情包。");
+    // === UX: update step nav to config ===
+    updateStepNav(2, [0, 1]);
 
     try {
       await suggestPrompt();
@@ -2599,6 +2809,292 @@ async function initApp() {
   setPromptHint(currentStyles);
   restorePersistedPackResult();
   renderPackHistory();
+
+  // === UX: init step nav, sticky bar, mobile tabs ===
+  updateStepNav(0, []);
+  initStickyBar();
+  initMobileTabs();
+  initResizeHandler();
 }
+
+// ========== Phase 1-3: UX Improvements ==========
+
+// ---- Scroll utility ----
+function scrollToElement(el, options) {
+  if (!el) return;
+  options = options || {};
+  var prefersReducedMotion = Boolean(
+    window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches
+  );
+  try {
+    el.scrollIntoView({
+      behavior: prefersReducedMotion ? "auto" : "smooth",
+      block: options.block || "start"
+    });
+  } catch (e) {
+    el.scrollIntoView();
+  }
+}
+
+// ---- Step Card Collapse / Expand ----
+function collapseStepCard(cardEl, summaryText, tone) {
+  if (!cardEl || cardEl.classList.contains("collapsed")) return;
+  tone = tone || "success";
+
+  var summary = cardEl.querySelector(".step-summary");
+  if (!summary) {
+    summary = document.createElement("div");
+    summary.className = "step-summary";
+
+    var statusDot = document.createElement("span");
+    statusDot.className = "step-summary-status";
+    statusDot.dataset.tone = tone;
+
+    var textEl = document.createElement("span");
+    textEl.className = "step-summary-text";
+
+    var editBtn = document.createElement("button");
+    editBtn.type = "button";
+    editBtn.className = "step-summary-edit secondary";
+    editBtn.textContent = "\u5C55\u5F00\u4FEE\u6539";
+    editBtn.addEventListener("click", function (e) {
+      e.stopPropagation();
+      expandStepCard(cardEl);
+    });
+
+    summary.appendChild(statusDot);
+    summary.appendChild(textEl);
+    summary.appendChild(editBtn);
+    cardEl.querySelector(".step-head").appendChild(summary);
+  }
+
+  var textEl2 = cardEl.querySelector(".step-summary-text");
+  if (textEl2) textEl2.textContent = summaryText || "";
+  var dotEl = cardEl.querySelector(".step-summary-status");
+  if (dotEl) dotEl.dataset.tone = tone;
+
+  cardEl.classList.add("collapsed");
+}
+
+function expandStepCard(cardEl) {
+  if (!cardEl || !cardEl.classList.contains("collapsed")) return;
+  cardEl.classList.remove("collapsed");
+}
+
+// ---- Step Navigation ----
+function updateStepNav(activeStep, completedSteps) {
+  var nav = document.getElementById("stepNav");
+  if (!nav) return;
+  completedSteps = completedSteps || [];
+
+  var items = typeof nav.querySelectorAll === "function" ? nav.querySelectorAll(".step-nav-item") : [];
+  items.forEach(function (item, idx) {
+    item.classList.remove("active", "completed");
+    if (idx === activeStep) {
+      item.classList.add("active");
+    } else if (completedSteps.indexOf(idx) !== -1) {
+      item.classList.add("completed");
+    }
+    item.onclick = function () {
+      scrollToStep(parseInt(item.dataset.step));
+    };
+  });
+}
+
+function scrollToStep(stepIndex) {
+  var cards = document.querySelectorAll(".step-card");
+  if (cards[stepIndex]) {
+    scrollToElement(cards[stepIndex], { block: "start" });
+  }
+}
+
+// ---- Mobile View Tabs ----
+function syncMobileView(view) {
+  var configArea = document.querySelector(".config-area");
+  var previewArea = document.querySelector(".preview-area");
+  var mobileTabs = document.getElementById("mobileViewTabs");
+  if (!configArea || !previewArea) return;
+
+  var isMobile = window.innerWidth < 768;
+
+  if (mobileTabs) {
+    if (isMobile) {
+      mobileTabs.hidden = false;
+      var tabs = mobileTabs.querySelectorAll(".mobile-tab");
+      tabs.forEach(function (t) {
+        var active = t.dataset.view === view;
+        t.classList.toggle("active", active);
+        t.setAttribute("aria-pressed", active ? "true" : "false");
+      });
+    } else {
+      mobileTabs.hidden = true;
+    }
+  }
+
+  if (isMobile) {
+    configArea.hidden = view !== "config";
+    previewArea.hidden = view !== "preview";
+  } else {
+    configArea.hidden = false;
+    previewArea.hidden = false;
+  }
+}
+
+// ---- Sticky Action Bar ----
+function showStickyActionBar(stateText) {
+  var bar = document.getElementById("stickyActionBar");
+  var statusEl = document.getElementById("stickyStatus");
+  if (!bar) return;
+  if (statusEl) statusEl.textContent = stateText || "";
+  bar.hidden = false;
+  var pageEl = document.querySelector(".page");
+  if (pageEl) pageEl.classList.add("has-sticky-bar");
+}
+
+function hideStickyActionBar() {
+  var bar = document.getElementById("stickyActionBar");
+  if (!bar) return;
+  bar.hidden = true;
+  var pageEl = document.querySelector(".page");
+  if (pageEl) pageEl.classList.remove("has-sticky-bar");
+}
+
+// ---- History Restore ----
+function restoreFromHistory(packId) {
+  var history = getPackHistory();
+  if (!Array.isArray(history)) return;
+  var entry = history.find(function (h) { return h.packId === packId; });
+  if (!entry) {
+    showToast("未找到该记录", "error");
+    return;
+  }
+
+  // Restore platform
+  if (entry.platform && PLATFORM_SPECS[entry.platform]) {
+    currentPlatform = entry.platform;
+    setSelectedPlatform(currentPlatform);
+    syncPlatformUI();
+  }
+
+  // Reset but keep history
+  resetAllState();
+
+  // Restore editable fields
+  if (entry.title) wechatAiTitle.value = entry.title;
+  if (entry.author) wechatAiAuthor.value = entry.author;
+  if (entry.stickerCount) wechatAiCount.value = String(entry.stickerCount);
+
+  // Switch to AI mode
+  if (creationModeAi) creationModeAi.checked = true;
+  syncCreationMode();
+
+  var titleText = entry.title || "未命名";
+  setNotice("\u5DF2\u6062\u590D\u300C" + titleText + "\u300D\u7684\u914D\u7F6E\uFF0C\u5982\u9700\u751F\u6210\u8BF7\u8865\u5145\u53C2\u8003\u56FE\u3002", "info");
+  scrollToElement(document.querySelector(".flow"), { block: "start" });
+}
+
+// Sticky bar button handlers (bound once after init)
+function initStickyBar() {
+  var regenBtn = document.getElementById("stickyRegenerate");
+  var dlBtn = document.getElementById("stickyDownload");
+  var resetBtn = document.getElementById("stickyReset");
+
+  if (regenBtn) {
+    regenBtn.addEventListener("click", function () {
+      if (currentCreationMode === "ai") {
+        generatePlatformPack();
+      }
+    });
+  }
+
+  if (dlBtn) {
+    dlBtn.addEventListener("click", function () {
+      if (lastPackResult && lastPackResult.downloadUrl) {
+        window.open(lastPackResult.downloadUrl, "_blank");
+      }
+    });
+  }
+
+  if (resetBtn) {
+    resetBtn.addEventListener("click", function () {
+      resetAllState();
+    });
+  }
+}
+
+// Mobile tab handlers
+function initMobileTabs() {
+  var tabs = document.querySelectorAll(".mobile-tab");
+  tabs.forEach(function (tab) {
+    tab.addEventListener("click", function () {
+      syncMobileView(tab.dataset.view);
+    });
+  });
+}
+
+// Responsive resize handler
+var _resizeTimer;
+function initResizeHandler() {
+  if (typeof window.addEventListener !== "function") return;
+  window.addEventListener("resize", function () {
+    clearTimeout(_resizeTimer);
+    _resizeTimer = setTimeout(function () {
+      var isMobile = window.innerWidth < 768;
+      if (!isMobile) {
+        var configArea = document.querySelector(".config-area");
+        var previewArea = document.querySelector(".preview-area");
+        if (configArea) configArea.hidden = false;
+        if (previewArea) previewArea.hidden = false;
+        var mobileTabs = document.getElementById("mobileViewTabs");
+        if (mobileTabs) mobileTabs.hidden = true;
+      } else {
+        var mobileTabs2 = document.getElementById("mobileViewTabs");
+        if (mobileTabs2) {
+          mobileTabs2.hidden = false;
+          var activeTab = mobileTabs2.querySelector(".mobile-tab.active");
+          syncMobileView(activeTab ? activeTab.dataset.view : "config");
+        }
+      }
+    }, 200);
+  });
+}
+
+// ---- Patch existing functions for UX integration ----
+
+// Patch renderPackHistory to add restore buttons
+var _origRenderPackHistory = renderPackHistory;
+renderPackHistory = function () {
+  _origRenderPackHistory();
+
+  // Add restore buttons to history items
+  var items = typeof historyList.querySelectorAll === "function" ? historyList.querySelectorAll(".history-item") : [];
+  items.forEach(function (item) {
+    if (item.querySelector(".history-restore-btn")) return;
+
+    var actionsEl = item.querySelector(".history-item-actions");
+    if (!actionsEl) return;
+
+    var restoreBtn = document.createElement("button");
+    restoreBtn.type = "button";
+    restoreBtn.className = "secondary history-restore-btn";
+    restoreBtn.textContent = "\u270F\uFE0F \u6062\u590D\u7F16\u8F91";
+    restoreBtn.style.fontSize = "var(--font-12)";
+    restoreBtn.style.padding = "6px 10px";
+    restoreBtn.style.borderRadius = "var(--radius-sm)";
+
+    // Find packId from the download button
+    var dlBtn = actionsEl.querySelector("a, button");
+    var packId = dlBtn ? (dlBtn.dataset ? dlBtn.dataset.packId : null) : null;
+    if (packId) {
+      restoreBtn.dataset.packId = packId;
+    }
+
+    restoreBtn.addEventListener("click", function () {
+      restoreFromHistory(restoreBtn.dataset.packId || "");
+    });
+
+    actionsEl.appendChild(restoreBtn);
+  });
+};
 
 initApp();
