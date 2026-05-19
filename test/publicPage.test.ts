@@ -267,7 +267,7 @@ function createAppSandbox(persistedValue?: Record<string, unknown>) {
     "stickyDownload",
     "stickyReset",
     "stepNav",
-    "mobileViewTabs"
+    "viewTabs"
   ];
 
   const elements = new Map(ids.map((id) => [id, new FakeElement("div", id)]));
