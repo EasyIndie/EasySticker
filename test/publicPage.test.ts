@@ -451,7 +451,6 @@ describe("public page", () => {
     expect(html).toContain('id="wechatAiStyleError"');
     expect(html).toContain("导出确认面板");
     expect(html).toContain("内部开发页");
-    expect(html).toContain('href="/internal.html"');
     expect(html).not.toContain("打开组件库文档页");
     expect(html).not.toContain('href="/components.html"');
     expect(html).not.toContain('href="/design-spec.html"');
@@ -499,8 +498,7 @@ describe("public page", () => {
       const res = await prodApp.inject({ method: "GET", url: "/" });
       expect(res.statusCode).toBe(200);
       expect(res.body).toContain("选择创建方式");
-      expect(res.body).not.toContain("内部开发页");
-      expect(res.body).not.toContain('href="/internal.html"');
+      // Badge always shown; only the link was production-filtered, now removed
     } finally {
       await prodApp.close();
       if (originalNodeEnv === undefined) {
@@ -628,7 +626,7 @@ describe("public page", () => {
       rewardEnabled: true,
       rewardMessage: "喜欢的话欢迎赞赏支持",
       stickerCount: 12,
-      styles: ["可爱", "简洁"],
+      styles: ["扁平插画", "3D 卡通"],
       hasGenerationAttempted: true,
       result: {
         packId: "pack-001",
@@ -668,7 +666,7 @@ describe("public page", () => {
         ),
         meta: {
           title: "猫咪日常",
-          styles: ["可爱", "简洁"],
+          styles: ["扁平插画", "3D 卡通"],
           author: "EasySticker Studio",
           version: "v1.2",
           copyright: "© EasySticker",
@@ -699,7 +697,7 @@ describe("public page", () => {
     })();
 
     expect(state.currentUploadId).toBe("upload-123");
-    expect(state.currentStyles).toEqual(["可爱"]); // 已经改为单选，只会恢复第一个
+    expect(state.currentStyles).toEqual(["扁平插画"]); // 已经改为单选，只会恢复第一个
     expect(state.hasGenerationAttempted).toBe(true);
     expect(state.lastPackResult.packId).toBe("pack-001");
     expect(elements.get("wechatAiProvider")?.value).toBe("doubao");
@@ -716,7 +714,7 @@ describe("public page", () => {
     expect(elements.get("uploadState")?.textContent).toBe("已恢复参考图");
     expect(elements.get("wechatAiFeedback")?.innerHTML).toContain("已从本地恢复最近一次生成结果");
     expect(elements.get("globalNotice")?.textContent).toContain("已恢复最近一次生成结果");
-    expect(elements.get("promptHint")?.textContent).toContain("可爱"); // 改为了单选，只包含一个
+    expect(elements.get("promptHint")?.textContent).toContain("扁平插画"); // 改为了单选，只包含一个
     expect(elements.get("promptHint")?.textContent).toContain("12 张");
     expect(elements.get("wechatAiExportInfo")?.innerHTML).toContain("结果概览与导出信息");
     expect(elements.get("wechatAiExportInfo")?.innerHTML).toContain("复制导出信息");

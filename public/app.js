@@ -939,7 +939,7 @@ function restorePersistedPackResult() {
 
     syncPlatformUI();
     syncRewardFields();
-    renderStyleOptions(currentStyles);
+    renderStyleOptions(DEFAULT_STYLE_OPTIONS);
     setPromptHint(currentStyles);
 
     if (restored.uploadId) {
@@ -2062,7 +2062,7 @@ async function suggestPrompt() {
 
     wechatAiPrompt.value = json.prompt ?? "";
     currentStyles = Array.isArray(json.styles) ? json.styles.filter(Boolean) : [];
-    renderStyleOptions(currentStyles.length ? currentStyles : DEFAULT_STYLE_OPTIONS);
+    renderStyleOptions(DEFAULT_STYLE_OPTIONS);
     setPromptHint(currentStyles);
   } catch (error) {
     // 忽略后台提示词生成错误，不影响主流程
