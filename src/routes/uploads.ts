@@ -27,6 +27,16 @@ export async function registerUploadRoutes(app: FastifyInstance) {
     const filePath = path.join(dir, `${id}${ext}`);
     await pipeline(part.file, fs.createWriteStream(filePath));
 
+    // Log usage for authenticated users
+    try {
+      await req.jwtVerify().catch(() => {});
+      const user = req.user as any;
+      if (user && user.email) {
+        app.usageStore.maybeRotate();
+        app.usageStore.log({ email: user.email, action: "upload", success: true });
+      }
+    } catch {}
+
     reply.send({
       uploadId: id,
       original: {

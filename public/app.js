@@ -1,3 +1,194 @@
+/* ===== Auth Module ===== */
+(function(){
+  const TOKEN_KEY = 'easysticker_token';
+  const USER_KEY = 'easysticker_user';
+  let authToken = localStorage.getItem(TOKEN_KEY) || null;
+  let authUser = JSON.parse(localStorage.getItem(USER_KEY) || 'null');
+
+  async function api(url, opts = {}) {
+    const headers = opts.headers || {};
+    if (authToken) {
+      headers['Authorization'] = `Bearer ${authToken}`;
+    }
+    const res = await fetch(url, { ...opts, headers });
+    if (res.status === 401 && !url.includes('/auth/')) {
+      logout();
+      showAuth();
+      throw new Error('Session expired. Please log in again.');
+    }
+    return res;
+  }
+
+  function login(token, user) {
+    authToken = token;
+    authUser = user;
+    localStorage.setItem(TOKEN_KEY, token);
+    localStorage.setItem(USER_KEY, JSON.stringify(user));
+    updateUI();
+  }
+
+  function logout() {
+    authToken = null;
+    authUser = null;
+    localStorage.removeItem(TOKEN_KEY);
+    localStorage.removeItem(USER_KEY);
+    updateUI();
+  }
+
+  function isLoggedIn() {
+    return !!authToken && !!authUser;
+  }
+
+  function getUser() {
+    return authUser;
+  }
+
+  function getToken() {
+    return authToken;
+  }
+
+  const overlay = document.getElementById('authOverlay');
+  const authTitle = document.getElementById('authTitle');
+  const authSubtitle = document.getElementById('authSubtitle');
+  const authForm = document.getElementById('authForm');
+  const authSubmit = document.getElementById('authSubmit');
+  const loginEmail = document.getElementById('loginEmail');
+  const loginPassword = document.getElementById('loginPassword');
+  const authError = document.getElementById('authError');
+  const authToggle = document.getElementById('authToggle');
+  const authSwitch = document.getElementById('authSwitch');
+  const authQuotaBar = document.getElementById('authQuotaBar');
+  const quotaDisplay = document.getElementById('quotaDisplay');
+  const userBadge = document.getElementById('userBadge');
+  const loginBtn = document.getElementById('loginBtn');
+
+  let isRegisterMode = false;
+
+  function showAuth() {
+    if (!overlay) return;
+    overlay.removeAttribute('hidden');
+  }
+
+  function hideAuth() {
+    if (overlay) overlay.setAttribute('hidden', '');
+    loadQuota();
+  }
+
+  function updateUI() {
+    if (isLoggedIn()) {
+      if (userBadge) {
+        userBadge.textContent = authUser.email;
+        userBadge.removeAttribute('hidden');
+      }
+      if (loginBtn) loginBtn.textContent = '🚪';
+      loginBtn.title = '注销';
+      hideAuth();
+    } else {
+      if (userBadge) userBadge.setAttribute('hidden', '');
+      if (loginBtn) loginBtn.textContent = '👤';
+      loginBtn.title = '登录';
+      // Don't show auth overlay — let user click to login
+    }
+  }
+
+  function toggleMode() {
+    isRegisterMode = !isRegisterMode;
+    if (isRegisterMode) {
+      authTitle.textContent = '注册 EasySticker';
+      authSubtitle.textContent = '创建一个账户以使用生成服务';
+      authSubmit.textContent = '注册';
+      authToggle.textContent = '已有账户？登录';
+    } else {
+      authTitle.textContent = '登录 EasySticker';
+      authSubtitle.textContent = '输入邮箱和密码进入工作台';
+      authSubmit.textContent = '登录';
+      authToggle.textContent = '没有账户？注册';
+    }
+  }
+
+  async function loadQuota() {
+    if (!isLoggedIn() || !quotaDisplay || !authQuotaBar) return;
+    try {
+      const res = await api('/api/auth/quota');
+      if (res.ok) {
+        const data = await res.json();
+        quotaDisplay.textContent = `${data.used} / ${data.remaining + data.used}`;
+        authQuotaBar.removeAttribute('hidden');
+      }
+    } catch {}
+  }
+
+  // Auth form handler
+  if (authForm) {
+    authForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const email = loginEmail.value.trim();
+      const password = loginPassword.value;
+      authError.setAttribute('hidden', '');
+      authSubmit.disabled = true;
+      authSubmit.textContent = isRegisterMode ? '注册中...' : '登录中...';
+
+      try {
+        let url, body;
+        if (isRegisterMode) {
+          url = '/api/auth/register';
+          body = { email, password };
+        } else {
+          url = '/api/auth/login';
+          body = { email, password };
+        }
+        const res = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body)
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          authError.textContent = data.message || 'Authentication failed';
+          authError.removeAttribute('hidden');
+          return;
+        }
+        login(data.token, data.user);
+      } catch (err) {
+        authError.textContent = 'Network error. Please try again.';
+        authError.removeAttribute('hidden');
+      } finally {
+        authSubmit.disabled = false;
+        authSubmit.textContent = isRegisterMode ? '注册' : '登录';
+      }
+    });
+  }
+
+  if (authToggle) {
+    authToggle.addEventListener('click', (e) => {
+      e.preventDefault();
+      toggleMode();
+    });
+  }
+
+  if (loginBtn) {
+    loginBtn.addEventListener('click', () => {
+      if (isLoggedIn()) {
+        logout();
+      } else {
+        showAuth();
+      }
+    });
+  }
+
+  // Expose to global scope
+  window._auth = { api, login, logout, isLoggedIn, getUser, getToken, loadQuota };
+
+  // Check auth on load — don't block UI, just silently check
+  if (isLoggedIn()) {
+    hideAuth();
+    loadQuota();
+    // userBadge already hidden by default, show it if logged in
+    updateUI();
+  }
+})();
+/* ===== End Auth Module ===== */
+
 const uploadForm = document.getElementById("uploadForm");
 const fileInput = document.getElementById("file");
 const uploadState = document.getElementById("uploadState");
@@ -1945,7 +2136,8 @@ function renderDownload(packId, downloadUrl, filename) {
     event.preventDefault();
     try {
       setNotice("正在准备下载文件…", "info");
-      const response = await fetch(link.href);
+      const api = (window._auth && window._auth.api) || fetch;
+      const response = await api(link.href);
       if (!response.ok) {
         throw new Error("下载失败，请稍后重试。");
       }
@@ -2042,7 +2234,8 @@ async function parseJson(response) {
 }
 
 async function requestJson(url, options) {
-  const response = await fetch(url, options);
+  const api = (window._auth && window._auth.api) || fetch;
+  const response = await api(url, options);
   const json = await parseJson(response);
   if (!response.ok) {
     throw new Error(json?.message || "请求失败，请稍后重试");
@@ -2260,7 +2453,8 @@ async function generatePlatformPack() {
 
     cancelRequested = false;
     sseAbortController = new AbortController();
-    const startRes = await fetch("/api/generate/start", {
+    const api = (window._auth && window._auth.api) || fetch;
+    const startRes = await api("/api/generate/start", {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify(payload)
@@ -2372,7 +2566,8 @@ async function generatePlatformPack() {
     for (let attempt = 0; attempt <= maxRetries && !completed && !cancelRequested; attempt++) {
       const headers = { accept: "text/event-stream" };
       if (lastEventId > 0) headers["Last-Event-ID"] = String(lastEventId);
-      const res = await fetch(`/api/generate/stream?taskId=${encodeURIComponent(currentTaskId)}`, {
+      const sseApi = (window._auth && window._auth.api) || fetch;
+      const res = await sseApi(`/api/generate/stream?taskId=${encodeURIComponent(currentTaskId)}`, {
         method: "GET",
         headers,
         signal: sseAbortController.signal
@@ -2607,7 +2802,8 @@ async function requestCancelCurrentGeneration(options = {}) {
     const blob = new Blob([body], { type: "application/json" });
     if (navigator.sendBeacon("/api/generate/cancel", blob)) return true;
   }
-  await fetch("/api/generate/cancel", {
+  const api = (window._auth && window._auth.api) || fetch;
+  await api("/api/generate/cancel", {
     method: "POST",
     headers: { "content-type": "application/json" },
     body,
@@ -2740,7 +2936,8 @@ originalPreview.addEventListener("error", () => {
 
 async function initApp() {
   try {
-    const configRes = await fetch("/api/config");
+    const api = (window._auth && window._auth.api) || fetch;
+    const configRes = await api("/api/config");
     if (configRes.ok) {
       const config = await configRes.json();
 

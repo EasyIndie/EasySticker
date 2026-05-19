@@ -70,6 +70,7 @@ export interface PromptConfig {
     security?: {
       apiToken?: string;
       enableAuth?: boolean;
+      jwtSecret?: string;
       rateLimit?: {
         maxRequests: number;
         windowMs: number;
@@ -78,6 +79,7 @@ export interface PromptConfig {
         maxGenerations: number;
       };
       corsAllowOrigin?: string;
+      jwtSecret?: string;
     };
   };
   global: {

@@ -1,21 +1,23 @@
 import fs from "node:fs";
 import path from "node:path";
+import crypto from "node:crypto";
 import { buildApp, type AppConfig } from "./app";
 import { loadPromptConfig, type PromptConfig } from "./services/generate/promptConfig";
 
 function loadSecurityConfig(config: PromptConfig): AppConfig["security"] {
   const security = config.server?.security ?? {};
-  
-  // Env vars override config file
+
   const envToken = process.env["API_TOKEN"];
   const envRateLimit = process.env["RATE_LIMIT_MAX"];
   const envQuota = process.env["DAILY_QUOTA_MAX"];
   const envCors = process.env["CORS_ALLOW_ORIGIN"];
   const envDisableAuth = process.env["DISABLE_AUTH"];
+  const envJwtSecret = process.env["JWT_SECRET"];
 
   return {
     apiToken: envToken || security.apiToken,
     enableAuth: envDisableAuth ? false : (security.enableAuth ?? true),
+    jwtSecret: envJwtSecret || security.jwtSecret,
     rateLimit: {
       maxRequests: Number(envRateLimit ?? security.rateLimit?.maxRequests ?? 30),
       windowMs: security.rateLimit?.windowMs ?? 60_000
@@ -47,6 +49,16 @@ async function main() {
   };
 
   const app = buildApp(appConfig);
+
+  // Ensure default admin on first run
+  const adminEmail = process.env["ADMIN_EMAIL"] || "admin@easysticker.app";
+  const adminPassword = process.env["ADMIN_PASSWORD"] || crypto.randomUUID().slice(0, 12);
+  const hasAdmin = app.userStore.ensureAdmin(adminEmail, adminPassword);
+
+  if (hasAdmin) {
+    app.log.info({ email: adminEmail }, "Default admin account created");
+    console.log(`\n🔑 Default admin: ${adminEmail} / ${adminPassword}\n`);
+  }
 
   await app.listen({ host, port });
   app.log.info({ host, port, auth: app.security.isAuthEnabled }, "server listening");
