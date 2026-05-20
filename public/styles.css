@@ -205,8 +205,8 @@
   border-color: rgba(255, 255, 255, 0.10);
 }
 [data-theme="dark"] .toast-notice {
-  background: rgba(30, 41, 59, 0.97);
-  border-color: rgba(255, 255, 255, 0.12);
+  border-color: rgba(255,255,255,0.2);
+  box-shadow: 0 4px 24px rgba(0,0,0,0.4);
 }
 [data-theme="dark"] .generation-progress-pct {
   color: var(--color-text-secondary);
@@ -689,10 +689,10 @@ button.secondary:hover {
   max-width: min(500px, calc(100vw - 32px));
   padding: 12px 16px;
   border-radius: var(--radius-lg);
-  border: 1px solid var(--color-border-subtle);
-  background: var(--color-overlay-dark);
-  color: var(--color-text-inverse);
-  box-shadow: var(--shadow-lg);
+  border: 1px solid rgba(255,255,255,0.15);
+  color: #fff;
+  font-weight: 500;
+  box-shadow: 0 4px 24px rgba(0,0,0,0.25);
   opacity: 0;
   pointer-events: none;
   cursor: pointer;
