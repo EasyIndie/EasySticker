@@ -84,18 +84,25 @@ export async function registerGenerateRoutes(app: FastifyInstance) {
     }
     const task = createTask();
 
-    // Daily quota check + usage logging for authenticated users
+    // Daily quota check: registered users unlimited, anonymous users capped at 10/day
+    const ANONYMOUS_DAILY_LIMIT = 10;
     try {
       await req.jwtVerify().catch(() => {});
       const user = req.user as any;
       if (user && user.email) {
+        // Registered users: log usage but no quota limit
         app.usageStore.maybeRotate();
-        const quota = app.usageStore.checkDailyQuota(user.email, 100);
+        app.usageStore.log({ email: user.email, action: "generate", success: true });
+      } else {
+        // Anonymous users: quota by IP
+        const ipKey = "ip:" + req.ip;
+        app.usageStore.maybeRotate();
+        const quota = app.usageStore.checkDailyQuota(ipKey, ANONYMOUS_DAILY_LIMIT);
         if (!quota.allowed) {
           reply.status(429);
-          return { error: "QuotaExceeded", message: "今日生成配额已用完，明天再来吧。" };
+          return { error: "QuotaExceeded", message: "今日生成配额已用完（匿名用户每日 10 次），登录后不限量。" };
         }
-        app.usageStore.log({ email: user.email, action: "generate", success: true });
+        app.usageStore.log({ email: ipKey, action: "generate", success: true });
       }
     } catch {}
 
