@@ -280,10 +280,32 @@ body {
 .auth-header {
   margin-bottom: 24px;
   text-align: center;
+  position: relative;
 }
 .auth-header h2 {
   margin: 0 0 4px;
   font-size: 1.25rem;
+}
+.auth-close {
+  position: absolute;
+  top: -12px;
+  right: -12px;
+  width: 32px;
+  height: 32px;
+  border: none;
+  border-radius: 50%;
+  background: var(--color-bg-subtle);
+  color: var(--color-text-secondary);
+  font-size: 16px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s, color 0.15s;
+}
+.auth-close:hover {
+  background: var(--color-border);
+  color: var(--color-text);
 }
 .auth-form {
   display: flex;
