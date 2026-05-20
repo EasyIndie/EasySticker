@@ -1377,13 +1377,24 @@ function showToast(text, tone = "info") {
   toastNotice.textContent = text;
   toastNotice.dataset.tone = tone;
   toastNotice.dataset.visible = "true";
+  toastNotice.style.pointerEvents = "auto";
   if (toastTimer) {
     clearTimeout(toastTimer);
   }
+  // Auto-hide: base 2.5s + 50ms per char, capped at 8s
+  const duration = Math.min(2500 + text.length * 50, 8000);
   toastTimer = setTimeout(() => {
     toastNotice.dataset.visible = "false";
-  }, 2200);
+    toastNotice.style.pointerEvents = "";
+  }, duration);
 }
+
+// Dismiss toast on click
+toastNotice.addEventListener("click", function () {
+  if (toastTimer) clearTimeout(toastTimer);
+  toastNotice.dataset.visible = "false";
+  toastNotice.style.pointerEvents = "";
+});
 
 function setFieldInvalid(target, invalid, message = "", { syncSummary = true } = {}) {
   if (!target) return;
