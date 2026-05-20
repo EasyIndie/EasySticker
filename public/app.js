@@ -2488,7 +2488,12 @@ async function generatePlatformPack() {
       body: JSON.stringify(payload)
     });
     const startJson = await startRes.json();
-    if (!startRes.ok || !startJson?.taskId) throw new Error("生成失败，请稍后重试。");
+    if (!startRes.ok) {
+      throw new Error(startJson?.message || "生成失败，请稍后重试。");
+    }
+    if (!startJson?.taskId) {
+      throw new Error("生成失败，请稍后重试。");
+    }
     currentTaskId = startJson.taskId;
 
     const decoder = new TextDecoder();
