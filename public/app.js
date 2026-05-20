@@ -69,6 +69,18 @@
     overlay.removeAttribute('hidden');
   }
 
+  // Close auth overlay on backdrop click
+  overlay.addEventListener('click', function (e) {
+    if (e.target === overlay) hideAuth();
+  });
+
+  // Close auth overlay on Escape
+  document.addEventListener('keydown', function escHandler(e) {
+    if (e.key === 'Escape' && !overlay.hasAttribute('hidden')) {
+      hideAuth();
+    }
+  });
+
   function hideAuth() {
     if (overlay) overlay.setAttribute('hidden', '');
     loadQuota();
@@ -184,6 +196,12 @@
         showAuth();
       }
     });
+  }
+
+  // Auth close button
+  const authClose = document.getElementById('authClose');
+  if (authClose) {
+    authClose.addEventListener('click', hideAuth);
   }
 
   // Expose to global scope
