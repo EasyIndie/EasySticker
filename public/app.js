@@ -75,6 +75,7 @@
   }
 
   function updateUI() {
+    const adminEntry = document.getElementById('adminEntry');
     if (isLoggedIn()) {
       if (userBadge) {
         userBadge.textContent = authUser.email;
@@ -82,9 +83,18 @@
       }
       if (loginBtn) loginBtn.textContent = '🚪';
       loginBtn.title = '注销';
+      // Show admin entry for admin users
+      if (adminEntry) {
+        if (authUser.role === 'admin') {
+          adminEntry.removeAttribute('hidden');
+        } else {
+          adminEntry.setAttribute('hidden', '');
+        }
+      }
       hideAuth();
     } else {
       if (userBadge) userBadge.setAttribute('hidden', '');
+      if (adminEntry) adminEntry.setAttribute('hidden', '');
       if (loginBtn) loginBtn.textContent = '👤';
       loginBtn.title = '登录';
       // Don't show auth overlay — let user click to login
