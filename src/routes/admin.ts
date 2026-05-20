@@ -1,3 +1,4 @@
+import type { AlertRule, AlertRecord } from "../lib/alertEngine";
 import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
 
 export function registerAdminRoutes(app: FastifyInstance, _opts: unknown): void {
@@ -72,4 +73,73 @@ export function registerAdminRoutes(app: FastifyInstance, _opts: unknown): void 
       return { records: result.metrics, count: result.metrics.length, hasMore: result.hasMore };
     }
   );
+
+  // ── Alert Engine Routes ──────────────────────────────────
+
+  // GET /api/admin/alerts/rules
+  app.get("/admin/alerts/rules", { preHandler: [requireAdmin] }, async (_req, reply) => {
+    const rules = app.alertEngine.getRules();
+    return { rules };
+  });
+
+  // PUT /api/admin/alerts/rules
+  app.put("/admin/alerts/rules", { preHandler: [requireAdmin] }, async (req, reply) => {
+    const body = req.body as { rules?: AlertRule[] };
+    if (!body || !Array.isArray(body.rules)) {
+      return reply.status(400).send({ error: "rules must be an array of AlertRule" });
+    }
+    app.alertEngine.updateRules(body.rules);
+    return { rules: app.alertEngine.getRules() };
+  });
+
+  // GET /api/admin/alerts/history
+  app.get("/admin/alerts/history", { preHandler: [requireAdmin] }, async (req, reply) => {
+    const query = req.query as Record<string, string | undefined>;
+    const resolvedParam = query.resolved;
+    const all = app.alertEngine.getAlertHistory();
+
+    if (resolvedParam === "false") {
+      return { alerts: all.filter((a: AlertRecord) => a.resolvedAt === null) };
+    }
+    return { alerts: all };
+  });
+
+  // POST /api/admin/alerts/:id/ack
+  app.post("/admin/alerts/:id/ack", { preHandler: [requireAdmin] }, async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const ok = app.alertEngine.acknowledgeAlert(id);
+    if (!ok) {
+      return reply.status(404).send({ error: "Alert not found" });
+    }
+    return { success: true };
+  });
+
+  // GET /api/admin/settings
+  app.get("/admin/settings", { preHandler: [requireAdmin] }, async (_req, reply) => {
+    const config = app.alertEngine.getConfig();
+    return {
+      webhookUrl: config.webhookUrl,
+      webhookEnabled: config.webhookEnabled,
+      notificationInterval: config.notificationInterval,
+      monitorRetentionDays: config.monitorRetentionDays,
+    };
+  });
+
+  // PUT /api/admin/settings
+  app.put("/admin/settings", { preHandler: [requireAdmin] }, async (req, reply) => {
+    const body = req.body as Record<string, unknown>;
+    const partial: Partial<import("../lib/alertEngine").AlertConfig> = {};
+    if (typeof body.webhookUrl === "string") partial.webhookUrl = body.webhookUrl;
+    if (typeof body.webhookEnabled === "boolean") partial.webhookEnabled = body.webhookEnabled;
+    if (typeof body.notificationInterval === "number") partial.notificationInterval = body.notificationInterval;
+    if (typeof body.monitorRetentionDays === "number") partial.monitorRetentionDays = body.monitorRetentionDays;
+    app.alertEngine.updateConfig(partial);
+    const config = app.alertEngine.getConfig();
+    return {
+      webhookUrl: config.webhookUrl,
+      webhookEnabled: config.webhookEnabled,
+      notificationInterval: config.notificationInterval,
+      monitorRetentionDays: config.monitorRetentionDays,
+    };
+  });
 }

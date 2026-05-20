@@ -2,6 +2,8 @@ import fs from "node:fs";
 import path from "node:path";
 import crypto from "node:crypto";
 import { buildApp, type AppConfig } from "./app";
+import { createAlertEngine } from "./lib/alertEngine";
+import { createAlertNotifier } from "./lib/alertNotifier";
 import { loadPromptConfig, type PromptConfig } from "./services/generate/promptConfig";
 
 function loadSecurityConfig(config: PromptConfig): AppConfig["security"] {
@@ -51,6 +53,32 @@ async function main() {
 
   const app = buildApp(appConfig);
 
+  // ── Alert Engine ──────────────────────────────────────────
+  const alertConfigPath = path.join(dataDir, "alerts-config.json");
+  const alertEngine = createAlertEngine(alertConfigPath, app.monitorStore, app.log);
+  app.decorate("alertEngine", alertEngine);
+
+  const alertNotifier = createAlertNotifier(() => app.alertEngine.getConfig(), app.log);
+
+  // Notification cooldown tracker: rule_id → last sent timestamp
+  const lastNotifySent = new Map<string, number>();
+
+  // Evaluate alerts every 30s and send notifications
+  const alertInterval = setInterval(() => {
+    app.alertEngine.evaluate();
+    const active = app.alertEngine.getActiveAlerts();
+    const now = Date.now();
+    for (const alert of active) {
+      const rule = app.alertEngine.getRules().find(r => r.id === alert.rule);
+      if (!rule) continue;
+      const last = lastNotifySent.get(alert.rule) ?? 0;
+      if (now - last >= rule.silenceMs) {
+        alertNotifier.send(alert);
+        lastNotifySent.set(alert.rule, now);
+      }
+    }
+  }, 30_000);
+
   // Start periodic monitoring
   const systemInterval = setInterval(() => app.monitorStore.recordSystem(), 10_000);
   const diskInterval = setInterval(() => app.monitorStore.recordDisk(), 60_000);
@@ -60,6 +88,7 @@ async function main() {
     clearInterval(systemInterval);
     clearInterval(diskInterval);
     clearInterval(cleanupInterval);
+    clearInterval(alertInterval);
     done();
   });
 
