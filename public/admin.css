@@ -209,6 +209,26 @@ input { font-family: inherit; }
   box-shadow: var(--shadow);
 }
 
+.topbar-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.topbar-left .topbar-back {
+  font-size: 18px;
+  text-decoration: none;
+  color: var(--c-text-secondary);
+  padding: 4px 8px;
+  border-radius: var(--radius-sm);
+  transition: background 0.15s, color 0.15s;
+}
+
+.topbar-left .topbar-back:hover {
+  background: var(--c-bg);
+  color: var(--c-text);
+}
+
 .topbar-brand {
   display: flex;
   align-items: center;
