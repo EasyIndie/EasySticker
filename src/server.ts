@@ -45,10 +45,23 @@ async function main() {
     port,
     dataDir,
     logLevel,
-    security: loadSecurityConfig(config)
+    security: loadSecurityConfig(config),
+    monitorRetentionDays: config.server?.security?.monitorRetentionDays ?? 7,
   };
 
   const app = buildApp(appConfig);
+
+  // Start periodic monitoring
+  const systemInterval = setInterval(() => app.monitorStore.recordSystem(), 10_000);
+  const diskInterval = setInterval(() => app.monitorStore.recordDisk(), 60_000);
+  const cleanupInterval = setInterval(() => app.monitorStore.cleanup(), 3_600_000);
+
+  app.addHook("onClose", (_instance, done) => {
+    clearInterval(systemInterval);
+    clearInterval(diskInterval);
+    clearInterval(cleanupInterval);
+    done();
+  });
 
   // Ensure default admin on first run
   const adminEmail = process.env["ADMIN_EMAIL"] || "admin@easysticker.app";

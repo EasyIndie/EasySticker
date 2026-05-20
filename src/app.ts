@@ -16,6 +16,7 @@ import { buildLogger } from "./lib/logger";
 import { createSecurity, type SecurityConfig } from "./lib/security";
 import { createUserStore } from "./lib/userStore";
 import { createUsageStore } from "./lib/usageStore";
+import { createMonitorStore } from "./lib/monitorStore";
 import { registerUploadRoutes } from "./routes/uploads";
 import { registerAssetRoutes } from "./routes/assets";
 import { registerPackRoutes } from "./routes/packs";
@@ -30,6 +31,7 @@ export type AppConfig = {
   dataDir: string;
   logLevel: string;
   security?: SecurityConfig;
+  monitorRetentionDays?: number;
 };
 
 declare module "fastify" {
@@ -38,6 +40,7 @@ declare module "fastify" {
     security: ReturnType<typeof createSecurity>;
     userStore: ReturnType<typeof createUserStore>;
     usageStore: ReturnType<typeof createUsageStore>;
+    monitorStore: ReturnType<typeof createMonitorStore>;
   }
   interface FastifyRequest {
     user?: { email: string; role: string };
@@ -78,6 +81,7 @@ export function buildApp(config: AppConfig): FastifyInstance {
   app.decorate("security", createSecurity(config.security ?? {}));
   app.decorate("userStore", createUserStore(config.dataDir));
   app.decorate("usageStore", createUsageStore(config.dataDir));
+  app.decorate("monitorStore", createMonitorStore(config.dataDir, config.monitorRetentionDays));
 
   // ===== JWT =====
   const jwtSecret = config.security?.jwtSecret || process.env["JWT_SECRET"] || crypto.randomBytes(32).toString("hex");
@@ -91,6 +95,24 @@ export function buildApp(config: AppConfig): FastifyInstance {
   app.addHook("onClose", (_instance, done) => {
     app.security.stopCleanup();
     done();
+  });
+
+  // ===== Request Metrics Hook =====
+  app.addHook("onRequest", async (req) => {
+    (req as any).__startTime = performance.now();
+  });
+
+  app.addHook("onResponse", async (req, reply) => {
+    if (!req.url.startsWith("/api/")) return;
+    const startTime = (req as any).__startTime;
+    if (typeof startTime !== "number") return;
+    const latencyMs = Math.round(performance.now() - startTime);
+    app.monitorStore.recordRequest({
+      method: req.method,
+      route: req.routeOptions?.url || req.url,
+      status: reply.statusCode,
+      durationMs: latencyMs,
+    });
   });
 
   // ===== Global Hooks =====
