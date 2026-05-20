@@ -154,6 +154,7 @@ async function loadDashboard() {
   const data = await apiCall("GET", "/admin/monitoring");
   if (!data) return;
   renderMetrics(data.snapshot);
+  loadAlerts();
 }
 
 function getMetricColor(percent) {
