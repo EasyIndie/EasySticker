@@ -397,8 +397,9 @@ export function createMonitorStore(
     },
   };
 
-  // Initialize: perform first CPU measurement (discarded — used as baseline) and disk measurement
-  takeCpuTimes();
+  // Initialize: perform first CPU measurement (used as baseline for delta calculation) and disk measurement
+  prevCpuTimes = takeCpuTimes();
+  prevCpuTs = Date.now();
   // Do initial disk measurement synchronously so snapshot has data
   store.recordDisk();
 

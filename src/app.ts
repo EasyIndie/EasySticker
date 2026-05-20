@@ -17,6 +17,7 @@ import { createSecurity, type SecurityConfig } from "./lib/security";
 import { createUserStore } from "./lib/userStore";
 import { createUsageStore } from "./lib/usageStore";
 import { createMonitorStore } from "./lib/monitorStore";
+import type { AlertEngine } from "./lib/alertEngine";
 import { registerUploadRoutes } from "./routes/uploads";
 import { registerAssetRoutes } from "./routes/assets";
 import { registerPackRoutes } from "./routes/packs";
@@ -41,6 +42,7 @@ declare module "fastify" {
     userStore: ReturnType<typeof createUserStore>;
     usageStore: ReturnType<typeof createUsageStore>;
     monitorStore: ReturnType<typeof createMonitorStore>;
+    alertEngine: AlertEngine;
   }
   interface FastifyRequest {
     user?: { email: string; role: string };
