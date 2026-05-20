@@ -56,6 +56,21 @@ input { font-family: inherit; }
   text-align: center;
 }
 
+.login-card .login-back {
+  margin-top: 16px;
+}
+
+.login-card .login-back a {
+  color: rgba(255,255,255,.7);
+  font-size: 13px;
+  text-decoration: none;
+  transition: color .2s;
+}
+
+.login-card .login-back a:hover {
+  color: #fff;
+}
+
 .login-logo { font-size: 48px; margin-bottom: 8px; }
 
 .login-card h2 {
