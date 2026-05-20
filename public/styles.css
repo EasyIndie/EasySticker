@@ -685,7 +685,7 @@ button.secondary:hover {
   position: fixed;
   right: 20px;
   bottom: 20px;
-  max-width: min(360px, calc(100vw - 32px));
+  max-width: min(480px, calc(100vw - 32px));
   padding: 12px 14px;
   border-radius: var(--radius-lg);
   border: 1px solid var(--color-border-subtle);
