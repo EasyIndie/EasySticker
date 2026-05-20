@@ -89,6 +89,21 @@ function checkAuth() {
   const user = sessionStorage.getItem("admin_user");
   if (token && user) {
     showMainSection(JSON.parse(user));
+    return;
+  }
+  // Try to reuse main app's login (stored in localStorage)
+  const appToken = localStorage.getItem("easysticker_token");
+  const appUserRaw = localStorage.getItem("easysticker_user");
+  if (appToken && appUserRaw) {
+    try {
+      const appUser = JSON.parse(appUserRaw);
+      if (appUser.role === "admin") {
+        sessionStorage.setItem("admin_token", appToken);
+        sessionStorage.setItem("admin_user", appUserRaw);
+        showMainSection(appUser);
+        return;
+      }
+    } catch (_) {}
   }
 }
 
