@@ -648,16 +648,9 @@ function updateStepNav(activeStep, completedSteps = []) {
 }
 
 function scrollToStep(stepIndex) {
-  if (stepIndex <= 3) {
-    const cards = configArea?.querySelectorAll(".step-card");
-    if (cards && cards[stepIndex]) {
-      scrollToElement(cards[stepIndex], { block: "start" });
-    }
-  } else if (stepIndex === 4) {
-    const cards = previewArea?.querySelectorAll(".step-card");
-    if (cards && cards[0]) {
-      scrollToElement(cards[0], { block: "start" });
-    }
+  const card = document.querySelector(".step-card[data-step-index='" + stepIndex + "']");
+  if (card) {
+    scrollToElement(card, { block: "start" });
   }
 }
 
@@ -2999,6 +2992,23 @@ function toggleHistory(expand) {
   }
 }
 
+// History toggle click handler
+document.addEventListener("click", function(e) {
+  var target = e.target.closest("#historyToggle, #historyToggleSub");
+  if (target) {
+    toggleHistory();
+  }
+});
+document.addEventListener("keydown", function(e) {
+  if ((e.key === "Enter" || e.key === " ") && e.target.closest) {
+    var el = e.target.closest("#historyToggle, #historyToggleSub");
+    if (el) {
+      e.preventDefault();
+      toggleHistory();
+    }
+  }
+});
+
 originalPreview.addEventListener("error", () => {
   originalPreview.removeAttribute("src");
   syncOriginalPreviewSlot();
@@ -3171,9 +3181,9 @@ function updateStepNav(activeStep, completedSteps) {
 }
 
 function scrollToStep(stepIndex) {
-  var cards = document.querySelectorAll(".step-card");
-  if (cards[stepIndex]) {
-    scrollToElement(cards[stepIndex], { block: "start" });
+  var card = document.querySelector(".step-card[data-step-index='" + stepIndex + "']");
+  if (card) {
+    scrollToElement(card, { block: "start" });
   }
 }
 

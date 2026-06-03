@@ -112,7 +112,7 @@
 
       <section class="flow">
         <div class="config-area">
-        <article class="card step-card">
+        <article class="card step-card" data-step-index="0">
           <div class="step-index">00</div>
           <div class="step-head">
             <h2>选择创建方式与平台</h2>
@@ -153,7 +153,7 @@
           </div>
         </article>
 
-        <article id="aiSourceSection" class="card step-card">
+        <article id="aiSourceSection" class="card step-card" data-step-index="1">
           <div class="step-index">01</div>
           <div class="step-head">
             <h2>上传参考图</h2>
@@ -182,7 +182,7 @@
           </div>
         </article>
 
-        <article id="importSourceSection" class="card step-card" hidden>
+        <article id="importSourceSection" class="card step-card" data-step-index="1" hidden>
           <div class="step-index">01</div>
           <div class="step-head">
             <h2 id="importHeading">导入已有表情图</h2>
@@ -233,7 +233,7 @@
           <div id="importState" class="status-chip" aria-live="polite">等待导入</div>
         </article>
 
-        <article class="card step-card">
+        <article class="card step-card" data-step-index="2">
           <div class="step-index">02</div>
           <div class="step-head">
             <h2>配置与信息</h2>
@@ -365,7 +365,7 @@
           <div id="promptHint" class="muted">建议在提示词中补充主体、情绪、动作和背景限制。系统默认生成 8 张表情，并自动补齐封面、图标和横幅。</div>
         </article>
 
-        <article class="card step-card">
+        <article class="card step-card" data-step-index="3">
           <div class="step-index">03</div>
           <div class="step-head">
             <h2>生成表情</h2>
@@ -391,7 +391,7 @@
         </div><!-- /.config-area -->
 
         <div class="preview-area">
-        <article class="card step-card">
+        <article class="card step-card" data-step-index="4">
           <div class="step-index">04</div>
           <div class="step-head">
             <h2>预览与下载</h2>
@@ -465,11 +465,12 @@
 
       <section class="card step-card" id="historySection" hidden>
         <div class="step-index">H</div>
-        <div class="step-head" id="historyToggle" style="cursor:pointer" onclick="toggleHistory()" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' ')event.preventDefault(),toggleHistory()">
-          <div class="step-head-text">
-            <h2>历史记录 <span id="historySummary" style="font-weight:normal;font-size:0.85rem;color:var(--color-text-secondary);"></span></h2>
-            <span class="collapse-icon" id="historyCollapseIcon">▶</span>
-          </div>
+        <div class="step-head" id="historyToggle" role="button" tabindex="0">
+          <h2>历史记录</h2>
+        </div>
+        <div class="step-head-sub" id="historyToggleSub" role="button" tabindex="-1" style="cursor:pointer">
+          <span id="historySummary">最近生成的表情包</span>
+          <span class="collapse-icon" id="historyCollapseIcon">▶</span>
         </div>
         <div class="step-body" id="historyBody" style="display:none">
           <button id="clearHistory" type="button" class="secondary">清空历史</button>

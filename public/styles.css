@@ -1993,6 +1993,19 @@ select {
   border-color: var(--accent);
 }
 
+#historyToggleSub {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  cursor: pointer;
+  user-select: none;
+  padding: 0 0 4px 0;
+}
+#historyToggleSub:hover .collapse-icon {
+  color: var(--color-text-primary);
+  border-color: var(--color-border);
+}
+
 .history-list {
   margin-top: 12px;
   display: flex;
@@ -2209,7 +2222,6 @@ select {
   margin-top: 2.5rem;
   padding: 1.5rem 1rem;
   text-align: center;
-  border-top: 1px solid var(--border-color, #e5e7eb);
 }
 
 .footer-links {
