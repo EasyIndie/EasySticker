@@ -155,9 +155,9 @@ export function buildApp(config: AppConfig): FastifyInstance {
     const origin = req.headers.origin;
     if (origin) {
       const allowed = config.security?.corsAllowOrigin;
-      // Strict same-origin only; if allowOrigin is set, use it as exact match
-      if (allowed) {
-        reply.header("Access-Control-Allow-Origin", origin);
+      // Strict same-origin only; if allowOrigin is set, only that origin is allowed
+      if (allowed && origin === allowed) {
+        reply.header("Access-Control-Allow-Origin", allowed);
         reply.header("Vary", "Origin");
       }
       reply.header("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
