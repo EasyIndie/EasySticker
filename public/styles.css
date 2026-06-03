@@ -509,6 +509,10 @@ button.secondary:hover {
   margin: 10px 0 6px;
   letter-spacing: -0.02em;
   font-size: clamp(28px, 4vw, var(--font-32));
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
 }
 
 .hero-text {

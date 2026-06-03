@@ -113,6 +113,7 @@ export async function registerConfigRoutes(app: FastifyInstance) {
     }
 
     return {
+      env: isProd ? "production" : "development",
       // Old format for backward compat (tests reference data.wechat.*)
       wechat: {
         styles: promptConfig.global.styles,
