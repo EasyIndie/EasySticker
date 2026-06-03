@@ -1245,10 +1245,10 @@ function renderPackHistory() {
   const history = getPackHistory();
   if (!historySection || !historyList) return;
   if (history.length === 0) {
-    historySection.hidden = true;
+    historySection.setAttribute("hidden", "");
     return;
   }
-  historySection.hidden = false;
+  historySection.removeAttribute("hidden");
   
   // Update summary line
   if (historySummary) {
@@ -2988,8 +2988,20 @@ let historyExpanded = false;
 
 function toggleHistory(expand) {
   historyExpanded = expand !== undefined ? expand : !historyExpanded;
-  if (historyBody) historyBody.hidden = !historyExpanded;
-  if (historyList) historyList.hidden = !historyExpanded;
+  if (historyBody) {
+    if (historyExpanded) {
+      historyBody.removeAttribute("hidden");
+    } else {
+      historyBody.setAttribute("hidden", "");
+    }
+  }
+  if (historyList) {
+    if (historyExpanded) {
+      historyList.removeAttribute("hidden");
+    } else {
+      historyList.setAttribute("hidden", "");
+    }
+  }
   if (historyCollapseIcon) {
     historyCollapseIcon.classList.toggle("expanded", historyExpanded);
   }
