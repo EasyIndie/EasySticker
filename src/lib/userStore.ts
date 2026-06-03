@@ -12,6 +12,8 @@ export interface User {
   createdAt: string;
   lastLogin: string | null;
   disabled: boolean;
+  resetToken?: string;
+  resetExpires?: string;
 }
 
 interface UserStoreData {
@@ -129,6 +131,40 @@ export function createUserStore(dataPath: string) {
       user.salt = salt;
       save();
       return true;
+    },
+
+    /** Set a password reset token with expiry. Returns false if user not found. */
+    setResetToken(email: string, token: string, ttlMs: number): boolean {
+      const lower = email.toLowerCase().trim();
+      const user = data.users[lower];
+      if (!user) return false;
+      user.resetToken = token;
+      user.resetExpires = new Date(Date.now() + ttlMs).toISOString();
+      save();
+      return true;
+    },
+
+    /** Find user by a valid (non-expired) reset token. Returns undefined if invalid/expired. */
+    getByResetToken(token: string): User | undefined {
+      for (const user of Object.values(data.users)) {
+        if (user.resetToken === token && user.resetExpires) {
+          if (new Date(user.resetExpires).getTime() > Date.now()) {
+            return { ...user };
+          }
+        }
+      }
+      return undefined;
+    },
+
+    /** Clear reset token after use (e.g. password changed). */
+    clearResetToken(email: string): void {
+      const lower = email.toLowerCase().trim();
+      const user = data.users[lower];
+      if (user) {
+        delete user.resetToken;
+        delete user.resetExpires;
+        save();
+      }
     },
 
     /** Reload from disk (for external changes). */

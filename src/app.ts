@@ -18,6 +18,7 @@ import { createUserStore } from "./lib/userStore";
 import { createUsageStore } from "./lib/usageStore";
 import { createMonitorStore } from "./lib/monitorStore";
 import type { AlertEngine } from "./lib/alertEngine";
+import { createMailer, type Mailer } from "./lib/mailer";
 import { registerUploadRoutes } from "./routes/uploads";
 import { registerAssetRoutes } from "./routes/assets";
 import { registerPackRoutes } from "./routes/packs";
@@ -43,6 +44,7 @@ declare module "fastify" {
     usageStore: ReturnType<typeof createUsageStore>;
     monitorStore: ReturnType<typeof createMonitorStore>;
     alertEngine: AlertEngine;
+    mailer?: Mailer;
   }
   interface FastifyRequest {
     user?: { email: string; role: string };
@@ -54,7 +56,8 @@ const PUBLIC_ROUTES = new Set([
   "/", "/index.html", "/internal.html",
   "/health", "/docs", "/docs/",
   "/@vite/client",
-  "/api/auth/login", "/api/auth/register"
+  "/api/auth/login", "/api/auth/register",
+  "/api/auth/forgot-password", "/api/auth/reset-password-with-token"
 ]);
 // Static file extensions that don't need auth
 const STATIC_EXTS = new Set([".css", ".js", ".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg", ".ico", ".html", ".json"]);
