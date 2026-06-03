@@ -468,12 +468,14 @@
         <div class="step-head" id="historyToggle" role="button" tabindex="0">
           <h2>历史记录</h2>
         </div>
-        <div class="step-head-sub" id="historyToggleSub" role="button" tabindex="-1" style="cursor:pointer">
-          <span id="historySummary">最近生成的表情包</span>
-          <span class="collapse-icon" id="historyCollapseIcon">▶</span>
+        <div class="step-head-sub" id="historySubRow">
+          <button id="clearHistory" type="button" class="btn-clear-history">清空历史</button>
+          <span id="historySummary" class="history-summary">最近生成的表情包</span>
+          <span id="historyToggleSub" class="collapse-btn" role="button" tabindex="0">
+            <span class="collapse-icon" id="historyCollapseIcon">▶</span>
+          </span>
         </div>
         <div class="step-body" id="historyBody" style="display:none">
-          <button id="clearHistory" type="button" class="secondary">清空历史</button>
         </div>
         <div id="historyList" class="history-list" style="display:none"></div>
       </section>
