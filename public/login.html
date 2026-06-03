@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>登录 - EasySticker</title>
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <main class="page" style="max-width: 400px; margin: 80px auto; padding: 0 16px;">
+    <div class="card" style="padding: 32px;">
+      <h1 style="margin: 0 0 24px; text-align: center;">EasySticker</h1>
+
+      <form id="loginForm">
+        <div class="field">
+          <label for="email">邮箱</label>
+          <input type="email" id="email" required placeholder="your@email.com" />
+        </div>
+        <div class="field">
+          <label for="password">密码</label>
+          <input type="password" id="password" required placeholder="密码" />
+        </div>
+        <button type="submit" class="btn btn-primary" style="width:100%;margin-top:8px;">登录</button>
+      </form>
+
+      <div id="loginMsg" class="notice" hidden style="margin-top: 16px;"></div>
+
+      <p style="margin-top: 24px; text-align: center;">
+        <a href="/forgot-password.html">忘记密码？</a>
+      </p>
+    </div>
+  </main>
+
+  <script>
+    const form = document.getElementById('loginForm');
+    const msgEl = document.getElementById('loginMsg');
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      msgEl.hidden = true;
+
+      const email = document.getElementById('email').value;
+      const password = document.getElementById('password').value;
+
+      try {
+        const res = await fetch('/api/auth/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email, password }),
+        });
+        const data = await res.json();
+
+        if (res.ok) {
+          localStorage.setItem('token', data.token);
+          localStorage.setItem('user', JSON.stringify(data.user));
+          location.href = '/';
+        } else {
+          showMsg(data.message || '登录失败', 'error');
+        }
+      } catch (err) {
+        showMsg('网络错误，请重试。', 'error');
+      }
+    });
+
+    function showMsg(text, type) {
+      msgEl.textContent = text;
+      msgEl.className = 'notice notice-' + type;
+      msgEl.hidden = false;
+    }
+  </script>
+</body>
+</html>

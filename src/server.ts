@@ -3,6 +3,7 @@ import path from "node:path";
 import crypto from "node:crypto";
 import { buildApp, type AppConfig } from "./app";
 import { createAlertEngine } from "./lib/alertEngine";
+import { createMailer } from "./lib/mailer";
 import { createAlertNotifier } from "./lib/alertNotifier";
 import { loadPromptConfig, type PromptConfig } from "./services/generate/promptConfig";
 
@@ -52,6 +53,28 @@ async function main() {
   };
 
   const app = buildApp(appConfig);
+
+  // ── Mailer (password reset) ───────────────────────────────
+  const smtpHost = process.env["SMTP_HOST"] || "";
+  const smtpPort = Number(process.env["SMTP_PORT"] || 587);
+  const smtpUser = process.env["SMTP_USER"] || "";
+  const smtpPass = process.env["SMTP_PASS"] || "";
+  const smtpFrom = process.env["SMTP_FROM"] || "noreply@easysticker.app";
+  const baseUrl = process.env["BASE_URL"] || `http://localhost:${port}`;
+
+  if (smtpHost) {
+    app.mailer = createMailer(
+      { host: smtpHost, port: smtpPort, user: smtpUser, pass: smtpPass, from: smtpFrom, baseUrl },
+      app.log
+    );
+    app.log.info({ host: smtpHost, port: smtpPort }, "Mailer initialized");
+  } else {
+    app.log.warn("No SMTP_HOST configured — password reset emails will be logged to console only");
+    app.mailer = createMailer(
+      { host: "", port: 0, user: "", pass: "", from: smtpFrom, baseUrl },
+      app.log
+    );
+  }
 
   // ── Alert Engine ──────────────────────────────────────────
   const alertConfigPath = path.join(dataDir, "alerts-config.json");
