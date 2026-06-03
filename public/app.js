@@ -281,6 +281,10 @@ const generationProgressBar = document.getElementById("generationProgressBar");
 const generationProgressPct = document.getElementById("generationProgressPct");
 const historySection = document.getElementById("historySection");
 const historyList = document.getElementById("historyList");
+const historyToggle = document.getElementById("historyToggle");
+const historyBody = document.getElementById("historyBody");
+const historyCollapseIcon = document.getElementById("historyCollapseIcon");
+const historySummary = document.getElementById("historySummary");
 const clearHistoryBtn = document.getElementById("clearHistory");
 const originalPreviewPlaceholder = document.getElementById("originalPreviewPlaceholder");
 const platformSelector = document.getElementById("platformSelector");
@@ -1246,6 +1250,16 @@ function renderPackHistory() {
   }
   historySection.hidden = false;
   
+  // Update summary line
+  if (historySummary) {
+    const latest = history[0];
+    const timeAgo = formatTimeAgo(latest.createdAt) || "刚刚";
+    historySummary.textContent = `${history.length} 条记录 · 最近 ${timeAgo}`;
+  }
+
+  // Default collapsed
+  toggleHistory(false);
+
   if (history.length === 0) {
     historyList.innerHTML = '<div class="history-empty">暂无历史记录</div>';
     return;
@@ -2970,6 +2984,28 @@ resetSubmit.addEventListener("click", () => {
 
 clearHistoryBtn?.addEventListener("click", () => {
   clearPackHistory();
+});
+
+// History section toggle (collapsible)
+let historyExpanded = false;
+
+function toggleHistory(expand) {
+  historyExpanded = expand !== undefined ? expand : !historyExpanded;
+  if (historyBody) historyBody.hidden = !historyExpanded;
+  if (historyList) historyList.hidden = !historyExpanded;
+  if (historyCollapseIcon) {
+    historyCollapseIcon.classList.toggle("expanded", historyExpanded);
+  }
+}
+
+historyToggle?.addEventListener("click", () => {
+  toggleHistory();
+});
+historyToggle?.addEventListener("keydown", (e) => {
+  if (e.key === "Enter" || e.key === " ") {
+    e.preventDefault();
+    toggleHistory();
+  }
 });
 
 originalPreview.addEventListener("error", () => {
