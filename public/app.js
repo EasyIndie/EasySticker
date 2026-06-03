@@ -24,6 +24,10 @@
     authUser = user;
     localStorage.setItem(TOKEN_KEY, token);
     localStorage.setItem(USER_KEY, JSON.stringify(user));
+    // 清除管理后台的退出标记，允许跳转 admin
+    try {
+      sessionStorage.removeItem("admin_logged_out");
+    } catch(_){}
     updateUI();
   }
 
@@ -32,6 +36,12 @@
     authUser = null;
     localStorage.removeItem(TOKEN_KEY);
     localStorage.removeItem(USER_KEY);
+    // 同步清除管理后台的登录状态
+    try {
+      sessionStorage.removeItem("admin_token");
+      sessionStorage.removeItem("admin_user");
+      sessionStorage.setItem("admin_logged_out", "1");
+    } catch(_){}
     updateUI();
   }
 
@@ -88,23 +98,24 @@
 
   function updateUI() {
     const adminEntry = document.getElementById('adminEntry');
+    const adminFooterLink = document.getElementById('adminFooterLink');
     if (isLoggedIn()) {
       if (loginBtn) loginBtn.textContent = '🚪';
       loginBtn.title = '注销';
       // Show admin entry for admin users
-      if (adminEntry) {
-        if (authUser.role === 'admin') {
-          adminEntry.removeAttribute('hidden');
-        } else {
-          adminEntry.setAttribute('hidden', '');
-        }
+      if (authUser.role === 'admin') {
+        if (adminEntry) adminEntry.removeAttribute('hidden');
+        if (adminFooterLink) adminFooterLink.removeAttribute('hidden');
+      } else {
+        if (adminEntry) adminEntry.setAttribute('hidden', '');
+        if (adminFooterLink) adminFooterLink.setAttribute('hidden', '');
       }
       hideAuth();
     } else {
       if (adminEntry) adminEntry.setAttribute('hidden', '');
+      if (adminFooterLink) adminFooterLink.setAttribute('hidden', '');
       if (loginBtn) loginBtn.textContent = '👤';
       loginBtn.title = '登录';
-      // Don't show auth overlay — let user click to login
     }
   }
 
