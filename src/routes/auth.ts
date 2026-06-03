@@ -69,8 +69,9 @@ export function registerAuthRoutes(app: FastifyInstance, _opts: unknown): void {
       });
     }
 
-    // Generate JWT token
-    const token = await reply.jwtSign({ email: user.email, role: user.role });
+    // Generate JWT token (default 7d expiry)
+    const expiresIn = app.appConfig.security?.jwtExpiresIn ?? "7d";
+    const token = await reply.jwtSign({ email: user.email, role: user.role }, { expiresIn });
     return { token, user: { email: user.email, role: user.role } };
   });
 
@@ -96,7 +97,8 @@ export function registerAuthRoutes(app: FastifyInstance, _opts: unknown): void {
       });
     }
 
-    const token = await reply.jwtSign({ email: user.email, role: user.role });
+    const expiresIn = app.appConfig.security?.jwtExpiresIn ?? "7d";
+    const token = await reply.jwtSign({ email: user.email, role: user.role }, { expiresIn });
     return { token, user: { email: user.email, role: user.role } };
   });
 

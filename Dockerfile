@@ -24,6 +24,15 @@ COPY --from=deps /app/node_modules ./node_modules
 COPY --from=build /app/dist ./dist
 COPY --from=build /app/public ./public
 COPY prompt-config.default.json ./
+
+# Create non-root user and chown data directory
+RUN groupadd -r appuser && useradd -r -g appuser -d /app -s /sbin/nologin appuser \
+    && chown -R appuser:appuser /app
+
+# Create data directory with proper permissions
+RUN mkdir -p /app/data && chown -R appuser:appuser /app/data
+
+USER appuser
 EXPOSE 3000
 
 # Health check — curl the built-in /health endpoint
