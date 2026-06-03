@@ -28,7 +28,8 @@ function loadSecurityConfig(config: PromptConfig): AppConfig["security"] {
     dailyQuota: {
       maxGenerations: Number(envQuota ?? security.dailyQuota?.maxGenerations ?? 100)
     },
-    corsAllowOrigin: envCors || security.corsAllowOrigin
+    corsAllowOrigin: envCors || security.corsAllowOrigin,
+    registration: security.registration
   };
 }
 

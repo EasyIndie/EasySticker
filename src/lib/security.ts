@@ -1,7 +1,18 @@
 /**
- * Production security: API token auth, rate limiting, daily quota.
+ * Production security: API token auth, rate limiting, daily quota, registration control.
  * All in-memory — simple, no Redis dependency. Resets on server restart.
  */
+
+export type RegistrationMode = "open" | "invite" | "closed";
+
+export type RegistrationConfig = {
+  /** 
+   * - 'open': anyone can register (default when absent)
+   * - 'invite': admin token required for registration (current behavior)
+   * - 'closed': registration entirely disabled
+   */
+  mode?: RegistrationMode;
+};
 
 export type SecurityConfig = {
   apiToken?: string;
@@ -15,6 +26,8 @@ export type SecurityConfig = {
     maxGenerations: number;
   };
   corsAllowOrigin?: string;
+  /** Registration policy. Defaults to 'open' when absent. */
+  registration?: RegistrationConfig;
 };
 
 interface RateEntry {
@@ -31,6 +44,9 @@ export function createSecurity(config: SecurityConfig) {
   const authEnabled = config.enableAuth !== false && !!config.apiToken;
   const rateLimitEnabled = !!config.rateLimit;
   const quotaEnabled = !!config.dailyQuota;
+
+  // Registration mode
+  const regMode: RegistrationMode = config.registration?.mode ?? "open";
 
   // Rate limiting state
   const rateMap = new Map<string, RateEntry>();
@@ -132,9 +148,15 @@ export function createSecurity(config: SecurityConfig) {
       }
     },
 
+    /** Check if registration is allowed */
+    checkRegistration(): { allowed: boolean; mode: RegistrationMode } {
+      return { allowed: regMode !== "closed", mode: regMode };
+    },
+
     isAuthEnabled: authEnabled,
     isRateLimitEnabled: rateLimitEnabled,
     isQuotaEnabled: quotaEnabled,
+    registrationMode: regMode,
     startCleanup,
     stopCleanup
   };
