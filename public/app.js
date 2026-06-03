@@ -59,7 +59,7 @@
   const authSwitch = document.getElementById('authSwitch');
   const authQuotaBar = document.getElementById('authQuotaBar');
   const quotaDisplay = document.getElementById('quotaDisplay');
-  const userBadge = document.getElementById('userBadge');
+
   const loginBtn = document.getElementById('loginBtn');
 
   let isRegisterMode = false;
@@ -89,10 +89,6 @@
   function updateUI() {
     const adminEntry = document.getElementById('adminEntry');
     if (isLoggedIn()) {
-      if (userBadge) {
-        userBadge.textContent = authUser.email;
-        userBadge.removeAttribute('hidden');
-      }
       if (loginBtn) loginBtn.textContent = '🚪';
       loginBtn.title = '注销';
       // Show admin entry for admin users
@@ -105,7 +101,6 @@
       }
       hideAuth();
     } else {
-      if (userBadge) userBadge.setAttribute('hidden', '');
       if (adminEntry) adminEntry.setAttribute('hidden', '');
       if (loginBtn) loginBtn.textContent = '👤';
       loginBtn.title = '登录';

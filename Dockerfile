@@ -23,6 +23,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends curl ca-certifi
 COPY --from=deps /app/node_modules ./node_modules
 COPY --from=build /app/dist ./dist
 COPY --from=build /app/public ./public
+COPY prompt-config.default.json ./
 EXPOSE 3000
 
 # Health check — curl the built-in /health endpoint
