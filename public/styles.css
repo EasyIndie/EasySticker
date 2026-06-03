@@ -2117,6 +2117,7 @@ select {
   transition: background 0.15s ease, border-color 0.15s ease;
   line-height: 1;
   color: var(--color-text-primary);
+  text-decoration: none;
 }
 .hero-btn:hover {
   background: var(--color-surface-hover);
