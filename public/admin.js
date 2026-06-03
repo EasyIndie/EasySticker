@@ -68,11 +68,7 @@ function logout() {
   sessionStorage.removeItem("admin_user");
   localStorage.removeItem("easysticker_token");
   localStorage.removeItem("easysticker_user");
-  document.getElementById("login-section").style.display = "flex";
-  document.getElementById("main-section").style.display = "none";
-  document.getElementById("login-email").value = "";
-  document.getElementById("login-password").value = "";
-  document.getElementById("login-error").textContent = "";
+  location.href = "/admin.html";
 }
 
 function showMainSection(user) {
