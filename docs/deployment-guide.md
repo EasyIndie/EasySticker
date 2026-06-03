@@ -301,10 +301,45 @@ sudo apt update && sudo apt upgrade -y
 
 ### 4.4 数据备份
 
+EasySticker 的所有持久化数据存储在 `./data/` 目录下，包含：
+
+| 路径 | 内容 |
+|------|------|
+| `data/users.json` | 用户账户（邮箱、密码哈希、角色） |
+| `data/usage.json` | 使用量统计 |
+| `data/monitor/` | 请求监控数据 |
+| `data/uploads/` | 用户上传的文件 |
+
+#### 手动备份
+
 ```bash
-# 备份 data 目录（包含用户数据、配置、生成记录）
-tar czf backup-$(date +%Y%m%d).tar.gz ./data
+# 备份全部数据
+tar czf backup-$(date +%Y%m%d-%H%M%S).tar.gz ./data
+
+# 恢复到指定目录
+mkdir -p /backup/app && tar xzf backup-20260603.tar.gz -C /backup/app
 ```
+
+#### 定期自动备份（crontab）
+
+```bash
+# 每天凌晨 3 点备份，保留最近 30 天
+0 3 * * * cd /path/to/easysticker && \
+  tar czf /backups/easysticker-\$(date +\\%Y\\%m\\%d).tar.gz ./data && \
+  find /backups -name 'easysticker-*.tar.gz' -mtime +30 -delete
+```
+
+#### Docker 卷备份
+
+若使用具名卷（Docker Compose 默认），备份方法：
+
+```bash
+# 创建临时容器挂载卷，导出数据
+docker run --rm -v easysticker_data:/data -v /backups:/backup alpine \
+  tar czf /backup/easysticker-$(date +%Y%m%d).tar.gz -C /data .
+```
+
+> **建议**：至少保留 30 天备份，并定期测试恢复流程。
 
 ---
 
