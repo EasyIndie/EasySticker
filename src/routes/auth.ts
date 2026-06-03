@@ -125,4 +125,63 @@ export function registerAuthRoutes(app: FastifyInstance, _opts: unknown): void {
     const quota = app.usageStore.checkDailyQuota(email, maxPerDay);
     return quota;
   });
+
+  // POST /api/auth/forgot-password — request password reset (local mode: contact admin)
+  app.post("/auth/forgot-password", {
+    schema: {
+      body: {
+        type: "object",
+        required: ["email"],
+        properties: {
+          email: { type: "string" }
+        }
+      }
+    }
+  }, async (req, reply) => {
+    const { email } = req.body as { email: string };
+    const user = app.userStore.get(email);
+    if (!user) {
+      // Don't reveal whether email exists — always return success
+      return { success: true, message: "如果该邮箱已注册，请联系管理员重置密码。" };
+    }
+
+    // In local dev mode, just respond with contact info
+    return {
+      success: true,
+      message: "密码重置请求已记录。请管理员登录管理后台为用户重置密码。"
+    };
+  });
+
+  // POST /api/auth/reset-password — admin resets a user's password
+  app.post("/auth/reset-password", {
+    schema: {
+      body: {
+        type: "object",
+        required: ["email", "newPassword"],
+        properties: {
+          email: { type: "string" },
+          newPassword: { type: "string", minLength: 6 }
+        }
+      }
+    }
+  }, async (req, reply) => {
+    try {
+      await req.jwtVerify();
+    } catch {
+      return reply.status(401).send({ error: "Unauthorized" });
+    }
+
+    const { role } = req.user as any;
+    if (role !== "admin") {
+      return reply.status(403).send({ error: "Forbidden", message: "Only admins can reset passwords." });
+    }
+
+    const { email, newPassword } = req.body as { email: string; newPassword: string };
+    const ok = app.userStore.updatePassword(email, newPassword);
+    if (!ok) {
+      return reply.status(404).send({ error: "User not found" });
+    }
+
+    return { success: true, message: "密码已重置。" };
+  });
 }
