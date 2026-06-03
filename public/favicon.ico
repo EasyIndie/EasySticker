@@ -1,1 +1,11 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><text y=".9em" font-size="90">🐱</text></svg>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" width="120" height="120">
+  <rect width="120" height="120" rx="24" fill="#07c160"/>
+  <g fill="#fff" transform="translate(24, 20)">
+    <path d="M36 8a28 28 0 1 0 0 56 28 28 0 1 0 0-56zm0 48c-11 0-20-9-20-20s9-20 20-20 20 9 20 20-9 20-20 20z"/>
+    <circle cx="24" cy="28" r="3.5"/>
+    <circle cx="48" cy="28" r="3.5"/>
+    <path d="M26 44c0 0 4 6 10 6s10-6 10-6" stroke="#fff" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+  </g>
+  <text x="60" y="90" text-anchor="middle" fill="#fff" font-family="sans-serif" font-size="13" font-weight="bold">E</text>
+  <text x="60" y="105" text-anchor="middle" fill="#fff" font-family="sans-serif" font-size="8" font-weight="bold" opacity="0.7">STICKER</text>
+</svg>
