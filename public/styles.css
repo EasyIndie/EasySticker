@@ -325,13 +325,13 @@ body {
   font-size: 0.95rem;
 }
 .auth-form input:focus {
-  outline: 2px solid var(--color-accent);
+  outline: 2px solid var(--accent);
   outline-offset: 1px;
 }
 .auth-btn {
   width: 100%;
   padding: 12px;
-  background: var(--color-accent);
+  background: var(--accent);
   color: #fff;
   border: none;
   border-radius: var(--radius-sm);
@@ -348,7 +348,7 @@ body {
   color: var(--color-muted);
 }
 .auth-switch a {
-  color: var(--color-accent);
+  color: var(--accent);
   text-decoration: none;
   cursor: pointer;
 }
