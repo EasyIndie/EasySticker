@@ -747,6 +747,22 @@ function formatTime(isoStr) {
 document.addEventListener("DOMContentLoaded", function () {
   checkAuth();
 
+  // 按钮事件绑定（替代内联 onclick，兼容 CSP）
+  document.getElementById("login-btn").addEventListener("click", login);
+  document.getElementById("logout-btn").addEventListener("click", logout);
+  document.getElementById("load-alerts-btn").addEventListener("click", loadAlerts);
+  document.getElementById("load-users-btn").addEventListener("click", loadUsers);
+  document.getElementById("save-settings-btn").addEventListener("click", saveSettings);
+  document.getElementById("save-rules-btn").addEventListener("click", saveAlertRules);
+
+  // Tab 按钮绑定（data-tab 属性驱动）
+  document.querySelectorAll(".tab-btn").forEach(function (btn) {
+    btn.addEventListener("click", function () {
+      switchTab(this.dataset.tab);
+    });
+  });
+
+  // 回车键触发登录
   document.getElementById("login-password").addEventListener("keydown", function (e) {
     if (e.key === "Enter") login();
   });
