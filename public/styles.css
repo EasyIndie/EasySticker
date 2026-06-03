@@ -262,15 +262,14 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(0,0,0,0.5);
-  backdrop-filter: blur(4px);
+  background: var(--color-overlay-dark, rgba(0,0,0,0.6));
   transition: opacity 0.2s;
 }
 .auth-overlay[hidden] {
   display: none;
 }
 .auth-box {
-  background: var(--surface-card);
+  background: var(--card);
   border: 1px solid var(--color-border-subtle);
   border-radius: var(--radius-md);
   padding: 32px;
