@@ -110,5 +110,52 @@ EasySticker 团队`;
     return send({ to, subject, text, html });
   }
 
-  return { send, sendResetPassword, buildResetEmail };
+  /** Build the email-verification email content. */
+  function buildVerifyEmail(to: string, token: string): {
+    subject: string;
+    text: string;
+    html: string;
+  } {
+    const verifyUrl = `${config.baseUrl}?verify=${token}`;
+    const subject = "EasySticker — 验证邮箱";
+    const text = `你好，
+
+请点击以下链接验证你的 EasySticker 账户邮箱：
+
+${verifyUrl}
+
+该链接在 24 小时内有效。如果你没有注册 EasySticker，请忽略此邮件。
+
+EasySticker 团队`;
+
+    const html = `<!DOCTYPE html>
+<html lang="zh-CN">
+<head><meta charset="utf-8"></head>
+<body style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+  <h2>EasySticker — 验证邮箱</h2>
+  <p>你好，</p>
+  <p>请点击下方链接验证你的邮箱地址：</p>
+  <p style="text-align: center; margin: 30px 0;">
+    <a href="${verifyUrl}" style="display: inline-block; padding: 12px 24px; background: #4f46e5; color: #fff; text-decoration: none; border-radius: 6px; font-size: 16px;">
+      验证邮箱
+    </a>
+  </p>
+  <p>或复制以下链接到浏览器地址栏：</p>
+  <p style="word-break: break-all; color: #666;">${verifyUrl}</p>
+  <p style="color: #999; font-size: 13px;">该链接在 24 小时内有效。如果你没有注册 EasySticker，请忽略此邮件。</p>
+  <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;">
+  <p style="color: #999; font-size: 12px;">EasySticker 团队</p>
+</body>
+</html>`;
+
+    return { subject, text, html };
+  }
+
+  /** Send an email-verification email (or log). */
+  async function sendVerifyEmail(to: string, token: string): Promise<boolean> {
+    const { subject, text, html } = buildVerifyEmail(to, token);
+    return send({ to, subject, text, html });
+  }
+
+  return { send, sendResetPassword, sendVerifyEmail, buildResetEmail, buildVerifyEmail };
 }
