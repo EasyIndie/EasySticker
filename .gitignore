@@ -20,3 +20,4 @@ coverage
 # IDE
 .vscode
 .idea
+playwright-report/
