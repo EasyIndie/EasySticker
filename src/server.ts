@@ -131,6 +131,24 @@ async function main() {
 
   await app.listen({ host, port });
   app.log.info({ host, port, auth: app.security.isAuthEnabled }, "server listening");
+  console.log(`\n🌐 EasySticker 已启动！`);
+  console.log(`   本机:   http://localhost:${port}`);
+  if (host === "0.0.0.0") {
+    // Show all non-internal network addresses
+    const os = require("node:os");
+    const ifaces = os.networkInterfaces();
+    for (const name of Object.keys(ifaces)) {
+      for (const info of ifaces[name] || []) {
+        if (info.family === "IPv4" && !info.internal) {
+          console.log(`   网络:   http://${info.address}:${port}`);
+        }
+      }
+    }
+  } else {
+    console.log(`   地址:   http://${host}:${port}`);
+  }
+  console.log(`   管理后台: http://localhost:${port}/admin.html`);
+  console.log();
 }
 
 main().catch((err) => {
