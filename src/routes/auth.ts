@@ -29,25 +29,35 @@ export function registerAuthRoutes(app: FastifyInstance, _opts: unknown): void {
   }, async (req, reply) => {
     const { email, password, adminToken } = req.body as any;
 
-    // Check if admin token is correct for admin registration
     const appConfig = app.appConfig;
     const adminSecret = appConfig.security?.apiToken;
+    const { allowed: regAllowed, mode: regMode } = app.security.checkRegistration();
 
-    // First user auto-becomes admin; subsequent registrations require admin token
-    const existingUsers = app.userStore.list();
-    if (existingUsers.length > 0 && !adminToken) {
+    // 'closed' mode — no registrations at all
+    if (regMode === "closed") {
       return reply.status(403).send({
-        error: "Registration closed",
-        message: "New user registration requires an admin invite token."
+        error: "Registration disabled",
+        message: "New user registration is currently disabled."
       });
     }
 
-    // If admin token provided, verify it
-    if (adminToken && adminToken !== adminSecret) {
-      return reply.status(403).send({
-        error: "Invalid token",
-        message: "The admin invite token is invalid."
-      });
+    // 'invite' mode — need admin token (unless first user which auto-becomes admin)
+    const existingUsers = app.userStore.list();
+    if (regMode === "invite") {
+      if (existingUsers.length > 0 && !adminToken) {
+        return reply.status(403).send({
+          error: "Registration closed",
+          message: "New user registration requires an admin invite token."
+        });
+      }
+
+      // If admin token provided, verify it
+      if (adminToken && adminToken !== adminSecret) {
+        return reply.status(403).send({
+          error: "Invalid token",
+          message: "The admin invite token is invalid."
+        });
+      }
     }
 
     const role = existingUsers.length === 0 ? "admin" : "user";
