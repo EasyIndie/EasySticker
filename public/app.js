@@ -2994,14 +2994,14 @@ function toggleHistory(expand) {
 
 // History toggle click handler
 document.addEventListener("click", function(e) {
-  var target = e.target.closest("#historyToggle, #historyToggleSub");
+  var target = e.target.closest("#historyToggle, .collapse-btn");
   if (target) {
     toggleHistory();
   }
 });
 document.addEventListener("keydown", function(e) {
   if ((e.key === "Enter" || e.key === " ") && e.target.closest) {
-    var el = e.target.closest("#historyToggle, #historyToggleSub");
+    var el = e.target.closest("#historyToggle, .collapse-btn");
     if (el) {
       e.preventDefault();
       toggleHistory();
