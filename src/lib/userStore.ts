@@ -12,6 +12,9 @@ export interface User {
   createdAt: string;
   lastLogin: string | null;
   disabled: boolean;
+  emailVerified: boolean;
+  emailVerifyToken?: string;
+  emailVerifyExpires?: string;
   resetToken?: string;
   resetExpires?: string;
 }
@@ -75,7 +78,8 @@ export function createUserStore(dataPath: string) {
         role,
         createdAt: new Date().toISOString(),
         lastLogin: null,
-        disabled: false
+        disabled: false,
+        emailVerified: false
       };
       data.users[lower] = user;
       save();
@@ -114,10 +118,14 @@ export function createUserStore(dataPath: string) {
       return true;
     },
 
-    /** Create default admin if no users exist */
+    /** Create default admin if no users exist — auto-verified */
     ensureAdmin(email: string, password: string): boolean {
       if (Object.keys(data.users).length > 0) return false;
       this.register(email, password, "admin");
+      const lower = email.toLowerCase().trim();
+      const user = data.users[lower];
+      if (user) user.emailVerified = true;
+      save();
       return true;
     },
 
@@ -154,6 +162,33 @@ export function createUserStore(dataPath: string) {
         }
       }
       return undefined;
+    },
+
+    /** Set email verification token. Returns false if user not found. */
+    setEmailVerifyToken(email: string, token: string, ttlMs: number): boolean {
+      const lower = email.toLowerCase().trim();
+      const user = data.users[lower];
+      if (!user) return false;
+      user.emailVerifyToken = token;
+      user.emailVerifyExpires = new Date(Date.now() + ttlMs).toISOString();
+      save();
+      return true;
+    },
+
+    /** Verify email with token. Returns true if valid. */
+    verifyEmail(token: string): boolean {
+      for (const user of Object.values(data.users)) {
+        if (user.emailVerifyToken === token && user.emailVerifyExpires) {
+          if (new Date(user.emailVerifyExpires).getTime() > Date.now()) {
+            user.emailVerified = true;
+            delete user.emailVerifyToken;
+            delete user.emailVerifyExpires;
+            save();
+            return true;
+          }
+        }
+      }
+      return false;
     },
 
     /** Clear reset token after use (e.g. password changed). */

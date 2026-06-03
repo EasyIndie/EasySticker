@@ -69,6 +69,13 @@ export function registerAuthRoutes(app: FastifyInstance, _opts: unknown): void {
       });
     }
 
+    // Send email verification (first-time users who are not admin)
+    if (role !== "admin" && app.mailer) {
+      const verifyToken = crypto.randomBytes(32).toString("hex");
+      app.userStore.setEmailVerifyToken(user.email, verifyToken, 86_400_000); // 24h
+      app.mailer.sendVerifyEmail(user.email, verifyToken).catch(() => {});
+    }
+
     // Generate JWT token (default 7d expiry)
     const expiresIn = app.appConfig.security?.jwtExpiresIn ?? "7d";
     const token = await reply.jwtSign({ email: user.email, role: user.role }, { expiresIn });
@@ -94,6 +101,16 @@ export function registerAuthRoutes(app: FastifyInstance, _opts: unknown): void {
       return reply.status(401).send({
         error: "Invalid credentials",
         message: "Email or password is incorrect."
+      });
+    }
+
+    // Reject unverified users
+    if (!user.emailVerified && user.role !== "admin") {
+      // Allow resending verification
+      return reply.status(403).send({
+        error: "Email not verified",
+        message: "请先验证邮箱后再登录。",
+        email: user.email
       });
     }
 
@@ -245,5 +262,56 @@ export function registerAuthRoutes(app: FastifyInstance, _opts: unknown): void {
     }
 
     return { success: true, message: "密码已重置。" };
+  });
+
+  // POST /api/auth/verify-email — confirm email via token
+  app.post("/auth/verify-email", {
+    schema: {
+      body: {
+        type: "object",
+        required: ["token"],
+        properties: {
+          token: { type: "string" }
+        }
+      }
+    }
+  }, async (req, reply) => {
+    const { token } = req.body as { token: string };
+    const ok = app.userStore.verifyEmail(token);
+    if (!ok) {
+      return reply.status(400).send({
+        error: "Invalid token",
+        message: "验证链接无效或已过期，请重新注册。"
+      });
+    }
+    return { success: true, message: "邮箱验证成功，请登录。" };
+  });
+
+  // POST /api/auth/resend-verification — resend verification email
+  app.post("/auth/resend-verification", {
+    schema: {
+      body: {
+        type: "object",
+        required: ["email"],
+        properties: {
+          email: { type: "string" }
+        }
+      }
+    }
+  }, async (req, reply) => {
+    const { email } = req.body as { email: string };
+    const user = app.userStore.get(email);
+    if (!user || user.emailVerified) {
+      // Don't reveal if email exists or already verified
+      return { success: true, message: "如果该邮箱未验证，你将收到验证邮件。" };
+    }
+    if (!app.mailer) {
+      app.log.warn({ email }, "Verification email requested but no mailer configured");
+      return { success: true, message: "如果该邮箱未验证，你将收到验证邮件。" };
+    }
+    const verifyToken = crypto.randomBytes(32).toString("hex");
+    app.userStore.setEmailVerifyToken(email, verifyToken, 86_400_000);
+    app.mailer.sendVerifyEmail(email, verifyToken).catch(() => {});
+    return { success: true, message: "如果该邮箱未验证，你将收到验证邮件。" };
   });
 }
