@@ -134,7 +134,9 @@ export function buildApp(config: AppConfig): FastifyInstance {
     reply.header("X-Content-Type-Options", "nosniff");
     reply.header("X-Frame-Options", "DENY");
     reply.header("Referrer-Policy", "strict-origin-when-cross-origin");
-    reply.header("X-DNS-Prefetch-Control", "off")
+    reply.header("X-DNS-Prefetch-Control", "off");
+    // HSTS: force HTTPS for 1 year, include subdomains
+    reply.header("Strict-Transport-Security", "max-age=31536000; includeSubDomains");
   });
 
   // ===== Global Hooks =====
@@ -191,8 +193,12 @@ export function buildApp(config: AppConfig): FastifyInstance {
     if (isPublicRoute(req.url)) return;
     if (req.method === "OPTIONS") return;
 
+    // Login endpoints: stricter rate limit (half the normal window)
+    const isLoginRoute = req.url === "/api/auth/login" || req.url === "/api/auth/register";
     const key = (req.headers.authorization?.slice(7)) || req.ip;
-    const result = app.security.checkRateLimit(key);
+    const result = isLoginRoute
+      ? app.security.checkRateLimit(key, { maxRequests: 5, windowMs: 60_000 })
+      : app.security.checkRateLimit(key);
     if (result && !result.allowed) {
       const retryAfter = Math.ceil((result.resetAt - Date.now()) / 1000);
       reply.header("Retry-After", String(retryAfter));

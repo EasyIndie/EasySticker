@@ -18,6 +18,8 @@ export type SecurityConfig = {
   apiToken?: string;
   enableAuth?: boolean;
   jwtSecret?: string;
+  /** JWT token expiry duration (ms or string like "7d"). Default: 7d */
+  jwtExpiresIn?: string;
   rateLimit?: {
     maxRequests: number;
     windowMs: number;
@@ -92,9 +94,9 @@ export function createSecurity(config: SecurityConfig) {
     },
 
     /** Check rate limit for a key (IP or token). Returns null if allowed, or error info. */
-    checkRateLimit(key: string): { allowed: boolean; remaining: number; resetAt: number } | null {
-      if (!rateLimitEnabled) return null;
-      const cfg = config.rateLimit!;
+    checkRateLimit(key: string, override?: { maxRequests: number; windowMs: number }): { allowed: boolean; remaining: number; resetAt: number } | null {
+      if (!rateLimitEnabled && !override) return null;
+      const cfg = override ?? config.rateLimit!;
       const now = Date.now();
       const entry = rateMap.get(key);
 
