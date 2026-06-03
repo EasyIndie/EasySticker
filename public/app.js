@@ -1245,10 +1245,10 @@ function renderPackHistory() {
   const history = getPackHistory();
   if (!historySection || !historyList) return;
   if (history.length === 0) {
-    historySection.setAttribute("hidden", "");
+    historySection.style.display = "none";
     return;
   }
-  historySection.removeAttribute("hidden");
+  historySection.style.display = "block";
   
   // Update summary line
   if (historySummary) {
@@ -2989,33 +2989,15 @@ let historyExpanded = false;
 function toggleHistory(expand) {
   historyExpanded = expand !== undefined ? expand : !historyExpanded;
   if (historyBody) {
-    if (historyExpanded) {
-      historyBody.removeAttribute("hidden");
-    } else {
-      historyBody.setAttribute("hidden", "");
-    }
+    historyBody.style.display = historyExpanded ? "block" : "none";
   }
   if (historyList) {
-    if (historyExpanded) {
-      historyList.removeAttribute("hidden");
-    } else {
-      historyList.setAttribute("hidden", "");
-    }
+    historyList.style.display = historyExpanded ? "block" : "none";
   }
   if (historyCollapseIcon) {
     historyCollapseIcon.classList.toggle("expanded", historyExpanded);
   }
 }
-
-historyToggle?.addEventListener("click", () => {
-  toggleHistory();
-});
-historyToggle?.addEventListener("keydown", (e) => {
-  if (e.key === "Enter" || e.key === " ") {
-    e.preventDefault();
-    toggleHistory();
-  }
-});
 
 originalPreview.addEventListener("error", () => {
   originalPreview.removeAttribute("src");
