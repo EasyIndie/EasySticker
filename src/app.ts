@@ -125,7 +125,7 @@ export function buildApp(config: AppConfig): FastifyInstance {
     // CSP: restrict script/styles to same-origin only
     reply.header("Content-Security-Policy",
       "default-src 'self'; " +
-      "script-src 'self'; " +
+      "script-src 'self' 'sha256-/susv/jnX6eIOdo/5fuyXHc/B4oDj3/0ITkfcVXVkg0='; " +
       "style-src 'self' 'unsafe-inline'; " +
       "img-src 'self' data: blob:; " +
       "font-src 'self'; " +
