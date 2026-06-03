@@ -115,16 +115,19 @@
 
   function toggleMode() {
     isRegisterMode = !isRegisterMode;
+    const inviteField = document.getElementById('inviteField');
     if (isRegisterMode) {
       authTitle.textContent = '注册 EasySticker';
       authSubtitle.textContent = '创建一个账户以使用生成服务';
       authSubmit.textContent = '注册';
       authToggle.textContent = '已有账户？登录';
+      if (inviteField) inviteField.removeAttribute('hidden');
     } else {
       authTitle.textContent = '登录 EasySticker';
       authSubtitle.textContent = '输入邮箱和密码进入工作台';
       authSubmit.textContent = '登录';
       authToggle.textContent = '没有账户？注册';
+      if (inviteField) inviteField.setAttribute('hidden', '');
     }
   }
 
@@ -154,7 +157,10 @@
         let url, body;
         if (isRegisterMode) {
           url = '/api/auth/register';
+          const inviteTokenInput = document.getElementById('inviteToken');
+          const adminToken = inviteTokenInput ? inviteTokenInput.value.trim() : '';
           body = { email, password };
+          if (adminToken) body.adminToken = adminToken;
         } else {
           url = '/api/auth/login';
           body = { email, password };

@@ -2169,6 +2169,42 @@ select {
 .preview-item,
 .history-item,
 .step-card,
+.site-footer {
+  margin-top: 2.5rem;
+  padding: 1.5rem 1rem;
+  text-align: center;
+  border-top: 1px solid var(--border-color, #e5e7eb);
+}
+
+.footer-links {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.footer-links a {
+  color: var(--link-color, #07c160);
+  text-decoration: none;
+  font-size: 0.875rem;
+}
+
+.footer-links a:hover {
+  text-decoration: underline;
+}
+
+.footer-sep {
+  color: var(--text-muted, #9ca3af);
+  font-size: 0.75rem;
+}
+
+.footer-muted {
+  margin-top: 0.5rem;
+  color: var(--text-muted, #9ca3af);
+  font-size: 0.75rem;
+}
+
 .card,
 .drop-zone-overlay {
   transition: background 0.2s ease, color 0.2s ease, border-color 0.2s ease,

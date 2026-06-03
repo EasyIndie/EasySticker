@@ -300,6 +300,9 @@ function renderUsers(users) {
           '<td>' +
             '<button class="btn ' + toggleClass + ' btn-sm" onclick="toggleUser(\'' + escHtmlAttr(u.email) + '\')">' + toggleText + '</button>' +
           '</td>' +
+          '<td>' +
+            '<button class="btn btn-outline btn-sm" onclick="showResetPassword(\'' + escHtmlAttr(u.email) + '\')">重置密码</button>' +
+          '</td>' +
         '</tr>'
       );
     })
@@ -308,7 +311,7 @@ function renderUsers(users) {
   container.innerHTML =
     '<table class="data-table">' +
       '<thead><tr>' +
-        '<th>邮箱</th><th>角色</th><th>创建时间</th><th>最后登录</th><th>状态</th><th>操作</th>' +
+        '<th>邮箱</th><th>角色</th><th>创建时间</th><th>最后登录</th><th>状态</th><th>操作</th><th></th>' +
       '</tr></thead>' +
       '<tbody>' + rows + '</tbody>' +
     '</table>';
@@ -656,6 +659,26 @@ async function saveAlertRules() {
     msg.className = "status-msg error";
   }
   setTimeout(() => { msg.textContent = ""; }, 3000);
+}
+
+// ── Password Reset ──────────────────────────────────────────
+
+function showResetPassword(email) {
+  const newPassword = prompt('为 "' + email + '" 设置新密码（至少6个字符）：');
+  if (!newPassword || newPassword.length < 6) {
+    if (newPassword) alert('密码至少6个字符');
+    return;
+  }
+  resetPassword(email, newPassword);
+}
+
+async function resetPassword(email, newPassword) {
+  const result = await apiCall("POST", "/auth/reset-password", { email, newPassword });
+  if (result && result.success) {
+    alert('✅ 密码已重置');
+  } else {
+    alert('❌ 重置失败: ' + (result?.message || '请重试'));
+  }
 }
 
 // ── Utility ──────────────────────────────────────────────────
