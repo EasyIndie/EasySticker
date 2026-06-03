@@ -24,7 +24,7 @@
         <label for="login-password">密码</label>
         <input id="login-password" type="password" placeholder="密码" autocomplete="current-password">
       </div>
-      <button id="login-btn" class="btn btn-primary" onclick="login()">登 录</button>
+      <button id="login-btn" class="btn btn-primary">登 录</button>
       <p id="login-error" class="error-msg"></p>
       <p class="login-back"><a href="/">← 返回首页</a></p>
     </div>
@@ -44,16 +44,16 @@
       </div>
       <div class="topbar-right">
         <span id="topbar-user" class="topbar-user"></span>
-        <button class="btn btn-outline btn-sm" onclick="logout()">退出</button>
+        <button id="logout-btn" class="btn btn-outline btn-sm">退出</button>
       </div>
     </header>
 
     <!-- Tab 切换 -->
     <nav class="tab-bar">
-      <button class="tab-btn active" data-tab="dashboard" onclick="switchTab('dashboard')">📊 仪表盘</button>
-      <button class="tab-btn" data-tab="users" onclick="switchTab('users')">👥 用户</button>
-      <button class="tab-btn" data-tab="stats" onclick="switchTab('stats')">📈 统计</button>
-      <button class="tab-btn" data-tab="settings" onclick="switchTab('settings')">⚙️ 设置</button>
+      <button class="tab-btn active" data-tab="dashboard">📊 仪表盘</button>
+      <button class="tab-btn" data-tab="users">👥 用户</button>
+      <button class="tab-btn" data-tab="stats">📈 统计</button>
+      <button class="tab-btn" data-tab="settings">⚙️ 设置</button>
     </nav>
 
     <!-- 内容区 -->
@@ -116,7 +116,7 @@
         <section class="section-card">
           <div class="section-header">
             <h3>🚨 活跃告警</h3>
-            <button class="btn btn-outline btn-sm" onclick="loadAlerts()">刷新</button>
+            <button class="btn btn-outline btn-sm" id="load-alerts-btn">刷新</button>
           </div>
           <div id="alerts-container">
             <p class="loading-text">加载中...</p>
@@ -129,7 +129,7 @@
         <section class="section-card">
           <div class="section-header">
             <h3>用户列表</h3>
-            <button class="btn btn-outline btn-sm" onclick="loadUsers()">刷新</button>
+            <button class="btn btn-outline btn-sm" id="load-users-btn">刷新</button>
           </div>
           <div id="users-container">
             <p class="loading-text">加载中...</p>
@@ -174,7 +174,7 @@
         <section class="section-card">
           <div class="section-header">
             <h3>📡 通知设置</h3>
-            <button class="btn btn-primary btn-sm" onclick="saveSettings()">保存设置</button>
+            <button class="btn btn-primary btn-sm" id="save-settings-btn">保存设置</button>
           </div>
           <div class="form-grid">
             <div class="input-group">
@@ -200,7 +200,7 @@
         <section class="section-card">
           <div class="section-header">
             <h3>🔔 告警规则</h3>
-            <button class="btn btn-primary btn-sm" onclick="saveAlertRules()">保存规则</button>
+            <button class="btn btn-primary btn-sm" id="save-rules-btn">保存规则</button>
           </div>
           <div id="alert-rules-container">
             <p class="loading-text">加载中...</p>
