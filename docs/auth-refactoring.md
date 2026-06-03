@@ -1,106 +1,47 @@
-# 认证模块重构方案
+# 认证模块重构 — 实施记录
 
-## 现状问题
+> 2026-06-03 已完成实施。本文档从「设计方案」更新为「实施记录」。
 
-当前两套独立的登录逻辑：
+## 现状
 
-| | 首页 (app.js) | 管理后台 (admin.js) |
-|---|---|---|
-| Token 存储 | `localStorage.easysticker_token` | `sessionStorage.admin_token` |
-| 用户信息 | `localStorage.easysticker_user` | `sessionStorage.admin_user` |
-| 登录 | API 登录 → localStorage | API 登录 → sessionStorage |
-| 登出 | 清 localStorage → 迁 session | 清 session + local → 设退出标记 |
-| 相互感知 | 无 | admin 从 local 拉 token 做"恢复" |
+两套登录逻辑已统一：
 
-### 具体问题
+| 维度 | 首页 (app.js) | 管理后台 (admin.js) |
+|------|------|------|
+| Token 存储 | `localStorage.easysticker_token` | `localStorage.easysticker_token`（同一 key） |
+| 用户信息 | `localStorage.easysticker_user` | `localStorage.easysticker_user`（同一 key） |
+| 登录 | API 登录 → localStorage | API 登录 → localStorage（同一位置） |
+| 退出标记 | `sessionStorage.admin_logged_out` | `sessionStorage.admin_logged_out` |
+| checkAuth | 直接从 localStorage 读 | 直接从 localStorage 读 |
 
-1. **两套 storage key** — 首页用 `easysticker_*`，后台用 `admin_*`，不一致
-2. **退出不同步** — 首页退出了不清 sessionStorage，后台退出了但 session 标记可能被跳过
-3. **入口控制不一致** — 首页关闭时 JS 控制显示，但硬链接 `<a href="/admin.html">` 不受控
-4. **token 生命期不同** — localStorage 跨标签页持久化，sessionStorage 同标签页
-5. **后台 `checkAuth` 从 local 自动恢复** — 是 hack 而非设计
+### 变更要点
 
-## 重构方案
+1. **admin.js token 改为 localStorage**（之前用 sessionStorage.admin_token）
+2. **移除 admin.js 的 checkAuth 自动恢复逻辑**（从 session→local 的 hack）
+3. **退出标记统一**：`sessionStorage.admin_logged_out`，登录时清掉
+4. **退出只清 localStorage**，不再清 sessionStorage 旧 key
+5. **首页增加 `storage` 事件监听**：其他标签页登录/退出实时感知
 
-### 核心设计：单源真理 (Single Source of Truth)
+### 状态流转
 
 ```
-            localStorage (持久化)
-                 │
-    ┌────────────┴────────────┐
-    │                        │
-  首页 (app.js)         管理后台 (admin.js)
-  读取 localStorage     读取 localStorage
-  写入 localStorage     写入 localStorage
+初始状态：localStorage 无 token
+         → checkAuth 检查 → 无 token → 显示登录页
+
+登录：写入 localStorage.easysticker_token
+    → 清除 sessionStorage.admin_logged_out
+    → showMainSection
+
+退出：移除 localStorage 中 token/user
+    → 设 sessionStorage.admin_logged_out = "1"
+    → 切回登录页
+
+其他标签页退出：localStorage token 被删
+   → 首页通过 storage 事件感知
+   → 自动切换回未登录态
 ```
 
-- **唯一存储位置**: `localStorage`
-- **Key**: `easysticker_token` + `easysticker_user`
-- **两页读取相同 key，写入相同 key**
+### 文件变更
 
-### 具体变更
-
-#### 1. 管理后台 token 存储改为 localStorage
-
-```js
-// admin.js — 登录
-localStorage.setItem("easysticker_token", result.token);
-localStorage.setItem("easysticker_user", JSON.stringify(result.user));
-
-// admin.js — API 调用
-const token = localStorage.getItem("easysticker_token");
-
-// admin.js — 登出
-localStorage.removeItem("easysticker_token");
-localStorage.removeItem("easysticker_user");
-
-// 不再使用 sessionStorage 做 token 存储
-// sessionStorage 只放退出标记
-```
-
-#### 2. 移除 admin.js 的 checkAuth 从 session 恢复逻辑
-
-```js
-// 删除从 sessionStorage 拿 token 和从 localStorage 自动恢复的代码
-// checkAuth 只做：
-//   1. 检查退出标记 → return
-//   2. 从 localStorage 拿 token → 有则登录
-```
-
-#### 3. 统一退出标记
-
-```js
-// 任何地方的退出操作都写入：
-sessionStorage.setItem("admin_logged_out", "1");
-// 任何地方的登录操作都清除：
-sessionStorage.removeItem("admin_logged_out");
-```
-
-#### 4. 首页底部"管理后台"链接控制
-
-已有 `hidden` 属性控制，不需要额外改动。
-
-### 边界情况覆盖
-
-| 场景 | 预期行为 |
-|------|---------|
-| 首页登录 → 点管理后台 | 自动进入（token 在 localStorage） |
-| 首页退出 → 点管理后台 | 显示登录页（退出标记 + 无 token） |
-| 管理后台退出 → 刷新首页 | 底部链接隐藏，token 无 |
-| 管理后台退出 → 点管理后台 | 显示登录页（退出标记） |
-| 管理后台登录 → 刷新管理后台 | 自动进入（localStorage 还在） |
-| 两个标签页：首页 + 后台 | 登录/退出互相感知（同一 localStorage） |
-| 关闭浏览器 → 打开 | token 持久化，未退出则仍登录 |
-| 管理后台登录 → 点首页退出 → 刷新管理后台 | 显示登录页 |
-
-### 风险
-
-- localStorage 跨标签页共享，logout 时两页同时感知 token 被移除
-- 但 JS 不会自动监听到 localStorage 变化。首页通过 `storage` 事件可以监听，后台不需监听（退出时跳转）
-- **建议**: 如果首页想实时感知其他标签页的退出，加 `window.addEventListener('storage', handler)`
-
-## 实施计划
-
-1. 修改 `admin.js`：token 存储改为 localStorage，简化 checkAuth
-2. 修改 `app.js`：统一退出标记设置（已有），确认 login/logout 使用相同 key
-3. 验证所有场景（上面 6 个）
+- `public/admin.js` — token 读写全部 localStorage，checkAuth 精简
+- `public/app.js` — 增加 `window.addEventListener('storage')` 跨标签页同步

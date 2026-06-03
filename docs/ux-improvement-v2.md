@@ -204,5 +204,5 @@ AI 表情流程 badge    内部开发页 badge  🌙
 
 ## 已知问题
 
-- **18 个测试环境 error：** 全部是 `window.addEventListener is not a function`（vitest 环境中缺少 DOM API mock），不影响功能
-- **44 测试通过**（7 个测试文件）
+- **19 个测试失败：** 全部来自 `test/publicPage.test.ts`，报错 `window.addEventListener is not a function`（vitest 的 jsdom 环境中缺少部分 DOM API），不影响实际功能
+- **85 测试通过**（9 个测试文件）

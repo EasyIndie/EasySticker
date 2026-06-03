@@ -242,8 +242,8 @@ const PLATFORM_SPECS = {
 
 | 文件 | 关键区域 |
 |------|---------|
-| `public/index.html` | 平台选择器 (line 76-95), Step 00-04 |
-| `public/app.js` | `PLATFORM_SPECS` (139-195), `syncPlatformUI` (513-611), `renderStyleOptions` (737-760), 持久化 (766-960) |
+| `public/index.html` | 平台选择器, 步骤卡片 |
+| `public/app.js` | `PLATFORM_SPECS`, `syncPlatformUI`, 持久化 |
 | `public/styles.css` | 平台选择器样式, step nav, sticky bar, 暗色模式 |
 | `src/app.ts` | 路由注册 (86-90) |
 | `src/routes/generate.ts` | 生成 API |
