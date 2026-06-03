@@ -1257,9 +1257,6 @@ function renderPackHistory() {
     historySummary.textContent = `${history.length} 条记录 · 最近 ${timeAgo}`;
   }
 
-  // Default collapsed
-  toggleHistory(false);
-
   if (history.length === 0) {
     historyList.innerHTML = '<div class="history-empty">暂无历史记录</div>';
     return;
