@@ -3457,4 +3457,21 @@ function initKeyboardShortcuts() {
   });
 }
 
+// 跨标签页同步登录状态（用户在其他标签页退出时首页实时感知）
+window.addEventListener("storage", function syncLoginState(e) {
+  if (e.key === "easysticker_token" || e.key === "easysticker_user") {
+    if (!e.newValue) {
+      // 其他标签页移除了 token → 同步退出
+      logout();
+    } else if (!authToken) {
+      // 其他标签页写入了 token → 同步登录
+      authToken = localStorage.getItem(TOKEN_KEY);
+      try {
+        authUser = JSON.parse(localStorage.getItem(USER_KEY));
+      } catch(_) {}
+      updateUI();
+    }
+  }
+});
+
 initApp();

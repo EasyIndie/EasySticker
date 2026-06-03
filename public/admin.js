@@ -8,7 +8,7 @@ let _refreshTimer = null;
 // ── API Call Helper ──────────────────────────────────────────
 
 async function apiCall(method, path, body) {
-  const token = sessionStorage.getItem("admin_token");
+  const token = localStorage.getItem("easysticker_token");
   try {
     const res = await fetch(API_BASE + path, {
       method,
@@ -56,8 +56,9 @@ async function login() {
     return;
   }
 
-  sessionStorage.setItem("admin_token", result.token);
-  sessionStorage.setItem("admin_user", JSON.stringify(result.user));
+  // 写入统一存储位置 (localStorage)，与首页 app.js 共享
+  localStorage.setItem("easysticker_token", result.token);
+  localStorage.setItem("easysticker_user", JSON.stringify(result.user));
   sessionStorage.removeItem("admin_logged_out");
   showMainSection(result.user);
 }
@@ -66,8 +67,6 @@ function logout() {
   try { clearInterval(_refreshTimer); } catch(_){}
   _refreshTimer = null;
   try {
-    sessionStorage.removeItem("admin_token");
-    sessionStorage.removeItem("admin_user");
     localStorage.removeItem("easysticker_token");
     localStorage.removeItem("easysticker_user");
     // 标记此会话已退出，防止 checkAuth 自动恢复
@@ -97,22 +96,14 @@ function checkAuth() {
   if (sessionStorage.getItem("admin_logged_out")) {
     return;
   }
-  const token = sessionStorage.getItem("admin_token");
-  const user = sessionStorage.getItem("admin_user");
-  if (token && user) {
-    showMainSection(JSON.parse(user));
-    return;
-  }
-  // Try to reuse main app's login (stored in localStorage)
-  const appToken = localStorage.getItem("easysticker_token");
-  const appUserRaw = localStorage.getItem("easysticker_user");
-  if (appToken && appUserRaw) {
+  // 统一从 localStorage 读取登录状态（与首页 app.js 共享同一 Token）
+  const token = localStorage.getItem("easysticker_token");
+  const userRaw = localStorage.getItem("easysticker_user");
+  if (token && userRaw) {
     try {
-      const appUser = JSON.parse(appUserRaw);
-      if (appUser.role === "admin") {
-        sessionStorage.setItem("admin_token", appToken);
-        sessionStorage.setItem("admin_user", appUserRaw);
-        showMainSection(appUser);
+      const user = JSON.parse(userRaw);
+      if (user.role === "admin") {
+        showMainSection(user);
         return;
       }
     } catch (_) {}
