@@ -33,9 +33,15 @@ async function apiCall(method, path, body) {
 // ── Login / Logout ───────────────────────────────────────────
 
 async function login() {
-  const email = document.getElementById("login-email").value.trim();
-  const password = document.getElementById("login-password").value;
-  const errorEl = document.getElementById("login-error");
+  console.log("[admin] login() called");
+  const emailEl = document.getElementById("login-email");
+  const passEl = document.getElementById("login-password");
+  if (!emailEl || !passEl) {
+    console.error("[admin] login-email or login-password element missing");
+    return;
+  }
+  const email = emailEl.value.trim();
+  const password = passEl.value;
 
   if (!email || !password) {
     errorEl.textContent = "请输入邮箱和密码";
@@ -43,27 +49,39 @@ async function login() {
   }
 
   const btn = document.getElementById("login-btn");
+  if (!btn) {
+    console.error("[admin] login-btn element missing");
+    return;
+  }
   btn.disabled = true;
   btn.textContent = "登录中...";
   errorEl.textContent = "";
 
-  const result = await apiCall("POST", "/auth/login", { email, password });
-  btn.disabled = false;
-  btn.textContent = "登 录";
+  try {
+    const result = await apiCall("POST", "/auth/login", { email, password });
+    btn.disabled = false;
+    btn.textContent = "登 录";
 
-  if (!result || result.error) {
-    errorEl.textContent = result?.message || "登录失败，请检查邮箱和密码";
-    return;
+    if (!result || result.error) {
+      errorEl.textContent = result?.message || "登录失败，请检查邮箱和密码";
+      return;
+    }
+
+    // 写入统一存储位置 (localStorage)，与首页 app.js 共享
+    localStorage.setItem("easysticker_token", result.token);
+    localStorage.setItem("easysticker_user", JSON.stringify(result.user));
+    sessionStorage.removeItem("admin_logged_out");
+    showMainSection(result.user);
+  } catch (e) {
+    console.error("[admin] login error:", e);
+    btn.disabled = false;
+    btn.textContent = "登 录";
+    errorEl.textContent = "登录出错，请重试";
   }
-
-  // 写入统一存储位置 (localStorage)，与首页 app.js 共享
-  localStorage.setItem("easysticker_token", result.token);
-  localStorage.setItem("easysticker_user", JSON.stringify(result.user));
-  sessionStorage.removeItem("admin_logged_out");
-  showMainSection(result.user);
 }
 
 function logout() {
+  console.log("[admin] logout() called");
   try { clearInterval(_refreshTimer); } catch(_){}
   _refreshTimer = null;
   try {
@@ -71,16 +89,23 @@ function logout() {
     localStorage.removeItem("easysticker_user");
     // 标记此会话已退出，防止 checkAuth 自动恢复
     sessionStorage.setItem("admin_logged_out", "1");
-  } catch(_){}
+  } catch(e){
+    console.error("[admin] logout storage error:", e);
+  }
   // 返回登录界面（不跳转，直接在当前页面切换）
-  document.getElementById("main-section").style.display = "none";
-  document.getElementById("login-section").style.display = "flex";
-  document.getElementById("login-email").value = "";
-  document.getElementById("login-password").value = "";
-  document.getElementById("login-error").textContent = "";
+  try {
+    document.getElementById("main-section").style.display = "none";
+    document.getElementById("login-section").style.display = "flex";
+    document.getElementById("login-email").value = "";
+    document.getElementById("login-password").value = "";
+    document.getElementById("login-error").textContent = "";
+  } catch(e) {
+    console.error("[admin] logout DOM error:", e);
+  }
 }
 
 function showMainSection(user) {
+  console.log("[admin] showMainSection:", user.email);
   document.getElementById("login-section").style.display = "none";
   document.getElementById("main-section").style.display = "block";
 
@@ -94,6 +119,7 @@ function showMainSection(user) {
 function checkAuth() {
   // 如果标记为已退出，不再自动登录
   if (sessionStorage.getItem("admin_logged_out")) {
+    console.log("[admin] checkAuth: blocked by logged_out flag");
     return;
   }
   // 统一从 localStorage 读取登录状态（与首页 app.js 共享同一 Token）
@@ -103,10 +129,13 @@ function checkAuth() {
     try {
       const user = JSON.parse(userRaw);
       if (user.role === "admin") {
+        console.log("[admin] checkAuth: auto-logged in as", user.email);
         showMainSection(user);
         return;
       }
-    } catch (_) {}
+    } catch (e) {
+      console.error("[admin] checkAuth: failed to parse user", e);
+    }
   }
 }
 
