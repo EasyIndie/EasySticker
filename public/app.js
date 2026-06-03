@@ -2991,6 +2991,12 @@ async function initApp() {
     if (configRes.ok) {
       const config = await configRes.json();
 
+      // Show/hide environment badge
+      const envBadge = document.getElementById('envBadge');
+      if (envBadge && config.env === 'development') {
+        envBadge.removeAttribute('hidden');
+      }
+
       // Support new platforms format
       if (config?.platforms) {
         const wc = config.platforms.wechat_stickers;
