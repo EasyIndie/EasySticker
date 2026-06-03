@@ -5,6 +5,8 @@ services:
     ports:
       - "3000:3000"
     environment:
+      - PORT=3000
+      - NODE_ENV=production
       # Production security — set these via .env or host env
       - API_TOKEN=${API_TOKEN:-}
       - RATE_LIMIT_MAX=${RATE_LIMIT_MAX:-30}
