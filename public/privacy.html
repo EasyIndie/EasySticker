@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>隐私政策 — EasySticker</title>
+    <meta name="theme-color" content="#07c160" />
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <a href="#privacyMain" class="skip-link">跳到主要内容</a>
+
+    <main id="privacyMain" class="page docs-page" role="main">
+      <header class="hero card">
+        <div class="hero-topline">
+          <span class="badge badge-neutral">Policy</span>
+          <nav class="hero-actions" aria-label="页面导航">
+            <a class="hero-link" href="/">返回首页</a>
+            <a class="hero-link" href="/terms.html">服务条款</a>
+            <a class="hero-link" href="/help.html">使用帮助</a>
+          </nav>
+        </div>
+        <h1>隐私政策</h1>
+        <p class="hero-text">最后更新：2026 年 6 月 3 日</p>
+        <div class="notice" data-tone="info">
+          我们非常重视您的隐私。本隐私政策说明 EasySticker 在您使用本服务时如何收集、使用、存储和保护您的信息。
+        </div>
+      </header>
+
+      <section class="docs-card card" aria-labelledby="dataCollectionTitle">
+        <h2 id="dataCollectionTitle">一、数据收集</h2>
+        <p>在使用 EasySticker 的过程中，我们可能会收集以下类型的数据：</p>
+        <ul class="spec-list">
+          <li><strong>上传的参考图片</strong> — 您上传用于生成表情包的原始图片（PNG、JPG、WebP 等格式）。</li>
+          <li><strong>AI 生成结果</strong> — 系统通过 AI 模型处理后生成的表情图、封面、图标、横幅及赞赏图等资源。</li>
+          <li><strong>配置信息</strong> — 您输入的提示词、风格选择、表情包标题、作者名及版权信息等元数据。</li>
+          <li><strong>使用日志</strong> — 匿名化的操作记录（如上传时间、生成次数、错误类型），用于改善服务质量。</li>
+        </ul>
+        <p>我们<strong>不会</strong>主动收集您的姓名、地址、电话号码、地理位置或设备标识符等个人身份信息，除非您通过邮箱注册账户时主动提供。</p>
+      </section>
+
+      <section class="docs-card card" aria-labelledby="dataStorageTitle">
+        <h2 id="dataStorageTitle">二、数据存储与安全</h2>
+        <p>所有数据均存储于您所部署的本地服务器中：</p>
+        <ul class="spec-list">
+          <li><strong>存储位置</strong> — 上传的图片和生成结果存储在服务器 <code>data/</code> 目录下。</li>
+          <li><strong>临时存储</strong> — 所有文件均设有时效缓存（TTL），默认 1 小时后自动清理。</li>
+          <li><strong>存储期限</strong> — 生成结果在服务器端仅临时保留，下载后请自行妥善保存。</li>
+          <li><strong>传输安全</strong> — 建议通过 HTTPS 部署本服务以保障数据传输过程中的安全性。</li>
+        </ul>
+        <p class="muted">EasySticker 是自托管（self-hosted）应用，数据不会离开您自己的服务器。如果您使用第三方部署平台，请同时参考该平台的数据安全策略。</p>
+      </section>
+
+      <section class="docs-card card" aria-labelledby="cookieUsageTitle">
+        <h2 id="cookieUsageTitle">三、Cookie 与本地存储</h2>
+        <p>EasySticker 不使用传统 HTTP Cookie。我们使用浏览器的 <strong>localStorage</strong> 存储以下信息：</p>
+        <ul class="spec-list">
+          <li><strong>主题偏好（theme）</strong> — 记录您选择的亮色/暗色模式。</li>
+          <li><strong>身份令牌（token）</strong> — 登录后用于维持会话状态，不包含密码或其他敏感信息。</li>
+        </ul>
+        <p>您可以随时通过浏览器开发者工具清除 localStorage 数据，这不会影响应用的核心功能。</p>
+      </section>
+
+      <section class="docs-card card" aria-labelledby="thirdPartyTitle">
+        <h2 id="thirdPartyTitle">四、第三方共享</h2>
+        <p><strong>我们不会将您的数据出售、共享或披露给第三方。</strong></p>
+        <p>由于 EasySticker 是自托管应用：</p>
+        <ul class="spec-list">
+          <li>您上传的图片和生成的内容仅存在于您自己的服务器上。</li>
+          <li>我们不使用第三方分析服务、广告网络或社交媒体追踪脚本。</li>
+          <li>如果使用了远程 AI 模型 API 服务（如 OpenAI、ComfyUI），相关数据将按该服务商的隐私政策处理。建议您在使用前查阅对应服务商的隐私条款。</li>
+        </ul>
+      </section>
+
+      <section class="docs-card card" aria-labelledby="userRightsTitle">
+        <h2 id="userRightsTitle">五、用户权利</h2>
+        <p>根据适用的数据保护法规，您享有以下权利：</p>
+        <ul class="spec-list">
+          <li><strong>访问权</strong> — 您可以要求了解我们收集了哪些与您相关的数据。</li>
+          <li><strong>删除权</strong> — 您可以要求删除您的账户及相关数据。</li>
+          <li><strong>撤回同意</strong> — 您可以随时停止使用本服务，已上传的临时数据将在 TTL 到期后自动清理。</li>
+        </ul>
+        <div class="notice" data-tone="info">
+          <strong>删除账户请求：</strong>如需删除账户及相关数据，请联系管理员处理。联系邮箱请参见服务页面或服务器部署说明。
+        </div>
+      </section>
+
+      <section class="docs-card card" aria-labelledby="policyChangesTitle">
+        <h2 id="policyChangesTitle">六、政策更新</h2>
+        <p>我们可能会不时更新本隐私政策。重大变更时，我们会通过服务页面公告或更新页面顶部「最后更新」日期的方式通知您。建议您定期查阅本页面以了解最新信息。</p>
+      </section>
+
+      <section class="docs-card card" aria-labelledby="contactTitle">
+        <h2 id="contactTitle">七、联系我们</h2>
+        <p>如果您对本隐私政策有任何疑问或担忧，请通过以下方式联系我们：</p>
+        <ul class="spec-list">
+          <li>在部署服务器上查阅项目 README 或联系服务器管理员。</li>
+          <li>如为开源部署，欢迎在 GitHub 项目仓库中提交 Issue。</li>
+        </ul>
+      </section>
+
+      <footer class="docs-card card" style="text-align:center;">
+        <p class="muted">EasySticker · 隐私政策 · 最后更新 2026 年 6 月 3 日</p>
+      </footer>
+    </main>
+  </body>
+</html>

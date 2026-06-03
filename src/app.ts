@@ -117,6 +117,23 @@ export function buildApp(config: AppConfig): FastifyInstance {
     });
   });
 
+  // ===== Security Headers =====
+  app.addHook("onRequest", async (_req, reply) => {
+    // CSP: restrict script/styles to same-origin only
+    reply.header("Content-Security-Policy",
+      "default-src 'self'; " +
+      "script-src 'self'; " +
+      "style-src 'self' 'unsafe-inline'; " +
+      "img-src 'self' data: blob:; " +
+      "font-src 'self'; " +
+      "connect-src 'self' ws: wss:; " +
+      "frame-ancestors 'none';");
+    reply.header("X-Content-Type-Options", "nosniff");
+    reply.header("X-Frame-Options", "DENY");
+    reply.header("Referrer-Policy", "strict-origin-when-cross-origin");
+    reply.header("X-DNS-Prefetch-Control", "off")
+  });
+
   // ===== Global Hooks =====
 
   // 1. Health check
@@ -133,13 +150,14 @@ export function buildApp(config: AppConfig): FastifyInstance {
     const origin = req.headers.origin;
     if (origin) {
       const allowed = config.security?.corsAllowOrigin;
-      if (allowed === "*" || !allowed) {
+      // Strict same-origin only; if allowOrigin is set, use it as exact match
+      if (allowed) {
         reply.header("Access-Control-Allow-Origin", origin);
-      } else if (allowed === origin) {
-        reply.header("Access-Control-Allow-Origin", origin);
+        reply.header("Vary", "Origin");
       }
       reply.header("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
       reply.header("Access-Control-Allow-Headers", "Content-Type, Authorization");
+      reply.header("Access-Control-Max-Age", "86400");
     }
     if (req.method === "OPTIONS") {
       reply.status(204).send();

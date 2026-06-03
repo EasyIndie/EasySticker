@@ -119,6 +119,18 @@ export function createUserStore(dataPath: string) {
       return true;
     },
 
+    /** Update password for a user. Returns false if user not found. */
+    updatePassword(email: string, newPassword: string): boolean {
+      const lower = email.toLowerCase().trim();
+      const user = data.users[lower];
+      if (!user) return false;
+      const { hash, salt } = hashPassword(newPassword);
+      user.passwordHash = hash;
+      user.salt = salt;
+      save();
+      return true;
+    },
+
     /** Reload from disk (for external changes). */
     reload() {
       load();

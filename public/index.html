@@ -37,6 +37,11 @@
             <span class="section-title">密码</span>
             <input id="loginPassword" type="password" placeholder="密码" required />
           </label>
+          <label class="field" id="inviteField" hidden>
+            <span class="section-title">邀请码</span>
+            <input id="inviteToken" type="text" placeholder="管理员提供的邀请码" />
+            <span class="field-hint">首个注册的账户自动成为管理员，之后需要邀请码</span>
+          </label>
           <div id="authError" class="field-error" hidden></div>
           <button type="submit" class="auth-btn" id="authSubmit">登录</button>
           <p class="auth-switch" id="authSwitch">
@@ -494,6 +499,19 @@
       <button type="button" class="lightbox-close" id="lightboxClose" aria-label="关闭">✕</button>
       <img class="lightbox-image" id="lightboxImage" alt="放大的贴图预览" />
     </div>
+
+    <footer class="site-footer">
+      <nav class="footer-links">
+        <a href="/help.html">使用帮助</a>
+        <span class="footer-sep">·</span>
+        <a href="/privacy.html">隐私政策</a>
+        <span class="footer-sep">·</span>
+        <a href="/terms.html">服务条款</a>
+        <span class="footer-sep">·</span>
+        <a href="/admin.html">管理后台</a>
+      </nav>
+      <p class="footer-muted">EasySticker · 本地部署</p>
+    </footer>
 
     <script src="/app.js?v=3"></script>
   </body>
