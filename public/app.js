@@ -659,7 +659,11 @@ function updateStepNav(activeStep, completedSteps = []) {
 }
 
 function scrollToStep(stepIndex) {
-  const card = document.querySelector(".step-card[data-step-index='" + stepIndex + "']");
+  let sel = ".step-card[data-step-index='" + stepIndex + "']";
+  if (stepIndex === 1 && currentCreationMode === "import") {
+    sel = "#importSourceSection";
+  }
+  const card = document.querySelector(sel);
   if (card) {
     scrollToElement(card, { block: "start" });
   }
@@ -1987,6 +1991,11 @@ function setGenerateButtonsBusy(busy) {
 
 function syncCreationMode() {
   currentCreationMode = creationModeImport?.checked ? "import" : "ai";
+  // 更新步骤2的导航标签
+  var step2Label = document.querySelector(".step-nav-item[data-step='1'] .step-nav-label");
+  if (step2Label) {
+    step2Label.textContent = currentCreationMode === "import" ? "导入已有表情图" : "上传参考图";
+  }
   if (aiSourceSection) aiSourceSection.hidden = currentCreationMode !== "ai";
   if (importSourceSection) importSourceSection.hidden = currentCreationMode !== "import";
   if (aiConfigFields) aiConfigFields.hidden = currentCreationMode !== "ai";
@@ -3197,7 +3206,11 @@ function updateStepNav(activeStep, completedSteps) {
 }
 
 function scrollToStep(stepIndex) {
-  var card = document.querySelector(".step-card[data-step-index='" + stepIndex + "']");
+  var sel = ".step-card[data-step-index='" + stepIndex + "']";
+  if (stepIndex === 1 && currentCreationMode === "import") {
+    sel = "#importSourceSection";
+  }
+  var card = document.querySelector(sel);
   if (card) {
     scrollToElement(card, { block: "start" });
   }
