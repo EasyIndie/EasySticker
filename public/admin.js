@@ -36,8 +36,9 @@ async function login() {
   console.log("[admin] login() called");
   const emailEl = document.getElementById("login-email");
   const passEl = document.getElementById("login-password");
-  if (!emailEl || !passEl) {
-    console.error("[admin] login-email or login-password element missing");
+  const errorEl = document.getElementById("login-error");
+  if (!emailEl || !passEl || !errorEl) {
+    console.error("[admin] login form elements missing");
     return;
   }
   const email = emailEl.value.trim();
