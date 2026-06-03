@@ -465,14 +465,17 @@
 
       <section class="card step-card" id="historySection" hidden>
         <div class="step-index">H</div>
-        <div class="step-head">
-          <h2>历史记录</h2>
-          <p class="muted">最近生成的表情包，点击可重新下载。最多保留最近 10 个。</p>
+        <div class="step-head step-head-clickable" id="historyToggle" role="button" tabindex="0">
+          <div class="step-head-text">
+            <h2>历史记录</h2>
+            <p class="muted" id="historySummary">最近生成的表情包</p>
+          </div>
+          <span class="collapse-icon" id="historyCollapseIcon">▶</span>
         </div>
-        <div class="step-body">
+        <div class="step-body collapse-body" id="historyBody" hidden>
           <button id="clearHistory" type="button" class="secondary">清空历史</button>
         </div>
-        <div id="historyList" class="history-list"></div>
+        <div id="historyList" class="history-list collapse-body" hidden></div>
       </section>
 
       <div id="stickyActionBar" class="sticky-action-bar" hidden>

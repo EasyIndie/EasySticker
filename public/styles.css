@@ -1956,6 +1956,33 @@ select {
 #historySection {
   margin-top: var(--gap);
 }
+/* ===== Collapsible Section (history toggle) ===== */
+.step-head-clickable {
+  cursor: pointer;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  user-select: none;
+}
+.step-head-clickable:hover .collapse-icon {
+  color: var(--color-text-primary);
+}
+.step-head-clickable .step-head-text {
+  flex: 1;
+  min-width: 0;
+}
+.collapse-icon {
+  font-size: 12px;
+  color: var(--color-text-secondary);
+  flex-shrink: 0;
+  margin-top: 6px;
+  transition: transform 0.2s;
+}
+.collapse-icon.expanded {
+  transform: rotate(90deg);
+}
+
 .history-list {
   margin-top: 12px;
   display: flex;
