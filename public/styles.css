@@ -1966,22 +1966,9 @@ select {
   margin-top: var(--gap);
 }
 /* ===== Collapsible Section (history toggle) ===== */
-.step-head-clickable {
-  cursor: pointer;
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 12px;
-  user-select: none;
-  -webkit-tap-highlight-color: transparent;
-}
-.step-head-clickable:hover .collapse-icon {
+#historyToggle:hover .collapse-icon {
   color: var(--color-text-primary);
   border-color: var(--color-border);
-}
-.step-head-clickable .step-head-text {
-  flex: 1;
-  min-width: 0;
 }
 .collapse-icon {
   display: inline-flex;
@@ -1990,7 +1977,7 @@ select {
   width: 24px;
   height: 24px;
   flex-shrink: 0;
-  margin-top: 4px;
+  margin-left: auto;
   border: 1px solid var(--color-border-subtle);
   border-radius: var(--radius-sm);
   font-size: 11px;
