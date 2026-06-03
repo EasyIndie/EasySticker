@@ -81,6 +81,9 @@ export interface PromptConfig {
       corsAllowOrigin?: string;
       jwtSecret?: string;
       monitorRetentionDays?: number;
+      registration?: {
+        mode?: "open" | "invite" | "closed";
+      };
     };
   };
   global: {

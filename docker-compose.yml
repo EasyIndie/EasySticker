@@ -9,6 +9,8 @@ services:
       - NODE_ENV=production
       # Production security — set these via .env or host env
       - API_TOKEN=${API_TOKEN:-}
+      - JWT_SECRET=${JWT_SECRET:-}
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD:-}
       - RATE_LIMIT_MAX=${RATE_LIMIT_MAX:-30}
       - DAILY_QUOTA_MAX=${DAILY_QUOTA_MAX:-100}
       - CORS_ALLOW_ORIGIN=${CORS_ALLOW_ORIGIN:-}
