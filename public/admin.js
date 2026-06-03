@@ -58,17 +58,27 @@ async function login() {
 
   sessionStorage.setItem("admin_token", result.token);
   sessionStorage.setItem("admin_user", JSON.stringify(result.user));
+  sessionStorage.removeItem("admin_logged_out");
   showMainSection(result.user);
 }
 
 function logout() {
-  clearInterval(_refreshTimer);
+  try { clearInterval(_refreshTimer); } catch(_){}
   _refreshTimer = null;
-  sessionStorage.removeItem("admin_token");
-  sessionStorage.removeItem("admin_user");
-  localStorage.removeItem("easysticker_token");
-  localStorage.removeItem("easysticker_user");
-  location.href = "/admin.html";
+  try {
+    sessionStorage.removeItem("admin_token");
+    sessionStorage.removeItem("admin_user");
+    localStorage.removeItem("easysticker_token");
+    localStorage.removeItem("easysticker_user");
+    // 标记此会话已退出，防止 checkAuth 自动恢复
+    sessionStorage.setItem("admin_logged_out", "1");
+  } catch(_){}
+  // 返回登录界面（不跳转，直接在当前页面切换）
+  document.getElementById("main-section").style.display = "none";
+  document.getElementById("login-section").style.display = "flex";
+  document.getElementById("login-email").value = "";
+  document.getElementById("login-password").value = "";
+  document.getElementById("login-error").textContent = "";
 }
 
 function showMainSection(user) {
@@ -83,6 +93,10 @@ function showMainSection(user) {
 }
 
 function checkAuth() {
+  // 如果标记为已退出，不再自动登录
+  if (sessionStorage.getItem("admin_logged_out")) {
+    return;
+  }
   const token = sessionStorage.getItem("admin_token");
   const user = sessionStorage.getItem("admin_user");
   if (token && user) {
