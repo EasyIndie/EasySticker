@@ -3025,8 +3025,13 @@ async function initApp() {
 
       // Show/hide environment badge
       const envBadge = document.getElementById('envBadge');
-      if (envBadge && config.env === 'development') {
-        envBadge.removeAttribute('hidden');
+      if (envBadge) {
+        if (config.env === 'development') {
+          envBadge.removeAttribute('hidden');
+          envBadge.style.display = '';
+        } else {
+          envBadge.style.display = 'none';
+        }
       }
 
       // Support new platforms format
