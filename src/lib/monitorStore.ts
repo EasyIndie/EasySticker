@@ -133,8 +133,8 @@ export function createMonitorStore(
   const logDir = path.join(dataPath, "monitoring");
   let prevCpuTimes = takeCpuTimes();
   let prevCpuTs = Date.now();
-  let lastSystemData: { ts: number; cpuPercent: number; loadAvg: number[]; memTotalMb: number; memUsedMb: number; memPercent: number; uptime: number } | null = null;
-  let lastDiskData: { ts: number; diskTotalMb: number; diskUsedMb: number; diskPercent: number } | null = null;
+  let lastSystemData: { ts: string; cpuPercent: number; loadAvg: number[]; memTotalMb: number; memUsedMb: number; memPercent: number; uptime: number } | null = null;
+  let lastDiskData: { ts: string; diskUsedMb: number } | null = null;
 
 
   // Rolling window for request metrics (1 second slots, 60 of them)
@@ -247,7 +247,7 @@ export function createMonitorStore(
         uptime,
       };
 
-      lastSystemData = { ts: now, ...record };
+      lastSystemData = record;
 
       pushSystemSample(cpuPercent, memPercent);
 
@@ -270,7 +270,7 @@ export function createMonitorStore(
         diskUsedMb,
       };
 
-      lastDiskData = { ts: now, diskUsedMb };
+      lastDiskData = record;
 
       const today = getToday();
       appendJsonl(path.join(logDir, "disk"), today, record);

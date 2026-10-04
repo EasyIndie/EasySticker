@@ -189,7 +189,7 @@ describe("createSecurity — combined scenarios", () => {
     expect(sec.isQuotaEnabled).toBe(true);
 
     expect(sec.checkAuth("token")).toBe(true);
-    expect(sec.checkRateLimit("ip").allowed).toBe(true);
+    expect(sec.checkRateLimit("ip")!.allowed).toBe(true);
     expect(sec.checkQuota("user").allowed).toBe(true);
   });
 

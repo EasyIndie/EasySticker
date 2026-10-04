@@ -1,6 +1,7 @@
 import createHttpError from "http-errors";
 import { fetch, FormData } from "undici";
 import { type AiGenerateInput, type AiGenerateOutput, type AiProvider } from "../provider";
+import { registerProvider } from "../registry";
 
 export class HttpAiProvider implements AiProvider {
   constructor(
@@ -77,3 +78,16 @@ export class HttpAiProvider implements AiProvider {
     return { mime: ct || "application/octet-stream", bytes };
   }
 }
+
+registerProvider("http", (config, providerId) => {
+  const endpoint = config.endpoint;
+  if (!endpoint) {
+    throw createHttpError(500, `endpoint is required in prompt-config.json for provider: ${providerId}`);
+  }
+  if (config.autoStart) {
+    // Lazy require avoids a circular import: managedHttp imports HttpAiProvider.
+    const { ManagedHttpAiProvider } = require("./managedHttp");
+    return new ManagedHttpAiProvider(endpoint, config.apiKey, config.autoStart);
+  }
+  return new HttpAiProvider(endpoint, config.apiKey);
+});

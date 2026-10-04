@@ -1,6 +1,7 @@
 import createHttpError from "http-errors";
 import { fetch, FormData } from "undici";
 import { type AiGenerateInput, type AiGenerateOutput, type AiProvider } from "../provider";
+import { registerProvider } from "../registry";
 
 type OpenAiImageOptions = {
   background?: "transparent" | "opaque" | "auto";
@@ -185,3 +186,19 @@ export class OpenAiImageProvider implements AiProvider {
     return 502;
   }
 }
+
+registerProvider("openai", (config, providerId) => {
+  const baseUrl = config.baseUrl || "https://api.openai.com/v1";
+  const apiKey = config.apiKey;
+  const model = config.model || "gpt-image-1.5";
+  if (!apiKey || typeof apiKey !== "string" || apiKey.length === 0) {
+    throw createHttpError(500, `apiKey is required and cannot be empty in prompt-config.json for provider: ${providerId}`);
+  }
+  return new OpenAiImageProvider(baseUrl, apiKey, model, {
+    background: config.background,
+    quality: config.quality,
+    outputFormat: config.outputFormat,
+    moderation: config.moderation,
+    inputFidelity: config.inputFidelity
+  });
+});

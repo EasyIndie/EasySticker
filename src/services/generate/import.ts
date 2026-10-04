@@ -1,9 +1,10 @@
 import fs from "node:fs";
 import path from "node:path";
-import type { FastifyInstance, FastifyRequest } from "fastify";
+import type { FastifyRequest } from "fastify";
 import createHttpError from "http-errors";
 import { nanoid } from "nanoid";
 import sharp from "sharp";
+import type { AssetStore } from "../../lib/assets";
 import { uploadsDir } from "../../lib/paths";
 import { validateAsset, validateAssetList } from "../platform/validate";
 import { getPlatformPreset } from "../platform/presets";
@@ -19,14 +20,6 @@ type ImportMetadata = {
 
 const SUPPORTED_MIMES = new Set(["image/png", "image/jpeg", "image/webp", "image/gif"]);
 const IMPORT_FILE_FIELDS = new Set(["stickers", "cover", "icon", "banner", "rewardGuide", "rewardThanks"]);
-
-function saveAsset(app: FastifyInstance, bytes: Buffer, assetId: string, ext = "png") {
-  const dir = uploadsDir(app);
-  fs.mkdirSync(dir, { recursive: true });
-  const outPath = path.join(dir, `${assetId}.${ext}`);
-  fs.writeFileSync(outPath, bytes);
-  return outPath;
-}
 
 async function readFileBuffer(file: NodeJS.ReadableStream) {
   const chunks: Buffer[] = [];
@@ -66,9 +59,9 @@ async function resizePng(input: Buffer, width: number, height: number, fit: "con
     .toBuffer();
 }
 
-function saveImportedAsset(app: FastifyInstance, bytes: Buffer, ext = "png") {
+function saveImportedAsset(assetStore: AssetStore, bytes: Buffer, ext = "png") {
   const assetId = nanoid();
-  saveAsset(app, bytes, assetId, ext);
+  assetStore.save(bytes, assetId, ext);
   return assetId;
 }
 
@@ -76,13 +69,13 @@ function cleanText(value: unknown) {
   return typeof value === "string" && value.trim() ? value.trim() : undefined;
 }
 
-async function validateOptionalAsset(app: FastifyInstance, presetId: string, assetId?: string) {
+async function validateOptionalAsset(assetStore: AssetStore, presetId: string, assetId?: string) {
   if (!assetId) return;
-  const result = await validateAsset(app, presetId, assetId);
+  const result = await validateAsset(assetStore, presetId, assetId);
   if (!result.ok) throw createHttpError(400, `${presetId} validation failed`);
 }
 
-export async function importStickerPack(app: FastifyInstance, presetId: string, req: FastifyRequest) {
+export async function importStickerPack(assetStore: AssetStore, dataDir: string, presetId: string, req: FastifyRequest) {
   const preset = getPlatformPreset(presetId);
   if (!preset) throw createHttpError(400, `unknown presetId: ${presetId}`);
 
@@ -126,7 +119,7 @@ export async function importStickerPack(app: FastifyInstance, presetId: string, 
         }
         const ext = presetId === "whatsapp_webp" ? "webp" : "png";
         const sticker = await convertToPlatformFormat(input, presetId, targetW, targetH);
-        stickerAssetIds.push(saveImportedAsset(app, sticker, ext));
+        stickerAssetIds.push(saveImportedAsset(assetStore, sticker, ext));
       } else {
         importedExtras[part.fieldname] = input;
       }
@@ -141,7 +134,7 @@ export async function importStickerPack(app: FastifyInstance, presetId: string, 
     throw createHttpError(400, `该平台至少需要导入 ${minStickers} 张图片`);
   }
 
-  const validation = await validateAssetList(app, presetId, stickerAssetIds);
+  const validation = await validateAssetList(assetStore, presetId, stickerAssetIds);
   if (!validation.ok) {
     throw createHttpError(400, `${presetId} validation failed`);
   }
@@ -163,37 +156,37 @@ export async function importStickerPack(app: FastifyInstance, presetId: string, 
   let rewardThanksAssetId: string | undefined;
 
   if (isWeChat) {
-    // Determine sticker extension from preset
-    const stickerExt = presetId === "whatsapp_webp" ? "webp" : "png";
+    // WeChat extras are always PNG (the whatsapp_webp branch never reaches here)
+    const stickerExt = "png";
     const firstSticker = stickerAssetIds[0]
-      ? fs.readFileSync(path.join(uploadsDir(app), `${stickerAssetIds[0]}.${stickerExt}`))
+      ? fs.readFileSync(path.join(uploadsDir(dataDir), `${stickerAssetIds[0]}.${stickerExt}`))
       : undefined;
 
     // WeChat extras are always PNG
     coverAssetId = importedExtras.cover
-      ? saveImportedAsset(app, await resizePng(importedExtras.cover, 240, 240, "contain"), "png")
+      ? saveImportedAsset(assetStore, await resizePng(importedExtras.cover, 240, 240, "contain"), "png")
       : firstSticker
-        ? saveImportedAsset(app, await resizePng(firstSticker, 240, 240, "contain"), "png")
+        ? saveImportedAsset(assetStore, await resizePng(firstSticker, 240, 240, "contain"), "png")
         : undefined;
     const iconSource = importedExtras.icon || importedExtras.cover || firstSticker;
     iconAssetId = iconSource
-      ? saveImportedAsset(app, await resizePng(iconSource, 50, 50, "contain"), "png")
+      ? saveImportedAsset(assetStore, await resizePng(iconSource, 50, 50, "contain"), "png")
       : undefined;
     bannerAssetId = importedExtras.banner
-      ? saveImportedAsset(app, await resizePng(importedExtras.banner, 750, 400, "cover"), "png")
+      ? saveImportedAsset(assetStore, await resizePng(importedExtras.banner, 750, 400, "cover"), "png")
       : undefined;
     rewardGuideAssetId = importedExtras.rewardGuide
-      ? saveImportedAsset(app, await resizePng(importedExtras.rewardGuide, 750, 400, "cover"), "png")
+      ? saveImportedAsset(assetStore, await resizePng(importedExtras.rewardGuide, 750, 400, "cover"), "png")
       : undefined;
     rewardThanksAssetId = importedExtras.rewardThanks
-      ? saveImportedAsset(app, await resizePng(importedExtras.rewardThanks, 750, 400, "cover"), "png")
+      ? saveImportedAsset(assetStore, await resizePng(importedExtras.rewardThanks, 750, 400, "cover"), "png")
       : undefined;
 
-    await validateOptionalAsset(app, "wechat_cover", coverAssetId);
-    await validateOptionalAsset(app, "wechat_icon", iconAssetId);
-    await validateOptionalAsset(app, "wechat_banner", bannerAssetId);
-    await validateOptionalAsset(app, "wechat_reward_guide", rewardGuideAssetId);
-    await validateOptionalAsset(app, "wechat_reward_thanks", rewardThanksAssetId);
+    await validateOptionalAsset(assetStore, "wechat_cover", coverAssetId);
+    await validateOptionalAsset(assetStore, "wechat_icon", iconAssetId);
+    await validateOptionalAsset(assetStore, "wechat_banner", bannerAssetId);
+    await validateOptionalAsset(assetStore, "wechat_reward_guide", rewardGuideAssetId);
+    await validateOptionalAsset(assetStore, "wechat_reward_thanks", rewardThanksAssetId);
   }
 
   const assets = stickerAssetIds.map((assetId, idx) => ({
@@ -201,7 +194,7 @@ export async function importStickerPack(app: FastifyInstance, presetId: string, 
     assetId
   }));
 
-  const { packId, downloadFilename, metadataJson } = await buildZipPack(app, {
+  const { packId, downloadFilename, metadataJson } = await buildZipPack(assetStore, dataDir, {
     presetId,
     assets,
     coverAssetId,

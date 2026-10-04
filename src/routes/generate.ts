@@ -1,8 +1,7 @@
 import { type FastifyInstance } from "fastify";
-import { z } from "zod";
 import { generateAssetsAndPack, getPromptTemplate } from "../services/generate/flow";
 import { importStickerPack } from "../services/generate/import";
-import { getPlatformPreset } from "../services/platform/presets";
+import { promptSchema, generateSchema, cancelSchema } from "../shared/contracts";
 import {
   createTask,
   getTask,
@@ -17,46 +16,10 @@ import {
 } from "../services/generate/tasks";
 
 import { loadPromptConfig } from "../services/generate/promptConfig";
+import type { AppDeps } from "../lib/deps";
 
-function buildCountSchema(presetId: string) {
-  const preset = getPlatformPreset(presetId);
-  const min = preset?.minCount ?? 1;
-  const max = preset?.maxCount ?? 50;
-  return z.number().int().min(min).max(max);
-}
-
-const promptSchema = z.object({
-  referenceAssetId: z.string().min(1),
-  presetId: z.string().min(1).default("wechat_stickers")
-});
-
-const generateSchema = z.object({
-  presetId: z.string().min(1).default("wechat_stickers"),
-  referenceAssetId: z.string().min(1),
-  prompt: z.string().min(1),
-  provider: z.string().optional(),
-  styles: z.array(z.string().min(1)).optional(),
-  stickerCount: z.number().int().min(1).max(50).optional(),
-  enableReward: z.boolean().optional(),
-  includeCover: z.boolean().optional(),
-  includeIcon: z.boolean().optional(),
-  includeBanner: z.boolean().optional(),
-  metadata: z
-    .object({
-      title: z.string().min(1).optional(),
-      author: z.string().min(1).optional(),
-      copyright: z.string().min(1).optional(),
-      version: z.string().min(1).optional(),
-      rewardMessage: z.string().min(1).optional()
-    })
-    .optional()
-});
-
-const cancelSchema = z.object({
-  taskId: z.string().min(1)
-});
-
-export async function registerGenerateRoutes(app: FastifyInstance) {
+export function registerGenerateRoutes(deps: AppDeps) {
+  return async (app: FastifyInstance) => {
   const config = loadPromptConfig();
   const serverConfig = config.server || {};
   ensureTaskGc(serverConfig.taskTtlMs ?? 10 * 60 * 1000, serverConfig.taskGcIntervalMs ?? 60 * 1000);
@@ -72,7 +35,7 @@ export async function registerGenerateRoutes(app: FastifyInstance) {
 
   app.post("/generate/import", async (req, reply) => {
     const presetId = (req.body as any)?.presetId || "wechat_stickers";
-    const result = await importStickerPack(app, presetId, req);
+    const result = await importStickerPack(deps.assetStore, deps.dataDir, presetId, req);
     return result;
   });
 
@@ -84,26 +47,29 @@ export async function registerGenerateRoutes(app: FastifyInstance) {
     }
     const task = createTask();
 
-    // Daily quota check: registered users unlimited, anonymous users capped at 10/day
-    const ANONYMOUS_DAILY_LIMIT = 10;
+    // Daily quota: registered users capped per account, anonymous users capped per IP.
+    const dailyQuota = deps.securityConfig?.dailyQuota;
+    const registeredLimit = dailyQuota?.maxGenerations ?? 100;
+    const anonymousLimit = dailyQuota?.anonymousMaxGenerations ?? 10;
     try {
       await req.jwtVerify().catch(() => {});
       const user = req.user as any;
-      if (user && user.email) {
-        // Registered users: log usage but no quota limit
-        app.usageStore.maybeRotate();
-        app.usageStore.log({ email: user.email, action: "generate", success: true });
-      } else {
-        // Anonymous users: quota by IP
-        const ipKey = "ip:" + req.ip;
-        app.usageStore.maybeRotate();
-        const quota = app.usageStore.checkDailyQuota(ipKey, ANONYMOUS_DAILY_LIMIT);
-        if (!quota.allowed) {
-          reply.status(429);
-          return { error: "QuotaExceeded", message: "今日生成配额已用完（匿名用户每日 10 次），登录后不限量。" };
-        }
-        app.usageStore.log({ email: ipKey, action: "generate", success: true });
+      const isRegistered = Boolean(user && user.email);
+      const quotaKey = isRegistered ? (user as { email: string }).email : "ip:" + req.ip;
+      const limit = isRegistered ? registeredLimit : anonymousLimit;
+
+      deps.usageStore.maybeRotate();
+      const quota = deps.usageStore.checkDailyQuota(quotaKey, limit);
+      if (!quota.allowed) {
+        reply.status(429);
+        return {
+          error: "QuotaExceeded",
+          message: isRegistered
+            ? `今日生成配额已用完（注册用户每日 ${limit} 次）。`
+            : `今日生成配额已用完（匿名用户每日 ${limit} 次），登录后可提升配额。`
+        };
       }
+      deps.usageStore.log({ email: quotaKey, action: "generate", success: true });
     } catch {}
 
     const abortController = new AbortController();
@@ -112,7 +78,8 @@ export async function registerGenerateRoutes(app: FastifyInstance) {
     setImmediate(async () => {
       try {
         await generateAssetsAndPack(
-          app,
+          deps.assetStore,
+          deps.dataDir,
           parsed.data.presetId,
           parsed.data,
           (event, data) => appendEvent(task, event, data),
@@ -205,5 +172,6 @@ export async function registerGenerateRoutes(app: FastifyInstance) {
       return { error: "NotFound", message: "task not found" };
     }
     return { ok: true };
-  });
+    });
+  };
 }

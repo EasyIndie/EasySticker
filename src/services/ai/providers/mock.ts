@@ -1,5 +1,6 @@
 import sharp from "sharp";
 import { type AiGenerateInput, type AiGenerateOutput, type AiProvider } from "../provider";
+import { registerProvider } from "../registry";
 
 function escapeXml(s: string) {
   return s
@@ -82,3 +83,5 @@ export class MockAiProvider implements AiProvider {
     return { mime: "image/png", bytes };
   }
 }
+
+registerProvider("mock", () => new MockAiProvider());
