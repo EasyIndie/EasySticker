@@ -77,9 +77,10 @@ export interface PromptConfig {
       };
       dailyQuota?: {
         maxGenerations: number;
+        anonymousMaxGenerations?: number;
       };
       corsAllowOrigin?: string;
-      jwtSecret?: string;
+      trustProxy?: boolean;
       monitorRetentionDays?: number;
       registration?: {
         mode?: "open" | "invite" | "closed";
@@ -196,7 +197,11 @@ export function loadPromptConfig(): PromptConfig {
       if (customConfig.server) {
         config.server = {
           ...config.server,
-          ...customConfig.server
+          ...customConfig.server,
+          security: {
+            ...(config.server?.security || {}),
+            ...(customConfig.server.security || {})
+          }
         };
       }
 

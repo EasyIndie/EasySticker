@@ -1,6 +1,7 @@
 import createHttpError from "http-errors";
 import { fetch } from "undici";
 import { type AiGenerateInput, type AiGenerateOutput, type AiProvider } from "../provider";
+import { registerProvider } from "../registry";
 
 /**
  * Hugging Face Inference API provider (text-to-image) via router.
@@ -72,3 +73,21 @@ export class HfAiProvider implements AiProvider {
     return { mime: ct || "image/png", bytes };
   }
 }
+
+registerProvider("hf", (config, providerId) => {
+  const endpoint = config.endpoint;
+  const apiKey = config.apiKey;
+  if (!endpoint) {
+    throw createHttpError(500, `endpoint is required in prompt-config.json for provider: ${providerId}`);
+  }
+  if (!apiKey || typeof apiKey !== "string" || apiKey.length === 0) {
+    throw createHttpError(500, `apiKey is required and cannot be empty in prompt-config.json for provider: ${providerId}`);
+  }
+  if (endpoint.includes("api-inference.huggingface.co")) {
+    throw createHttpError(500, "Hugging Face deprecated api-inference host. Use https://router.huggingface.co/hf-inference/models/<org>/<model> as endpoint.");
+  }
+  if (!endpoint.includes("router.huggingface.co/hf-inference/models/")) {
+    throw createHttpError(500, "Hugging Face endpoint must include model path. Set endpoint to e.g. https://router.huggingface.co/hf-inference/models/stabilityai/stable-diffusion-xl-base-1.0");
+  }
+  return new HfAiProvider(endpoint, apiKey);
+});

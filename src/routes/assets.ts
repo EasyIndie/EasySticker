@@ -1,8 +1,8 @@
 import fs from "node:fs";
 import path from "node:path";
-import { type FastifyInstance, type FastifyReply, type FastifyRequest } from "fastify";
+import { type FastifyInstance } from "fastify";
 import createHttpError from "http-errors";
-import { findAssetFile } from "../lib/assets";
+import type { AppDeps } from "../lib/deps";
 
 function mimeFromExt(ext: string): string {
   if (ext === ".png") return "image/png";
@@ -12,16 +12,18 @@ function mimeFromExt(ext: string): string {
   return "application/octet-stream";
 }
 
-export async function registerAssetRoutes(app: FastifyInstance) {
-  app.get<{
-    Params: { id: string };
-  }>("/assets/:id", async (req: FastifyRequest, reply: FastifyReply) => {
-    const id = req.params.id;
-    const file = findAssetFile(app, id);
-    if (!file) throw createHttpError(404, "asset not found");
+export function registerAssetRoutes(deps: AppDeps) {
+  return async (app: FastifyInstance) => {
+    app.get<{
+      Params: { id: string };
+    }>("/assets/:id", async (req, reply) => {
+      const id = req.params.id;
+      const file = deps.assetStore.find(id);
+      if (!file) throw createHttpError(404, "asset not found");
 
-    const ext = path.extname(file.filename).toLowerCase();
-    reply.type(mimeFromExt(ext));
-    return reply.send(fs.createReadStream(file.filePath));
-  });
+      const ext = path.extname(file.filename).toLowerCase();
+      reply.type(mimeFromExt(ext));
+      return reply.send(fs.createReadStream(file.filePath));
+    });
+  };
 }

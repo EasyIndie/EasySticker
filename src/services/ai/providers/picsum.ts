@@ -1,5 +1,6 @@
 import { fetch } from "undici";
 import { type AiGenerateInput, type AiGenerateOutput, type AiProvider } from "../provider";
+import { registerProvider } from "../registry";
 
 export class PicsumAiProvider implements AiProvider {
   constructor(private readonly baseUrl = "https://picsum.photos") {}
@@ -18,3 +19,5 @@ export class PicsumAiProvider implements AiProvider {
     return { mime: "image/jpeg", bytes };
   }
 }
+
+registerProvider("picsum", (config) => new PicsumAiProvider(config.baseUrl));

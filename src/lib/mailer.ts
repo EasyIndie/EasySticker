@@ -1,5 +1,10 @@
 import nodemailer from "nodemailer";
-import type { FastifyBaseLogger } from "fastify";
+
+export type MailerLogger = {
+  info: (obj: object, msg?: string) => void;
+  warn: (obj: object, msg?: string) => void;
+  error: (obj: object, msg?: string) => void;
+};
 
 export interface MailerConfig {
   host: string;
@@ -17,7 +22,7 @@ export type Mailer = ReturnType<typeof createMailer>;
  * Create a mailer. If SMTP host is empty, falls back to "console mode"
  * where emails are only logged, useful for local development with no SMTP.
  */
-export function createMailer(config: MailerConfig, log: FastifyBaseLogger) {
+export function createMailer(config: MailerConfig, log: MailerLogger) {
   const transporter =
     config.host
       ? nodemailer.createTransport({

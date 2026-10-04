@@ -1,6 +1,7 @@
 import createHttpError from "http-errors";
 import { fetch } from "undici";
 import { type AiGenerateInput, type AiGenerateOutput, type AiProvider } from "../provider";
+import { registerProvider } from "../registry";
 
 /**
  * Volcengine Ark (Doubao) Inference API provider
@@ -10,7 +11,8 @@ export class DoubaoAiProvider implements AiProvider {
   constructor(
     private readonly baseUrl: string,
     private readonly apiKey: string,
-    private readonly model: string
+    private readonly model: string,
+    private readonly size = "2K"
   ) {}
 
   async generateImage(input: AiGenerateInput, signal?: AbortSignal): Promise<AiGenerateOutput> {
@@ -20,7 +22,7 @@ export class DoubaoAiProvider implements AiProvider {
     const body: any = {
       model: this.model,
       prompt: input.prompt,
-      size: "2K", // 根据提供的示例固定为 2K，或者也可以基于 input 动态计算
+      size: this.size, // 默认 2K，可通过 provider.size 配置覆盖
       response_format: "b64_json",
       // 为了跑通最小核心流程，暂时不开启 stream 和 sequential_image_generation 批处理，
       // 以兼容我们现有的单图循环管线
@@ -78,3 +80,13 @@ export class DoubaoAiProvider implements AiProvider {
     return { mime: "image/png", bytes };
   }
 }
+
+registerProvider("doubao", (config, providerId) => {
+  const baseUrl = config.baseUrl || "https://ark.cn-beijing.volces.com/api/v3";
+  const apiKey = config.apiKey;
+  const model = config.model || "doubao-seedream-5-0-260128";
+  if (!apiKey || typeof apiKey !== "string" || apiKey.length === 0) {
+    throw createHttpError(500, `apiKey is required and cannot be empty in prompt-config.json for provider: ${providerId}`);
+  }
+  return new DoubaoAiProvider(baseUrl, apiKey, model, config.size);
+});

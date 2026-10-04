@@ -1,18 +1,17 @@
 import fs from "node:fs";
 import path from "node:path";
-import type { FastifyInstance } from "fastify";
 import createHttpError from "http-errors";
 import sharp from "sharp";
-import { findAssetFile } from "../../lib/assets";
+import type { AssetStore } from "../../lib/assets";
 import { PLATFORM_PRESETS } from "./presets";
 
 export type ValidationIssue = { code: string; message: string };
 
-export async function validateAsset(app: FastifyInstance, presetId: string, assetId: string) {
+export async function validateAsset(assetStore: AssetStore, presetId: string, assetId: string) {
   const preset = PLATFORM_PRESETS.find((p) => p.id === presetId);
   if (!preset) throw createHttpError(404, "unknown preset");
 
-  const asset = findAssetFile(app, assetId);
+  const asset = assetStore.find(assetId);
   if (!asset) throw createHttpError(404, "asset not found");
 
   const st = fs.statSync(asset.filePath);
@@ -52,7 +51,7 @@ export async function validateAsset(app: FastifyInstance, presetId: string, asse
   };
 }
 
-export async function validateAssetList(app: FastifyInstance, presetId: string, assetIds: string[]) {
+export async function validateAssetList(assetStore: AssetStore, presetId: string, assetIds: string[]) {
   const preset = PLATFORM_PRESETS.find((p) => p.id === presetId);
   if (!preset) throw createHttpError(404, "unknown preset");
   const issues = [];
@@ -66,7 +65,7 @@ export async function validateAssetList(app: FastifyInstance, presetId: string, 
 
   const items = [];
   for (const assetId of assetIds) {
-    const res = await validateAsset(app, presetId, assetId);
+    const res = await validateAsset(assetStore, presetId, assetId);
     if (!res.ok) issues.push({ code: "asset", message: `asset ${assetId} not compatible` });
     items.push(res);
   }
