@@ -579,56 +579,7 @@ const CONFIRM_CARD_STATE = {
   }
 };
 
-// ========== Scroll Helpers ==========
-function scrollToElement(el, options = {}) {
-  if (!el) return;
-  const prefersReducedMotion = Boolean(window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches);
-  try {
-    el.scrollIntoView({
-      behavior: prefersReducedMotion ? "auto" : "smooth",
-      block: options.block || "start"
-    });
-  } catch {
-    el.scrollIntoView();
-  }
-}
-
-// ========== Step Card Collapse ==========
-function collapseStepCard(cardEl, summaryText, tone = "success") {
-  if (!cardEl || cardEl.classList.contains("collapsed")) return;
-
-  let summary = cardEl.querySelector(".step-summary");
-  if (!summary) {
-    summary = document.createElement("div");
-    summary.className = "step-summary";
-
-    const statusDot = document.createElement("span");
-    statusDot.className = "step-summary-status";
-    statusDot.dataset.tone = tone;
-
-    const textEl = document.createElement("span");
-    textEl.className = "step-summary-text";
-
-    const editBtn = document.createElement("button");
-    editBtn.type = "button";
-    editBtn.className = "step-summary-edit secondary";
-    editBtn.textContent = "展开修改";
-    editBtn.addEventListener("click", (e) => {
-      e.stopPropagation();
-      expandStepCard(cardEl);
-    });
-
-    summary.appendChild(statusDot);
-    summary.appendChild(textEl);
-    summary.appendChild(editBtn);
-    cardEl.querySelector(".step-head").appendChild(summary);
-  }
-
-  cardEl.querySelector(".step-summary-text").textContent = summaryText;
-  cardEl.querySelector(".step-summary-status").dataset.tone = tone;
-  cardEl.classList.add("collapsed");
-}
-
+// ========== Step Card Expand ==========
 function expandStepCard(cardEl) {
   if (!cardEl || !cardEl.classList.contains("collapsed")) return;
   cardEl.classList.remove("collapsed");
@@ -638,107 +589,6 @@ function expandAllStepCards() {
   document.querySelectorAll(".step-card.collapsed").forEach(card => {
     card.classList.remove("collapsed");
   });
-}
-
-// ========== Step Navigation ==========
-function updateStepNav(activeStep, completedSteps = []) {
-  const nav = document.getElementById("stepNav");
-  if (!nav) return;
-
-  const items = nav.querySelectorAll(".step-nav-item");
-  items.forEach((item, idx) => {
-    item.classList.remove("active", "completed");
-    if (idx === activeStep) item.classList.add("active");
-    else if (completedSteps.includes(idx)) item.classList.add("completed");
-
-    item.onclick = () => {
-      const targetStep = parseInt(item.dataset.step);
-      scrollToStep(targetStep);
-    };
-  });
-}
-
-function scrollToStep(stepIndex) {
-  let sel = ".step-card[data-step-index='" + stepIndex + "']";
-  if (stepIndex === 1 && currentCreationMode === "import") {
-    sel = "#importSourceSection";
-  }
-  const card = document.querySelector(sel);
-  if (card) {
-    scrollToElement(card, { block: "start" });
-  }
-}
-
-// ========== Mobile View Tabs ==========
-function syncMobileView(view) {
-  if (!configArea || !previewArea || !viewTabs) return;
-
-  const tabs = viewTabs.querySelectorAll(".view-tab");
-  tabs.forEach(t => {
-    t.classList.toggle("active", t.dataset.view === view);
-    t.setAttribute("aria-pressed", t.dataset.view === view ? "true" : "false");
-  });
-
-  configArea.hidden = view !== "config";
-  previewArea.hidden = view !== "preview";
-
-  if (view === "preview") {
-    window.scrollTo({ top: 0, behavior: "smooth" });
-  }
-}
-
-function initMobileViewTabs() {
-  if (!viewTabs) return;
-  viewTabs.querySelectorAll(".view-tab").forEach(tab => {
-    tab.addEventListener("click", () => {
-      syncMobileView(tab.dataset.view);
-    });
-  });
-}
-
-// ========== Sticky Action Bar ==========
-function showStickyBar(packTitle, packId, downloadUrl, downloadFilename) {
-  if (!stickyActionBar) return;
-  if (stickyStatus) stickyStatus.textContent = packTitle ? `✅ ${packTitle}` : "✅ 已生成";
-  stickyActionBar.hidden = false;
-
-  // Wire download
-  if (stickyDownload && downloadUrl) {
-    const newDownload = stickyDownload.cloneNode(true);
-    stickyDownload.parentNode.replaceChild(newDownload, stickyDownload);
-    const stickyDownloadRef = document.getElementById("stickyDownload");
-    if (stickyDownloadRef) {
-      stickyDownloadRef.addEventListener("click", () => {
-        const a = document.createElement("a");
-        a.href = downloadUrl;
-        a.download = downloadFilename || `${packId}.zip`;
-        a.click();
-      });
-    }
-  }
-}
-
-function hideStickyBar() {
-  if (stickyActionBar) stickyActionBar.hidden = true;
-}
-
-function initStickyBarButtons() {
-  if (stickyRegenerate) {
-    stickyRegenerate.addEventListener("click", async () => {
-      if (currentCreationMode === "ai") {
-        expandAllStepCards();
-        scrollToElement(document.querySelector(".config-area"), { block: "start" });
-        await generatePlatformPack();
-      }
-    });
-  }
-  if (stickyReset) {
-    stickyReset.addEventListener("click", () => {
-      expandAllStepCards();
-      resetAllState();
-      hideStickyBar();
-    });
-  }
 }
 
 // ========== Platform UI Sync ==========
@@ -1280,6 +1130,7 @@ function renderPackHistory() {
         </div>
         <div class="history-item-actions">
           <button type="button" class="secondary history-dl-btn" data-pack-id="${escapeAttr(entry.packId)}" data-dl-url="${escapeAttr(entry.downloadUrl)}" data-filename="${escapeAttr(entry.downloadFilename)}">下载</button>
+          <button type="button" class="secondary history-restore-btn" data-pack-id="${escapeAttr(entry.packId)}">✏️ 恢复编辑</button>
         </div>
       </div>
     `
@@ -1296,6 +1147,12 @@ function renderPackHistory() {
         a.download = filename || "pack.zip";
         a.click();
       }
+    });
+  });
+
+  historyList.querySelectorAll(".history-restore-btn").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      restoreFromHistory(btn.dataset.packId || "");
     });
   });
 }
@@ -3180,11 +3037,6 @@ function collapseStepCard(cardEl, summaryText, tone) {
   cardEl.classList.add("collapsed");
 }
 
-function expandStepCard(cardEl) {
-  if (!cardEl || !cardEl.classList.contains("collapsed")) return;
-  cardEl.classList.remove("collapsed");
-}
-
 // ---- Step Navigation ----
 function updateStepNav(activeStep, completedSteps) {
   var nav = document.getElementById("stepNav");
@@ -3323,44 +3175,6 @@ function initViewTabs() {
     tab.addEventListener("click", function () {
       syncViewTab(tab.dataset.view);
     });
-  });
-}
-
-// ---- Patch existing functions for UX integration ----
-
-// Patch renderPackHistory to add restore buttons
-var _origRenderPackHistory = renderPackHistory;
-renderPackHistory = function () {
-  _origRenderPackHistory();
-
-  // Add restore buttons to history items
-  var items = typeof historyList.querySelectorAll === "function" ? historyList.querySelectorAll(".history-item") : [];
-  items.forEach(function (item) {
-    if (item.querySelector(".history-restore-btn")) return;
-
-    var actionsEl = item.querySelector(".history-item-actions");
-    if (!actionsEl) return;
-
-    var restoreBtn = document.createElement("button");
-    restoreBtn.type = "button";
-    restoreBtn.className = "secondary history-restore-btn";
-    restoreBtn.textContent = "\u270F\uFE0F \u6062\u590D\u7F16\u8F91";
-    restoreBtn.style.fontSize = "var(--font-12)";
-    restoreBtn.style.padding = "6px 10px";
-    restoreBtn.style.borderRadius = "var(--radius-sm)";
-
-    // Find packId from the download button
-    var dlBtn = actionsEl.querySelector("a, button");
-    var packId = dlBtn ? (dlBtn.dataset ? dlBtn.dataset.packId : null) : null;
-    if (packId) {
-      restoreBtn.dataset.packId = packId;
-    }
-
-    restoreBtn.addEventListener("click", function () {
-      restoreFromHistory(restoreBtn.dataset.packId || "");
-    });
-
-    actionsEl.appendChild(restoreBtn);
   });
 }
 
