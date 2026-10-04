@@ -1,3 +1,5 @@
+import crypto from "node:crypto";
+
 /**
  * Production security: API token auth, rate limiting, daily quota, registration control.
  * All in-memory — simple, no Redis dependency. Resets on server restart.
@@ -26,8 +28,12 @@ export type SecurityConfig = {
   };
   dailyQuota?: {
     maxGenerations: number;
+    /** Per-IP daily limit for anonymous users. Default 10. */
+    anonymousMaxGenerations?: number;
   };
   corsAllowOrigin?: string;
+  /** Trust reverse-proxy headers (X-Forwarded-For / X-Forwarded-Proto). Default false. */
+  trustProxy?: boolean;
   /** Registration policy. Defaults to 'open' when absent. */
   registration?: RegistrationConfig;
 };
@@ -89,8 +95,10 @@ export function createSecurity(config: SecurityConfig) {
     /** Check if API token is valid. Returns true if auth is disabled or token matches. */
     checkAuth(token: string | undefined): boolean {
       if (!authEnabled) return true; // auth disabled
-      if (!token) return false;
-      return token === config.apiToken;
+      if (!token || !config.apiToken) return false;
+      const a = Buffer.from(token);
+      const b = Buffer.from(config.apiToken);
+      return a.length === b.length && crypto.timingSafeEqual(a, b);
     },
 
     /** Check rate limit for a key (IP or token). Returns null if allowed, or error info. */

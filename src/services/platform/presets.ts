@@ -12,6 +12,8 @@ export type PlatformPreset = {
   minCount?: number;
   maxCount?: number;
   outputFormat?: "png" | "webp";
+  /** Whether this platform produces extra assets (cover/icon/banner/reward). */
+  supportsExtras?: boolean;
 };
 
 export function getPlatformPreset(id: string): PlatformPreset | undefined {
@@ -60,7 +62,8 @@ export const PLATFORM_PRESETS: PlatformPreset[] = [
     maxHeight: 240,
     minCount: 8,
     maxCount: 24,
-    outputFormat: "png"
+    outputFormat: "png",
+    supportsExtras: true
   },
   {
     id: "wechat_banner",

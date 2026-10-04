@@ -13,12 +13,12 @@ import staticPlugin from "@fastify/static";
 import swagger from "@fastify/swagger";
 import swaggerUi from "@fastify/swagger-ui";
 import { buildLogger } from "./lib/logger";
+import { createFileAssetStore } from "./lib/assets";
 import { createSecurity, type SecurityConfig } from "./lib/security";
 import { createUserStore } from "./lib/userStore";
 import { createUsageStore } from "./lib/usageStore";
 import { createMonitorStore } from "./lib/monitorStore";
-import type { AlertEngine } from "./lib/alertEngine";
-import { createMailer, type Mailer } from "./lib/mailer";
+import type { AppDeps } from "./lib/deps";
 import { registerUploadRoutes } from "./routes/uploads";
 import { registerAssetRoutes } from "./routes/assets";
 import { registerPackRoutes } from "./routes/packs";
@@ -35,21 +35,6 @@ export type AppConfig = {
   security?: SecurityConfig;
   monitorRetentionDays?: number;
 };
-
-declare module "fastify" {
-  interface FastifyInstance {
-    appConfig: AppConfig;
-    security: ReturnType<typeof createSecurity>;
-    userStore: ReturnType<typeof createUserStore>;
-    usageStore: ReturnType<typeof createUsageStore>;
-    monitorStore: ReturnType<typeof createMonitorStore>;
-    alertEngine: AlertEngine;
-    mailer?: Mailer;
-  }
-  interface FastifyRequest {
-    user?: { email: string; role: string };
-  }
-}
 
 // Routes that don't require authentication
 const PUBLIC_ROUTES = new Set([
@@ -74,19 +59,25 @@ async function renderIndexHtml() {
   return fs.readFile(path.join(process.cwd(), "public", "index.html"), "utf8");
 }
 
-export function buildApp(config: AppConfig): FastifyInstance {
+export function buildApp(config: AppConfig, deps?: Partial<AppDeps>): FastifyInstance {
+  const resolved: AppDeps = {
+    dataDir: config.dataDir,
+    assetStore: deps?.assetStore ?? createFileAssetStore(config.dataDir),
+    security: deps?.security ?? createSecurity(config.security ?? {}),
+    securityConfig: config.security ?? {},
+    userStore: deps?.userStore ?? createUserStore(config.dataDir),
+    usageStore: deps?.usageStore ?? createUsageStore(config.dataDir),
+    monitorStore: deps?.monitorStore ?? createMonitorStore(config.dataDir, config.monitorRetentionDays),
+    alertEngine: deps?.alertEngine,
+    mailer: deps?.mailer
+  };
+
   const app = Fastify({
     logger: buildLogger(config.logLevel),
     genReqId: () => crypto.randomUUID(),
-    bodyLimit: 10 * 1024 * 1024
+    bodyLimit: 10 * 1024 * 1024,
+    trustProxy: config.security?.trustProxy ?? false
   });
-
-  // ===== Decorate =====
-  app.decorate("appConfig", config);
-  app.decorate("security", createSecurity(config.security ?? {}));
-  app.decorate("userStore", createUserStore(config.dataDir));
-  app.decorate("usageStore", createUsageStore(config.dataDir));
-  app.decorate("monitorStore", createMonitorStore(config.dataDir, config.monitorRetentionDays));
 
   // ===== JWT =====
   const jwtSecret = config.security?.jwtSecret || process.env["JWT_SECRET"] || crypto.randomBytes(32).toString("hex");
@@ -94,11 +85,11 @@ export function buildApp(config: AppConfig): FastifyInstance {
 
   // Start periodic cleanup
   app.addHook("onReady", () => {
-    app.security.startCleanup();
+    resolved.security.startCleanup();
   });
 
   app.addHook("onClose", (_instance, done) => {
-    app.security.stopCleanup();
+    resolved.security.stopCleanup();
     done();
   });
 
@@ -112,16 +103,16 @@ export function buildApp(config: AppConfig): FastifyInstance {
     const startTime = (req as any).__startTime;
     if (typeof startTime !== "number") return;
     const latencyMs = Math.round(performance.now() - startTime);
-    app.monitorStore.recordRequest({
+    resolved.monitorStore.recordRequest({
       method: req.method,
       route: req.routeOptions?.url || req.url,
       status: reply.statusCode,
-      durationMs: latencyMs,
+      durationMs: latencyMs
     });
   });
 
   // ===== Security Headers =====
-  app.addHook("onRequest", async (_req, reply) => {
+  app.addHook("onRequest", async (req, reply) => {
     // CSP: restrict script/styles to same-origin only
     reply.header("Content-Security-Policy",
       "default-src 'self'; " +
@@ -135,8 +126,10 @@ export function buildApp(config: AppConfig): FastifyInstance {
     reply.header("X-Frame-Options", "DENY");
     reply.header("Referrer-Policy", "strict-origin-when-cross-origin");
     reply.header("X-DNS-Prefetch-Control", "off");
-    // HSTS: force HTTPS for 1 year, include subdomains
-    reply.header("Strict-Transport-Security", "max-age=31536000; includeSubDomains");
+    // HSTS: only advertise over HTTPS (browsers ignore it on plain HTTP anyway)
+    if (req.protocol === "https") {
+      reply.header("Strict-Transport-Security", "max-age=31536000; includeSubDomains");
+    }
   });
 
   // ===== Global Hooks =====
@@ -173,12 +166,12 @@ export function buildApp(config: AppConfig): FastifyInstance {
   app.addHook("onRequest", async (req, reply) => {
     if (isPublicRoute(req.url)) return;
     if (req.method === "OPTIONS") return;
-    if (!app.security.isAuthEnabled) return;
+    if (!resolved.security.isAuthEnabled) return;
 
     const authHeader = req.headers.authorization;
     const token = authHeader?.startsWith("Bearer ") ? authHeader.slice(7) : undefined;
 
-    if (!app.security.checkAuth(token)) {
+    if (!resolved.security.checkAuth(token)) {
       reply.status(401).send({
         error: "Unauthorized",
         message: "Missing or invalid API token. Set Authorization: Bearer <token>.",
@@ -189,16 +182,18 @@ export function buildApp(config: AppConfig): FastifyInstance {
 
   // 4. Rate limiting
   app.addHook("onRequest", async (req, reply) => {
-    if (!app.security.isRateLimitEnabled) return;
+    if (!resolved.security.isRateLimitEnabled) return;
     if (isPublicRoute(req.url)) return;
     if (req.method === "OPTIONS") return;
 
     // Login endpoints: stricter rate limit (half the normal window)
     const isLoginRoute = req.url === "/api/auth/login" || req.url === "/api/auth/register";
-    const key = (req.headers.authorization?.slice(7)) || req.ip;
+    // Key by IP only — using the Authorization header here would let callers bypass
+    // the limiter by sending a fresh random token per request.
+    const key = req.ip;
     const result = isLoginRoute
-      ? app.security.checkRateLimit(key, { maxRequests: 5, windowMs: 60_000 })
-      : app.security.checkRateLimit(key);
+      ? resolved.security.checkRateLimit(key, { maxRequests: 5, windowMs: 60_000 })
+      : resolved.security.checkRateLimit(key);
     if (result && !result.allowed) {
       const retryAfter = Math.ceil((result.resetAt - Date.now()) / 1000);
       reply.header("Retry-After", String(retryAfter));
@@ -260,12 +255,12 @@ export function buildApp(config: AppConfig): FastifyInstance {
   app.get("/index.html", serveIndex);
 
   // ===== API Routes =====
-  app.register(registerAuthRoutes, { prefix: "/api" });
-  app.register(registerAdminRoutes, { prefix: "/api" });
-  app.register(registerUploadRoutes, { prefix: "/api" });
-  app.register(registerAssetRoutes, { prefix: "/api" });
-  app.register(registerPackRoutes, { prefix: "/api" });
-  app.register(registerGenerateRoutes, { prefix: "/api" });
+  app.register(registerAuthRoutes(resolved), { prefix: "/api" });
+  app.register(registerAdminRoutes(resolved), { prefix: "/api" });
+  app.register(registerUploadRoutes(resolved), { prefix: "/api" });
+  app.register(registerAssetRoutes(resolved), { prefix: "/api" });
+  app.register(registerPackRoutes(resolved), { prefix: "/api" });
+  app.register(registerGenerateRoutes(resolved), { prefix: "/api" });
   app.register(registerConfigRoutes, { prefix: "/api" });
 
   return app;
