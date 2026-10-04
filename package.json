@@ -9,11 +9,15 @@
   "scripts": {
     "dev": "concurrently -k \"tsup --watch\" \"node --watch dist/server.js\"",
     "build": "tsup",
+    "typecheck": "tsc --noEmit",
+    "web:dev": "vite",
+    "web:build": "vite build",
+    "web:typecheck": "tsc -p web/tsconfig.json",
     "start": "node dist/server.js",
     "prod": "NODE_ENV=production node dist/server.js",
     "mock-ai": "node scripts/mock-ai-server.mjs",
     "comfy-adapter": "node scripts/comfy-adapter.mjs",
-    "test": "npm run build && node ./node_modules/.bin/vitest run",
+    "test": "npm run typecheck && npm run web:typecheck && npm run build && node ./node_modules/.bin/vitest run",
     "test:e2e": "playwright test"
   },
   "dependencies": {
@@ -43,9 +47,10 @@
     "playwright": "^1.60.0",
     "tsup": "^8.4.0",
     "typescript": "^5.8.2",
+    "vite": "^5.4.21",
     "vitest": "^3.0.9"
   },
-  "description": "AI-powered WeChat sticker auto-production pipeline \u2014 upload reference, generate expressions, auto-validate, one-click ZIP export",
+  "description": "AI-powered WeChat sticker auto-production pipeline — upload reference, generate expressions, auto-validate, one-click ZIP export",
   "license": "MIT",
   "repository": {
     "type": "git",
