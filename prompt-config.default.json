@@ -9,12 +9,14 @@
     "security": {
       "apiToken": "",
       "enableAuth": true,
+      "trustProxy": false,
       "rateLimit": {
         "maxRequests": 30,
         "windowMs": 60000
       },
       "dailyQuota": {
-        "maxGenerations": 100
+        "maxGenerations": 100,
+        "anonymousMaxGenerations": 10
       },
       "registration": {
         "mode": "invite"
@@ -48,6 +50,7 @@
         "name": "\u8c46\u5305\u5927\u6a21\u578b (Ark)",
         "baseUrl": "https://ark.cn-beijing.volces.com/api/v3",
         "model": "doubao-seedream-5-0-260128",
+        "size": "2K",
         "apiKey": ""
       },
       "openai": {
@@ -65,8 +68,8 @@
       "hf": {
         "type": "hf",
         "name": "HuggingFace",
-        "endpoint": "https://api-inference.huggingface.co/v1",
-        "model": "deepseek-3.5-7b-instruct",
+        "endpoint": "https://router.huggingface.co/hf-inference/models/stabilityai/stable-diffusion-xl-base-1.0",
+        "model": "stabilityai/stable-diffusion-xl-base-1.0",
         "apiKey": ""
       },
       "http": {

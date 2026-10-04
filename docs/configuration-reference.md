@@ -48,7 +48,8 @@ EasySticker 使用两层配置：
 
 | 字段 | 类型 | 默认值 | 说明 |
 |------|------|--------|------|
-| `maxGenerations` | number | `100` | 每用户每日最大生成次数 |
+| `maxGenerations` | number | `100` | 每用户（登录）每日最大生成次数 |
+| `anonymousMaxGenerations` | number | `10` | 匿名用户（按 IP）每日最大生成次数 |
 
 #### `registration` — 注册策略
 

@@ -51,8 +51,6 @@ autocannon -c 20 -d 30 \
 - 20 并发，30 秒
 - 需要先获取有效 token
 
-## 期望指标
-
 ## 测试结果（Mac mini M2, Docker 模式）
 
 | 场景 | 实际 RPS | 实际 P99 延迟 | 错误率 |
