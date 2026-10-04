@@ -26,7 +26,7 @@
 |------|------|------|---------|--------|---------|
 | CPU 过高 | cpu.percent | > 80% | 60s | 5min | ✅ |
 | 错误率过高 | errorRate | > 5% | 120s | 10min | ✅ |
-| 磁盘空间不足 | disk.percent | > 90% | 60s | 10min | ✅ |
+| 磁盘空间不足 | disk.usedMb | > 500MB | 60s | 10min | ✅ |
 | 响应延迟过高 | avgLatencyMs | > 5000ms | 120s | 10min | ✅ |
 | 请求量激增 | requestsPerMinute | > 100 | 60s | 5min | ❌ |
 

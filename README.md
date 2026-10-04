@@ -196,7 +196,7 @@ docker compose up -d
 A: 不需要也能启动（随机图片模式）。但想要真正的 AI 生成能力，需要至少配置一个 AI 提供商（豆包、OpenAI、HF 等）。
 
 **Q: 生成的图片存储在哪里？**
-A: 全部存储在服务器的 `data/` 目录下。任务默认 1h 后自动清理。
+A: 全部存储在服务器的 `data/` 目录下。任务状态在内存中默认 1h 后自动过期；磁盘上的 `data/uploads/` 与 `data/packs/` 需用 `node scripts/cleanup.mjs --days 7` 或 Docker `cleanup` profile 定期清理。
 
 **Q: 支持微信表情开放平台提审吗？**
 A: 输出 ZIP 包完全符合微信表情开放平台的上架规范，可以直接用该 ZIP 提交审核。目前不支持通过 API 自动提审。

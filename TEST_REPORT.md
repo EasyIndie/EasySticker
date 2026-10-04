@@ -1,8 +1,8 @@
 # EasySticker 测试报告
 
-**最近更新:** 2026-06-03  
-**版本:** 0.1.0  
-**范围:** 后端单元测试 / 前端功能验证 / 构建验证
+**最近更新:** 2026-06-03
+**版本:** 0.1.0
+**范围:** 后端单元测试 / 前端 Playwright E2E / 构建验证
 
 ---
 
@@ -10,42 +10,42 @@
 
 | 项 | 值 |
 |---|---|
-| Node.js | v22.22.2 |
-| 测试框架 | vitest v3.x |
-| 构建工具 | tsup v8.5.x |
+| Node.js | v22+ |
+| 单元测试框架 | vitest v3.x |
+| E2E 框架 | Playwright v1.60 |
+| 构建工具 | tsup v8.x |
 | 测试服务器 | 127.0.0.1:3002 |
 
 ---
 
 ## 2. 测试结果
 
-### 后端单元测试: **✅ 85 passed, 19 failed (10 test files)**
+### 后端单元测试（vitest，9 个测试文件）
 
-| 测试文件 | 测试数 | 状态 |
-|---|---|---|
-| `test/config.test.ts` | 2 | ✅ 通过 |
-| `test/pipeline.test.ts` | 3 | ✅ 通过 |
-| `test/publicPage.test.ts` | 24 | ❌ 19 失败, 5 通过 |
-| `test/aiProvider.test.ts` | 7 | ✅ 通过 |
-| `test/openaiProvider.test.ts` | 3 | ✅ 通过 |
-| `test/httpProvider.test.ts` | 2 | ✅ 通过 |
-| `test/managedHttpProvider.test.ts` | 3 | ✅ 通过 |
-| `test/security.test.ts` | 8 | ✅ 通过 |
-| `test/userStore.test.ts` | 12 | ✅ 通过 |
-| `test/usageStore.test.ts` | 6 | ✅ 通过 |
-| `test/fixtures/*` | (工具函数) | — |
+| 测试文件 | 覆盖内容 |
+|---|---|
+| `test/config.test.ts` | 配置加载与合并 |
+| `test/pipeline.test.ts` | 生成全流程 |
+| `test/aiProvider.test.ts` | AI Provider 工厂与分发 |
+| `test/openaiProvider.test.ts` | OpenAI 提供商 |
+| `test/httpProvider.test.ts` | 通用 HTTP 提供商 |
+| `test/managedHttpProvider.test.ts` | 自动启停的 HTTP 提供商 |
+| `test/security.test.ts` | 认证 / 限流 / 配额 |
+| `test/userStore.test.ts` | 用户存储与密码哈希 |
+| `test/usageStore.test.ts` | 使用量统计 |
+| `test/fixtures/*` | 测试工具函数 |
 
-### 失败说明
+### 前端 E2E（Playwright，`test/e2e/`）
 
-**`test/publicPage.test.ts` 中的 19 个失败**全部是同一个根因：
+| 测试文件 | 覆盖内容 |
+|---|---|
+| `test/e2e/home.spec.ts` | 首页渲染与导航 |
+| `test/e2e/auth.spec.ts` | 登录 / 注册流程 |
+| `test/e2e/ai-flow.spec.ts` | AI 生成流程 |
+| `test/e2e/import-flow.spec.ts` | 导入已有图片流程 |
+| `test/e2e/admin.spec.ts` | 管理后台 |
 
-```
-window.addEventListener is not a function
-```
-
-测试使用 `vm` 模块 + `FakeElement` 模拟 DOM，缺少原生 DOM 环境的某些 API（如 `addEventListener`、`localStorage`、`postMessage` 等）。这些 `publicPage` 测试验证的是前端 JS 在真实浏览器中的行为，在 node.js 的 vm sandbox 中无法完整运行。
-
-**状态：已知问题，不影响产品功能。** 所有后端逻辑测试（安全、用户存储、使用统计、AI 提供商等）全部通过。
+> 注：早期用 `vm` 模块模拟 DOM 的 `test/publicPage.test.ts` 已移除（该方案在 Node sandbox 中缺少 `addEventListener`/`localStorage` 等浏览器 API），前端行为改由 Playwright 真实浏览器 E2E 覆盖。
 
 ---
 
