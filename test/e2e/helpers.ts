@@ -1,4 +1,22 @@
-import { expect, type Page } from "@playwright/test";
+import { expect, type APIRequestContext, type APIResponse, type Page } from "@playwright/test";
+
+/**
+ * e2e 会在短时间内集中打很多 API，容易撞上服务端限流（默认 30 req/min）。
+ * 限流本身另有单测覆盖，这里只做退避重试，避免测试结果被它干扰。
+ */
+export async function apiRequest(
+  request: APIRequestContext,
+  method: "get" | "post" | "delete",
+  url: string,
+  options: Parameters<APIRequestContext["post"]>[1] = {}
+): Promise<APIResponse> {
+  let res = await (request[method] as (u: string, o?: unknown) => Promise<APIResponse>)(url, options);
+  for (let i = 0; i < 8 && res.status() === 429; i++) {
+    await new Promise((r) => setTimeout(r, 5000));
+    res = await (request[method] as (u: string, o?: unknown) => Promise<APIResponse>)(url, options);
+  }
+  return res;
+}
 
 /** 等待服务就绪 */
 export async function waitForApp(page: Page) {

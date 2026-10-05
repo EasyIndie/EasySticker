@@ -2,6 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { createFileAssetStore, listAssetFiles, type AssetStore } from "../../lib/assets";
 import { readZipEntries } from "../../lib/zip";
+import { ensureRetentionStarted, expiryFor } from "./retention";
 import {
   deletePack,
   findPackZipPath,
@@ -55,7 +56,7 @@ export type GcReport = {
   packs: { total: number; bytes: number; legacyZips: number };
   uploads: { total: number; bytes: number };
   compacted: { count: number; bytes: number; skipped: string[] };
-  expired: { count: number; bytes: number; packIds: string[] };
+  expired: { count: number; bytes: number; packIds: string[]; retentionStartedAt: string | null };
   orphanAssets: { count: number; bytes: number; keptRecent: number };
   origBackups: { count: number; bytes: number };
   reclaimedBytes: number;
@@ -113,7 +114,7 @@ export async function runGc(options: GcOptions): Promise<GcReport> {
     packs: { total: 0, bytes: 0, legacyZips: 0 },
     uploads: { total: 0, bytes: 0 },
     compacted: { count: 0, bytes: 0, skipped: [] },
-    expired: { count: 0, bytes: 0, packIds: [] },
+    expired: { count: 0, bytes: 0, packIds: [], retentionStartedAt: null },
     orphanAssets: { count: 0, bytes: 0, keptRecent: 0 },
     origBackups: { count: 0, bytes: 0 },
     reclaimedBytes: 0,
@@ -188,16 +189,27 @@ export async function runGc(options: GcOptions): Promise<GcReport> {
     }
   }
 
-  /* 3. 按保留期删包（默认关闭） */
+  /* 3. 按保留期删包 */
   if (packRetentionDays > 0) {
-    const cutoff = now - packRetentionDays * 24 * 60 * 60 * 1000;
+    // 策略起点：过期时间 = max(包创建时间, 策略生效时间) + 保留天数。
+    // 这样「刚开启保留期」不会把既有数据一次性清空，每个包都有完整窗口。
+    const { retentionStartedAt } = ensureRetentionStarted(dataDir, now);
+    report.expired.retentionStartedAt = retentionStartedAt;
+
     for (const packId of packIds) {
       const metadata = readPackMetadata(dataDir, packId);
-      const createdAt = metadata?.createdAt ? Date.parse(metadata.createdAt) : NaN;
       const zipPath = findPackZipPath(dataDir, packId);
-      const mtimeMs = zipPath ? fs.statSync(zipPath).mtimeMs : NaN;
-      const stamp = Number.isFinite(createdAt) ? createdAt : mtimeMs;
-      if (!Number.isFinite(stamp) || stamp >= cutoff) continue;
+      const rawCreated = metadata?.createdAt;
+      const createdAt =
+        rawCreated && Number.isFinite(Date.parse(rawCreated))
+          ? rawCreated
+          : zipPath
+            ? new Date(fs.statSync(zipPath).mtimeMs).toISOString()
+            : null;
+      if (!createdAt) continue;
+
+      const expiresAt = expiryFor(createdAt, packRetentionDays, retentionStartedAt);
+      if (!expiresAt || Date.parse(expiresAt) > now) continue;
 
       report.expired.count += 1;
       report.expired.packIds.push(packId);

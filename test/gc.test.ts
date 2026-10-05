@@ -147,6 +147,11 @@ describe("数据目录 GC", () => {
     raw.metadata.createdAt = new Date(Date.now() - 40 * 86400_000).toISOString();
     fs.writeFileSync(manifestPath, JSON.stringify(raw, null, 2));
 
+    // 保留期不追溯既往，所以先把「策略生效起点」也倒推到 40 天前
+    fs.writeFileSync(
+      path.join(dataDir, "maintenance.json"),
+      JSON.stringify({ retentionStartedAt: new Date(Date.now() - 40 * 86400_000).toISOString() })
+    );
     const dry = await runGc({ dataDir, dryRun: true, packRetentionDays: 30, orphanMinAgeMs: 0 });
     expect(dry.expired.packIds).toContain(created.packId);
     expect(readPackManifest(dataDir, created.packId)).not.toBeNull();
@@ -157,6 +162,38 @@ describe("数据目录 GC", () => {
     expect(store.find(sticker)).toBeNull();
     // 没过期的包不受影响
     expect(readPackManifest(dataDir, manifestPackId)).not.toBeNull();
+  }, 60000);
+
+  it("保留期不追溯既往：策略刚启用时老包也有完整窗口", async () => {
+    const sticker = await mkAsset(240, 240, 70);
+    const created = await createPack(store, dataDir, {
+      presetId: "wechat_stickers",
+      assets: [{ label: "001", assetId: sticker, role: "sticker" }],
+      metadata: { title: "很老的包" },
+      generation: { source: "ai-generate", providerId: "mock", prompt: "x", styles: ["贴纸"] }
+    });
+    // 把包的时间改到 400 天前
+    const manifestPath = path.join(dataDir, "packs", `${created.packId}.json`);
+    const raw = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
+    raw.metadata.createdAt = new Date(Date.now() - 400 * 86400_000).toISOString();
+    fs.writeFileSync(manifestPath, JSON.stringify(raw, null, 2));
+
+    // 从未启用过保留期 → 第一次跑把「生效起点」锚定到现在，老包不该被删
+    fs.rmSync(path.join(dataDir, "maintenance.json"), { force: true });
+    const first = await runGc({ dataDir, dryRun: false, packRetentionDays: 30, orphanMinAgeMs: 0 });
+    expect(first.expired.packIds).not.toContain(created.packId);
+    expect(first.expired.retentionStartedAt).toBeTruthy();
+    expect(readPackManifest(dataDir, created.packId)).not.toBeNull();
+
+    // 把生效起点倒推 400 天 → 这个包就真的过期了
+    fs.writeFileSync(
+      path.join(dataDir, "maintenance.json"),
+      JSON.stringify({ retentionStartedAt: new Date(Date.now() - 400 * 86400_000).toISOString() })
+    );
+    const second = await runGc({ dataDir, dryRun: false, packRetentionDays: 30, orphanMinAgeMs: 0 });
+    expect(second.expired.packIds).toContain(created.packId);
+    expect(readPackManifest(dataDir, created.packId)).toBeNull();
+    expect(store.find(sticker)).toBeNull();
   }, 60000);
 
   it("删除包后其素材变成孤儿，下一轮 GC 会回收", async () => {

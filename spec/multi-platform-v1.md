@@ -168,6 +168,7 @@ const PLATFORM_SPECS = {
 | `/api/generate/import` | POST | 导入已有图片 |
 | `/api/generate/import-pack` | POST | 导入本站下载的 ZIP 包，还原提示词 / 风格 / 参考图 |
 | `/api/packs/:packId/restore` | POST | 按 packId 还原服务端已存的包（历史记录「一键还原」，不复制新包） |
+| `/api/packs` | GET | 当前用户自己的包列表（登录按邮箱，未登录按 `x-client-id`）+ 保留期信息 |
 | `/api/packs/:packId` | DELETE | 删除包（清单 + 旧 ZIP），素材交给 GC 回收 |
 | `/api/admin/storage` | GET | 存储占用体检 + 全部包列表（管理员） |
 | `/api/admin/storage/gc` | POST | 手动执行数据目录清理（管理员） |

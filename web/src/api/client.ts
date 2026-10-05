@@ -1,3 +1,5 @@
+import { withClientId } from "./clientId";
+
 export type ApiResult<T> =
   | { ok: true; data: T }
   | { ok: false; status: number; error: string };
@@ -12,6 +14,7 @@ export async function request<T>(url: string, init?: RequestInit): Promise<ApiRe
   if (token) {
     headers.set("authorization", `Bearer ${token}`);
   }
+  withClientId(headers);
 
   const res = await fetch(url, { ...init, headers });
 

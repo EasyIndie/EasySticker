@@ -51,6 +51,8 @@ infrastructure（适配器）  providers 实现、exporters、repositories、mai
 - **资产仓储 seam**：`AssetStore` 接口 + `createFileAssetStore(dataDir)` 默认实现，注入到服务；未来可换对象存储。
 - **资源查找 O(1)**：`findAssetFile` 按已知扩展名 `statSync` 探测，而不是 `readdirSync` 扫目录。后者是 O(目录大小) 的同步 I/O，挂在 `GET /api/assets/:id`（结果页每张图一个请求）与打包（每包约 30 次）的热路径上；实测 333 文件时单次 0.699ms → 0.023ms，且不随规模退化。同时用字符集白名单挡住 assetId 路径穿越。
 - **包只存清单，ZIP 按需现打**：`packs/<packId>.json` 保存 `metadata.json`（逐张提示词/尺寸/角色），下载时由 `createPackArchive` 现场打包并边打边发。避免了「uploads 一份 + zip 一份」的双倍占用，也让「单资源重生成 → 重建整包」从搬几 MB 变成写几 KB。旧包（仅 `.zip`）仍可直接流式下载，无需迁移。
+- **包归属（owner）**：清单里记录 `owner`（已登录 = 邮箱；未登录 = 前端持久化的 `x-client-id`）。`GET /api/packs` 只返回请求者自己的包 —— 无归属的旧包不会出现在任何人的列表里，避免把别人的包列出来。`owner` **只存在清单，不进 ZIP 的 `metadata.json`**（那个会随表情包分发出去）。删包要求 owner 匹配或管理员。
+- **保留期不追溯既往**：`services/maintenance/retention.ts` 记录策略生效起点（`data/maintenance.json`），过期时间 = `max(创建时间, 生效起点) + 保留天数`，避免开启策略当天清空既有数据。
 - **数据目录 GC**：`services/maintenance/gc.ts` + `scheduler.ts`，服务端每 6 小时巡检（`server.maintenance` 配置）。只做可证明安全的回收：压缩旧包、清孤儿素材（需过 6 小时安全期）、清 `.orig` 备份；按保留期删包默认关闭。CLI 入口 `src/cli/gc.ts`（`npm run gc`），后台「存储」面板同源调用。
 - **静态资源豁免**：`isPublicRoute` 放行 `/api/assets/:id` 与 `/api/packs/:id/download`（前缀匹配）。它们既豁免鉴权（`<img>`/`<a>` 无法携带 `Authorization`），也不计入 API 频率限制，避免结果页并发加载几十张图触发 429。
 - **typecheck 门禁**：`npm run typecheck`（`tsc --noEmit`）已接入 `npm test`，当前 0 错误。

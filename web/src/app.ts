@@ -613,6 +613,96 @@ function getPackHistory(): any[] {
     return Array.isArray(parsed) ? parsed.slice(0, MAX_HISTORY) : [];
   } catch { return []; }
 }
+/**
+ * 服务端的包列表（当前用户可见的那些）。
+ * 服务端是「这个用户有哪些包」的权威来源：清了浏览器缓存也能把历史补回来。
+ */
+let serverPacks: any[] | null = null;
+let serverRetentionDays = 0;
+
+/** 拉一次服务端包列表，并把本地历史与服务端对账。 */
+async function refreshPackHistory(): Promise<void> {
+  try {
+    const json = await requestJson("/api/packs");
+    if (!Array.isArray(json?.packs)) return;
+    const packs: any[] = json.packs;
+    serverPacks = packs;
+    serverRetentionDays = Number(json?.retentionDays) || 0;
+
+    // 本地有、服务端列表里没有的，不能直接判定「已过期」：
+    // 开启归属之前建的包没有 owner，不会出现在任何人的列表里。逐个探一下确认真伪。
+    const known = new Set(packs.map((p) => p.packId));
+    const local = getPackHistory();
+    const unknown = local.filter((e) => e?.packId && !known.has(e.packId));
+    const missingIds = new Set<string>();
+    const api = (window._auth && window._auth.api) || fetch;
+    await Promise.all(
+      unknown.map(async (e) => {
+        try {
+          const res = await api(`/api/packs/${encodeURIComponent(e.packId)}`);
+          if (res.status === 404) missingIds.add(e.packId);
+        } catch {
+          // 网络问题不判定，保持原样
+        }
+      })
+    );
+
+    const merged = mergeHistoryWithServer(local, packs, missingIds);
+    savePackHistory(merged);
+    renderPackHistory();
+  } catch {
+    // 拉不到就继续用本地缓存，不影响使用
+    renderPackHistory();
+  }
+}
+
+/**
+ * 合并本地历史与服务端列表：
+ * - 服务端有的以服务端为准（标题/数量/过期时间等展示字段都对齐）；
+ * - 服务端没有的本地记录标记为 `missing`（已过期或被删），灰显但仍可点删除；
+ * - 服务端有、本地没有的（例如清了缓存）补回来 —— 这就是「历史不丢」的关键。
+ */
+function mergeHistoryWithServer(local: any[], server: any[], missingIds: Set<string> = new Set()): any[] {
+  const merged = new Map<string, any>();
+  for (const p of server) {
+    if (!p?.packId) continue;
+    merged.set(p.packId, {
+      packId: p.packId,
+      downloadUrl: p.downloadUrl,
+      downloadFilename: p.downloadFilename || `${p.packId}.zip`,
+      platform: p.presetId || "wechat_stickers",
+      platformLabel: PLATFORM_SPECS[p.presetId]?.platformLabel || "",
+      title: p.title || "未命名表情包",
+      author: p.author || "",
+      stickerCount: p.stickerCount || 0,
+      styles: Array.isArray(p.styles) ? p.styles.join(", ") : "",
+      createdAt: Date.parse(p.createdAt) || Date.now(),
+      rewardEnabled: Boolean(p.rewardEnabled),
+      expiresAt: p.expiresAt || null,
+      missing: false
+    });
+  }
+  for (const e of local) {
+    if (!e?.packId || merged.has(e.packId)) continue;
+    merged.set(e.packId, { ...e, missing: missingIds.has(e.packId) });
+  }
+  return [...merged.values()]
+    .sort((a, b) => (Number(b.createdAt) || 0) - (Number(a.createdAt) || 0))
+    .slice(0, MAX_HISTORY);
+}
+
+/** 「还剩 N 天」：只在快过期时提示，避免每条都挤满噪音。 */
+function expiryHint(expiresAt: string | null | undefined): string {
+  if (!expiresAt) return "";
+  const stamp = Date.parse(expiresAt);
+  if (!Number.isFinite(stamp)) return "";
+  const days = Math.ceil((stamp - Date.now()) / 86400000);
+  if (days < 0) return "已过期";
+  if (days > 7) return "";
+  if (days === 0) return "今天到期";
+  return `剩余 ${days} 天`;
+}
+
 function savePackHistory(history: any[]): void {
   const storage = getStorage();
   if (!storage) return;
@@ -640,6 +730,8 @@ function addToPackHistory(result: any): void {
   };
   savePackHistory([entry, ...filtered]);
   renderPackHistory();
+  // 顺带对齐服务端字段（过期时间等）
+  if (serverPacks) void refreshPackHistory();
 }
 function formatTimeAgo(iso: string): string {
   if (!iso) return "";
@@ -668,19 +760,20 @@ function renderPackHistory(): void {
   if (historySummary) {
     const latest = history[0];
     const timeAgo = formatTimeAgo(latest.createdAt) || "刚刚";
-    historySummary.textContent = `${history.length} 条记录 · 最近 ${timeAgo}`;
+    const retention = serverRetentionDays > 0 ? ` · 服务端保留 ${serverRetentionDays} 天` : "";
+    historySummary.textContent = `${history.length} 条记录 · 最近 ${timeAgo}${retention}`;
   }
 
   historyList.innerHTML = history
     .map((entry) => `
-      <div class="history-item" data-pack-id="${window._preview!.escapeAttr(entry.packId)}">
+      <div class="history-item${entry.missing ? " history-item-missing" : ""}" data-pack-id="${window._preview!.escapeAttr(entry.packId)}">
         <div class="history-item-meta">
-          <div class="history-item-title">${window._preview!.escapeHtml(entry.title)}</div>
-          <div class="history-item-sub">${window._preview!.escapeHtml(entry.author ? entry.author + " · " : "")}${entry.stickerCount} 张${entry.styles ? " · " + window._preview!.escapeHtml(entry.styles) : ""}${entry.rewardEnabled ? " · 含赞赏" : ""}${entry.platformLabel ? " · " + window._preview!.escapeHtml(entry.platformLabel) : ""} · ${formatTimeAgo(entry.createdAt) || "刚刚"}</div>
+          <div class="history-item-title">${window._preview!.escapeHtml(entry.title)}${entry.missing ? ' <span class="history-tag">已过期</span>' : ""}</div>
+          <div class="history-item-sub">${window._preview!.escapeHtml(entry.author ? entry.author + " · " : "")}${entry.stickerCount} 张${entry.styles ? " · " + window._preview!.escapeHtml(entry.styles) : ""}${entry.rewardEnabled ? " · 含赞赏" : ""}${entry.platformLabel ? " · " + window._preview!.escapeHtml(entry.platformLabel) : ""} · ${formatTimeAgo(entry.createdAt) || "刚刚"}${expiryHint(entry.expiresAt) ? " · " + expiryHint(entry.expiresAt) : ""}</div>
         </div>
         <div class="history-item-actions">
-          <button type="button" class="secondary history-dl-btn" data-pack-id="${window._preview!.escapeAttr(entry.packId)}" data-dl-url="${window._preview!.escapeAttr(entry.downloadUrl)}" data-filename="${window._preview!.escapeAttr(entry.downloadFilename)}">下载</button>
-          <button type="button" class="secondary history-restore-btn" data-pack-id="${window._preview!.escapeAttr(entry.packId)}"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l3 2"/></svg> 还原现场</button>
+          <button type="button" class="secondary history-dl-btn" data-pack-id="${window._preview!.escapeAttr(entry.packId)}" data-dl-url="${window._preview!.escapeAttr(entry.downloadUrl)}" data-filename="${window._preview!.escapeAttr(entry.downloadFilename)}"${entry.missing ? " disabled" : ""}>下载</button>
+          <button type="button" class="secondary history-restore-btn" data-pack-id="${window._preview!.escapeAttr(entry.packId)}"${entry.missing ? " disabled" : ""}><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l3 2"/></svg> 还原现场</button>
           <button type="button" class="secondary history-delete-btn" data-pack-id="${window._preview!.escapeAttr(entry.packId)}" title="删除这条记录（同时删掉服务端的包）" aria-label="删除这条记录"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></button>
         </div>
       </div>
@@ -710,10 +803,35 @@ function renderPackHistory(): void {
     });
   });
 }
-function clearPackHistory(): void {
+/**
+ * 清空历史记录。
+ *
+ * 服务端是这个用户「有哪些包」的权威来源，所以只清本地的话，下次刷新会原样回来。
+ * 因此这里一并删掉服务端的包 —— 做了二次确认，且是唯一会批量删文件的操作。
+ */
+async function clearPackHistory(): Promise<void> {
+  const history = getPackHistory();
+  const confirmed = window.confirm(
+    history.length
+      ? `确定删除全部 ${history.length} 条记录？\n\n这同时会删掉服务端保存的表情包，不可恢复。`
+      : "当前没有历史记录。"
+  );
+  if (!confirmed) return;
+
   savePackHistory([]);
+  await Promise.allSettled(
+    history.map((e) =>
+      e?.packId
+        ? requestJson(`/api/packs/${encodeURIComponent(e.packId)}`, { method: "DELETE" })
+        : Promise.resolve()
+    )
+  );
+  if (serverPacks) serverPacks = [];
   renderPackHistory();
-  window._ui!.setNotice("历史记录已清空", "info");
+  window._ui!.setNotice(
+    history.length ? `已删除全部 ${history.length} 条记录（含服务端的包）` : "历史记录已清空",
+    "info"
+  );
 }
 /** 把当前平台切到指定值（含单选按钮与 UI 同步）。 */
 function switchPlatform(platform: string | undefined): void {
@@ -737,6 +855,7 @@ async function deletePackFromHistory(packId: string): Promise<void> {
     // 包可能已经不在了，继续清本地记录
   }
   savePackHistory(history.filter((h) => h.packId !== packId));
+  if (serverPacks) serverPacks = serverPacks.filter((p) => p.packId !== packId);
   renderPackHistory();
   if (lastPackResult?.packId === packId) resetGenerationResult({ clearPersisted: true });
   window._ui!.setNotice(`已删除「${entry?.title || packId}」`, "info");
@@ -1896,7 +2015,7 @@ function bindEvents(): void {
   });
   resetSubmit.addEventListener("click", () => resetAllState());
   // 阻止冒泡：清空按钮位于 #historyToggle 内，避免同时触发折叠/展开
-  clearHistoryBtn?.addEventListener("click", (event) => { event.stopPropagation(); clearPackHistory(); });
+  clearHistoryBtn?.addEventListener("click", (event) => { event.stopPropagation(); void clearPackHistory(); });
 
   document.addEventListener("click", (e) => {
     const target = (e.target as HTMLElement | null)?.closest?.("#historyToggle, .collapse-btn");
@@ -2006,6 +2125,7 @@ async function initApp(): Promise<void> {
   setPromptHint(currentStyles);
   restorePersistedPackResult();
   renderPackHistory();
+  void refreshPackHistory();
 
   updateStepNav(0, []);
   initStickyBar();

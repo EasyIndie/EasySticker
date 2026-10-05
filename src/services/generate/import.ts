@@ -75,7 +75,13 @@ async function validateOptionalAsset(assetStore: AssetStore, presetId: string, a
   if (!result.ok) throw createHttpError(400, `${presetId} validation failed`);
 }
 
-export async function importStickerPack(assetStore: AssetStore, dataDir: string, presetId: string, req: FastifyRequest) {
+export async function importStickerPack(
+  assetStore: AssetStore,
+  dataDir: string,
+  presetId: string,
+  req: FastifyRequest,
+  owner?: string | null
+) {
   const preset = getPlatformPreset(presetId);
   if (!preset) throw createHttpError(400, `unknown presetId: ${presetId}`);
 
@@ -218,7 +224,7 @@ export async function importStickerPack(assetStore: AssetStore, dataDir: string,
     rewardThanksAssetId,
     metadata,
     generation
-  });
+  }, owner);
 
   return {
     packId,

@@ -704,10 +704,10 @@ const mbText = (bytes: number) => `${(Number(bytes || 0) / MB).toFixed(2)} MB`;
 async function loadStorage(): Promise<void> {
   const data = await apiCall<any>("GET", "/admin/storage");
   if (!data?.report) return;
-  renderStorage(data.report, data.packs || []);
+  renderStorage(data.report, data.packs || [], data.retentionDays || 0, data.retentionStartedAt || null);
 }
 
-function renderStorage(report: any, packs: any[]): void {
+function renderStorage(report: any, packs: any[], retentionDays = 0, retentionStartedAt: string | null = null): void {
   const grid = byId("storage-metrics");
   if (grid) {
     const cards: Array<[string, string, string]> = [
@@ -718,6 +718,13 @@ function renderStorage(report: any, packs: any[]): void {
       ["待压缩旧包", `${report.compacted?.count ?? 0} 个`, mbText(report.compacted?.bytes)],
       ["可回收孤儿素材", `${report.orphanAssets?.count ?? 0} 个`, mbText(report.orphanAssets?.bytes)],
       ["可回收备份", `${report.origBackups?.count ?? 0} 个`, mbText(report.origBackups?.bytes)],
+      [
+        "包保留期",
+        retentionDays > 0 ? `${retentionDays} 天` : "不清理",
+        retentionDays > 0
+          ? `自 ${retentionStartedAt ? formatTime(retentionStartedAt) : "未知"} 起算（不追溯既往数据）`
+          : "只做压缩旧包 / 清孤儿素材"
+      ],
       ["合计可回收", mbText(report.reclaimedBytes), "下次自动巡检会清理"]
     ];
     grid.innerHTML = cards
@@ -751,8 +758,8 @@ function renderStorage(report: any, packs: any[]): void {
           <td>${escHtml(p.title || p.packId)}</td>
           <td>${p.stickerCount || "-"}</td>
           <td>${mbText(p.bytes)}</td>
-          <td>${escHtml(formatTime(p.createdAt))}</td>
-          <td>${p.hasZip ? "旧 ZIP" : "清单"}</td>
+          <td>${escHtml(formatTime(p.createdAt))}${p.expiresAt ? `<br><span class="section-desc">${escHtml(formatTime(p.expiresAt))} 清理</span>` : ""}</td>
+          <td>${p.hasZip ? "旧 ZIP" : "清单"}${p.owner ? `<br><span class="section-desc">${escHtml(p.owner)}</span>` : ""}</td>
           <td><button class="btn btn-outline btn-sm" data-action="delete-pack" data-pack-id="${escHtml(p.packId)}">删除</button></td>
         </tr>`
           )

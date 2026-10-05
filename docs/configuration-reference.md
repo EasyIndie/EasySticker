@@ -41,7 +41,7 @@ GC 只做「可证明安全」的回收：压缩旧包、清孤儿素材、清�
 |------|------|--------|------|
 | `gcEnabled` | boolean | `true` | 是否启用定期清理。关掉则只在手动 `npm run gc` 时清理 |
 | `gcIntervalMs` | number | `21600000` | 巡检间隔（毫秒，默认 6 小时）。启动后延迟 30 秒跑第一次 |
-| `packRetentionDays` | number | `0` | 包保留天数；`0` = 不按时间清理。**非 0 会真的删除用户的历史包**，请确认前端有相应提示 |
+| `packRetentionDays` | number | `30` | 包保留天数；`0` = 不按时间清理。**非 0 会真的删除用户的历史包** |
 | `orphanMinAgeHours` | number | `6` | 孤儿素材安全期（小时）。只有「无人引用」且「落盘超过这么久」的素材才会被删，避免误删正在生成的文件 |
 | `compactLegacyPacks` | boolean | `true` | 把仅有 `.zip` 的历史包转成清单（素材本来就在 uploads 里，ZIP 改为下载时现打） |
 | `dropOrigBackups` | boolean | `true` | 删除 `repair-pack` 留下的 `<packId>.zip.orig` 备份 |
@@ -60,6 +60,10 @@ GC 只做「可证明安全」的回收：压缩旧包、清孤儿素材、清�
   }
 }
 ```
+
+**保留期不追溯既往**：过期时间按 `max(包创建时间, 策略生效时间) + 保留天数` 计算，
+策略生效时间记录在 `data/maintenance.json`。所以「今天才把 `packRetentionDays` 从 0 改成 30」
+不会立刻删掉历史数据，每个包都能拿到完整窗口。
 
 > 存储模型：**素材只存一份**（`data/uploads/<assetId>.<ext>`），包只存一份几 KB 的清单
 > （`data/packs/<packId>.json`）。ZIP 在用户点下载时现场打包，不常驻磁盘。

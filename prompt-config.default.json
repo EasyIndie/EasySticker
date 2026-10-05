@@ -25,7 +25,7 @@
     "maintenance": {
       "gcEnabled": true,
       "gcIntervalMs": 21600000,
-      "packRetentionDays": 0,
+      "packRetentionDays": 30,
       "orphanMinAgeHours": 6,
       "compactLegacyPacks": true,
       "dropOrigBackups": true

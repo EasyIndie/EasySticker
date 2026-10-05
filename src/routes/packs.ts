@@ -7,10 +7,14 @@ import {
   deletePack,
   findPackZipPath,
   getPackInfo,
+  listPacks,
   missingPackFiles,
   packExists,
   readPackManifest
 } from "../services/pack/service";
+import { canManagePack, resolveRequester } from "../lib/owner";
+import { loadPromptConfig } from "../services/generate/promptConfig";
+import { ensureRetentionStarted } from "../services/maintenance/retention";
 import { restorePackById } from "../services/generate/restore";
 import { packSchema } from "../shared/contracts";
 import type { AppDeps } from "../lib/deps";
@@ -31,12 +35,27 @@ export function registerPackRoutes(deps: AppDeps) {
         return { error: "BadRequest", message: "invalid request body", issues: parsed.error.issues };
       }
 
+      const { owner } = await resolveRequester(req);
       const { packId, downloadUrl, downloadFilename } = await createPack(
         deps.assetStore,
         deps.dataDir,
-        parsed.data
+        parsed.data,
+        owner
       );
       return { packId, downloadUrl, downloadFilename };
+    });
+
+    // 当前用户自己的包列表（已登录按邮箱，未登录按 x-client-id）。
+    // 服务端是「这个用户有哪些包」的权威来源，前端用它把历史记录补回来。
+    app.get("/packs", async (req) => {
+      const requester = await resolveRequester(req);
+      const retentionDays = loadPromptConfig().server?.maintenance?.packRetentionDays ?? 0;
+      const { retentionStartedAt } = retentionDays > 0 ? ensureRetentionStarted(deps.dataDir) : { retentionStartedAt: null };
+      const all = listPacks(deps.dataDir, retentionDays, retentionStartedAt);
+      const packs = requester.isAdmin
+        ? all
+        : all.filter((p) => requester.owner !== null && p.owner === requester.owner);
+      return { packs, retentionDays, owner: requester.owner, isAdmin: requester.isAdmin };
     });
 
     app.get<{
@@ -72,10 +91,16 @@ export function registerPackRoutes(deps: AppDeps) {
     // 历史记录「一键还原」：直接拿服务端存的包还原生成现场，不需要用户再找文件。
     app.post<{
       Params: { packId: string };
-    }>("/packs/:packId/restore", async (req) => {
+    }>("/packs/:packId/restore", async (req, reply) => {
       const presetId =
         (req.body as { presetId?: string } | undefined)?.presetId || "wechat_stickers";
-      return restorePackById(deps.assetStore, deps.dataDir, presetId, req.params.packId);
+      const requester = await resolveRequester(req);
+      const manifest = readPackManifest(deps.dataDir, req.params.packId);
+      if (manifest && !canManagePack(requester, manifest.owner)) {
+        reply.status(403);
+        return { error: "Forbidden", message: "这个表情包不属于当前账号" };
+      }
+      return restorePackById(deps.assetStore, deps.dataDir, presetId, req.params.packId, requester.owner);
     });
 
     // 包的生命周期收尾：删掉清单（与旧 ZIP），素材留给 GC 回收。
@@ -83,10 +108,17 @@ export function registerPackRoutes(deps: AppDeps) {
     app.delete<{
       Params: { packId: string };
     }>("/packs/:packId", async (req, reply) => {
-      if (!deletePack(deps.dataDir, req.params.packId)) {
+      if (!packExists(deps.dataDir, req.params.packId)) {
         reply.status(404);
         return { error: "NotFound", message: "pack not found" };
       }
+      const requester = await resolveRequester(req);
+      const manifest = readPackManifest(deps.dataDir, req.params.packId);
+      if (!canManagePack(requester, manifest?.owner)) {
+        reply.status(403);
+        return { error: "Forbidden", message: "这个表情包不属于当前账号" };
+      }
+      deletePack(deps.dataDir, req.params.packId);
       return { ok: true, packId: req.params.packId };
     });
 

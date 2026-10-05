@@ -19,6 +19,7 @@ import {
 
 import { loadPromptConfig } from "../services/generate/promptConfig";
 import type { AppDeps } from "../lib/deps";
+import { resolveRequester } from "../lib/owner";
 
 export function registerGenerateRoutes(deps: AppDeps) {
   return async (app: FastifyInstance) => {
@@ -37,14 +38,15 @@ export function registerGenerateRoutes(deps: AppDeps) {
 
   app.post("/generate/import", async (req, reply) => {
     const presetId = (req.body as any)?.presetId || "wechat_stickers";
-    const result = await importStickerPack(deps.assetStore, deps.dataDir, presetId, req);
-    return result;
+    const { owner } = await resolveRequester(req);
+    return importStickerPack(deps.assetStore, deps.dataDir, presetId, req, owner);
   });
 
   // 导入从本站下载的 ZIP 包，还原生成现场（可继续单张重生成 / 二次编辑）。
   app.post("/generate/import-pack", async (req, reply) => {
     const presetId = (req.body as any)?.presetId || "wechat_stickers";
-    return restorePackFromZip(deps.assetStore, deps.dataDir, presetId, req);
+    const { owner } = await resolveRequester(req);
+    return restorePackFromZip(deps.assetStore, deps.dataDir, presetId, req, owner);
   });
 
   // Daily quota: registered users capped per account, anonymous users capped per IP.
@@ -108,6 +110,8 @@ export function registerGenerateRoutes(deps: AppDeps) {
 
     const abortController = new AbortController();
     setTaskCancelHandler(task.id, () => abortController.abort());
+    // 在请求生命周期内解析归属（setImmediate 之后 req.user 可能已不可用）
+    const { owner } = await resolveRequester(req);
 
     setImmediate(async () => {
       try {
@@ -118,7 +122,8 @@ export function registerGenerateRoutes(deps: AppDeps) {
           parsed.data,
           (event, data) => appendEvent(task, event, data),
           () => Boolean(getTask(task.id)?.canceled),
-          abortController.signal
+          abortController.signal,
+          owner
         );
       } catch (error) {
         if (getTask(task.id)?.canceled) return;
