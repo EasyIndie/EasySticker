@@ -38,3 +38,12 @@ export async function toBannerPng(input: Buffer) {
     .png({ compressionLevel: 9, adaptiveFiltering: true })
     .toBuffer();
 }
+
+/** Convert into a WeChat reward image (赞赏引导图 / 答谢图，750×560 PNG). */
+export async function toRewardPng(input: Buffer) {
+  return sharp(input)
+    .ensureAlpha()
+    .resize(750, 560, { fit: "cover" })
+    .png({ compressionLevel: 9, adaptiveFiltering: true })
+    .toBuffer();
+}

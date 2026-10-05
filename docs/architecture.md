@@ -45,7 +45,9 @@ infrastructure（适配器）  providers 实现、exporters、repositories、mai
 - **组合根 + 依赖注入**：`server.ts` 装配全部依赖，`src/lib/deps.ts` 定义 `AppDeps`；路由/服务不再 `app.decorate("xxx")`，彻底移除 `declare module "fastify"` 的 `FastifyInstance` 增强。
 - **领域层去 Fastify 化**：`findAssetFile`/`buildZipPack`/`generateAssetsAndPack` 等不再接收 `FastifyInstance`。
 - **平台策略化**：`PlatformPreset.supportsExtras` 取代散落的 `isWeChat` 判断；微信额外资源生成抽到 `generate/extras.ts`。
+- **单资源重生成**：`generate/single.ts` + `POST /api/generate/resource`。按 `target`（`sticker.index` 或 `extra.key`）只重生成一张，复用统一提示词模板、尺寸与平台校验；契约预留 `mode="edit"` + `sourceAssetId` + `instruction`，为二次编辑/优化打底。扩展资源改为「单张失败不中断整包」：`extras.ts` 记录 `failures` 并发出发带 `error` 的 `extra` 事件，前端将该卡片渲染为可点击重试的错误态。
 - **资产仓储 seam**：`AssetStore` 接口 + `createFileAssetStore(dataDir)` 默认实现，注入到服务；未来可换对象存储。
+- **静态资源豁免**：`isPublicRoute` 放行 `/api/assets/:id` 与 `/api/packs/:id/download`（前缀匹配）。它们既豁免鉴权（`<img>`/`<a>` 无法携带 `Authorization`），也不计入 API 频率限制，避免结果页并发加载几十张图触发 429。
 - **typecheck 门禁**：`npm run typecheck`（`tsc --noEmit`）已接入 `npm test`，当前 0 错误。
 
 ---
@@ -58,25 +60,31 @@ infrastructure（适配器）  providers 实现、exporters、repositories、mai
 - [ ] 引入 OpenAPI 类型生成（`openapi-typescript`），前端 TS 化后共享类型。
 
 ### P2 组合根（消灭服务定位器）
-- [ ] `server.ts` 建容器，构造注入 `userStore`/`usageStore`/`monitorStore` 等。
-- [ ] 去掉 `app.decorate("xxx")` 与 `app.xxx` 的隐式依赖。
+- [x] `server.ts` 建容器，构造注入 `userStore`/`usageStore`/`monitorStore` 等（`lib/deps.ts` 定义 `AppDeps`）。
+- [x] 去掉 `app.decorate("xxx")` 与 `app.xxx` 的隐式依赖（已移除 `declare module "fastify"` 的 `FastifyInstance` 增强）。
 - [ ] `app.ts` 拆为多个 plugin（security、monitoring、static、routes）。
 
 ### P3 模块化后端
 - [ ] 按 `modules/` 重排目录（见 §5）。
 - [ ] `flow.ts` 拆为 pipeline 步骤。
-- [ ] 平台规则策略化（preset 携带 `strategy`，消除散落的 `isWeChat`）。
+- [x] 平台规则策略化（`PlatformPreset.supportsExtras` 取代散落的 `isWeChat`；扩展资源生成抽到 `generate/extras.ts`）。
 
 ### P4 存储仓储化（进行中）
 - [x] `AssetStore` 接口 + 文件实现（`lib/assets.ts`）。
 - [ ] `UserRepository` / `UsageRepository` / `MonitorRepository` 命名接口（当前用工厂返回类型，已够用）。
 - [ ] Pack 存储仓储化。
 
-### P5 前端模块化（进行中）
-- [x] Vite + TypeScript 工具链（`vite.config.ts`、`web/`）。
-- [x] 类型化 API 客户端（`web/src/api/`，消费 `src/shared/contracts`）。
-- [ ] 将 `public/app.js` 按 feature 垂直切片迁移（auth → preview → generator），每搬一块删一块旧代码。
-- [ ] 迁移完成后用 `dist-web` 替换 `public` 静态目录。
+### P5 前端模块化（已完成）
+- [x] Vite + TypeScript 工具链（`vite.config.ts`、`web/vite.*.config.ts`），构建产物落在 `public/js/`。
+- [x] 类型化 API 客户端（`web/src/api/`，消费 `src/shared/contracts`）与 auth 单一状态源（`web/src/store/auth.ts`）。
+- [x] 旧单体 `public/app.js`（约 3300 行）/ `public/admin.js`（约 775 行）已删除，拆为六个 IIFE 切片：
+  - `auth` —— `api/auth` + `store/auth` + `features/auth`（→ `public/js/auth.js`）
+  - `preview` —— 贴图/额外资源/下载/导出确认卡（→ `public/js/preview.js`，依赖经 `configure` 注入）
+  - `generator-api` —— SSE 客户端（`api/sse.ts` 纯解析器 + `api/generate-stream.ts`，→ `public/js/generator-api.js`）
+  - `ui` —— 状态/通知/进度（→ `public/js/ui.js`，暴露 `window._ui`）
+  - `app` —— 主站 controller：platform/config 同步、校验、持久化、history、生成编排、单资源重生成、UX（→ `public/js/app.js`）
+  - `admin` —— 管理后台（内联 onclick 改为 `data-action` 事件委托以过 CSP，→ `public/js/admin.js`）
+- [ ] 迁移完成后用 `dist-web` 替换 `public` 静态目录（可选收尾）。
 
 ### P6 护栏
 - [ ] dependency-cruiser / ESLint import 边界，CI 强制依赖方向。
@@ -119,10 +127,15 @@ src/
 ```
 web/src/
   main.ts
-  api/          # 类型化 client（由契约生成）
-  store/        # 单一状态源
+  auth-entry.ts          # auth 独立入口（构建为 public/js/auth.js）
+  preview-entry.ts       # preview 独立入口（构建为 public/js/preview.js）
+  generator-api-entry.ts # 生成网络/SSE 客户端入口（构建为 public/js/generator-api.js）
+  ui-entry.ts            # UI 工具入口（构建为 public/js/ui.js）
+  app-entry.ts           # 主站 controller 入口（构建为 public/js/app.js）
+  api/                   # 类型化 client（由契约生成）：client / auth / generate / sse / generate-stream
+  store/                 # 单一状态源：auth.ts
   components/
-  features/     # auth / generator / import / preview / history / admin
+  features/              # auth.ts、preview.ts、ui.ts + app.ts（剩余 controller）
 ```
 
 ---

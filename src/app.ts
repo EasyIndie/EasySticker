@@ -41,15 +41,23 @@ const PUBLIC_ROUTES = new Set([
   "/", "/index.html", "/internal.html",
   "/health", "/docs", "/docs/",
   "/@vite/client",
+  "/api/config",
   "/api/auth/login", "/api/auth/register",
   "/api/auth/forgot-password", "/api/auth/reset-password-with-token"
 ]);
 // Static file extensions that don't need auth
 const STATIC_EXTS = new Set([".css", ".js", ".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg", ".ico", ".html", ".json"]);
 
+// 前缀匹配的公开资源：它们是只读内容，<img src> / <a href> 无法携带
+// Authorization 头；同时必须豁免 API 频率限制，否则一次结果要加载几十张
+// 图片会瞬间超过 maxRequests 而触发 429，导致图片加载失败。
+const PUBLIC_PREFIXES = ["/api/assets/"];
+
 function isPublicRoute(url: string): boolean {
   const [path] = url.split("?");
   if (PUBLIC_ROUTES.has(path)) return true;
+  if (PUBLIC_PREFIXES.some((prefix) => path.startsWith(prefix))) return true;
+  if (path.startsWith("/api/packs/") && path.endsWith("/download")) return true;
   const ext = path.slice(path.lastIndexOf("."));
   if (ext && STATIC_EXTS.has(ext)) return true;
   return false;
@@ -171,13 +179,22 @@ export function buildApp(config: AppConfig, deps?: Partial<AppDeps>): FastifyIns
     const authHeader = req.headers.authorization;
     const token = authHeader?.startsWith("Bearer ") ? authHeader.slice(7) : undefined;
 
-    if (!resolved.security.checkAuth(token)) {
-      reply.status(401).send({
-        error: "Unauthorized",
-        message: "Missing or invalid API token. Set Authorization: Bearer <token>.",
-        requestId: req.id
-      });
+    // 接受两种凭证：机器对机器 API token，或用户 JWT（由各路由自行校验）。
+    // 这样设置 API_TOKEN 后，前端仍可继续用 JWT 访问 /api/auth/me、/api/generate/* 等。
+    if (resolved.security.checkAuth(token)) return;
+
+    try {
+      await req.jwtVerify();
+      return; // 有效 JWT，放行
+    } catch {
+      // 不是有效 JWT，继续拒绝
     }
+
+    reply.status(401).send({
+      error: "Unauthorized",
+      message: "Missing or invalid API token. Set Authorization: Bearer <token>.",
+      requestId: req.id
+    });
   });
 
   // 4. Rate limiting

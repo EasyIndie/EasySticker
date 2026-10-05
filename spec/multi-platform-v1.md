@@ -1,6 +1,8 @@
 # EasySticker 多平台支持 — 项目现状文档
 
 > 2026-05-19 更新：本文档从「设计方案」更新为「项目现状」，反映已完成的实现。
+>
+> ⚠️ **路径已过时：** 文中 `public/app.js` 已删除，平台逻辑（`PLATFORM_SPECS` / `syncPlatformUI` / 持久化）已迁至 `web/src/app.ts`（构建为 `public/js/app.js`）。功能仍然有效，路径请以 `web/src/` 为准。
 
 ## 1. 状态总览
 

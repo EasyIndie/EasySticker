@@ -1,6 +1,8 @@
 # EasySticker 用户体验 — 改造记录
 
 > 2026-05-19 更新：本文档从「设计方案」重写为「实施记录」，反映实际落地的改动。
+>
+> ⚠️ **路径已过时：** 文中改动当时落在 `public/app.js` / `public/index.html`。前端 P5 迁移后，controller 逻辑已迁至 `web/src/app.ts`（构建为 `public/js/app.js`），`public/app.js` 已删除。功能仍然有效，路径请以 `web/src/` 为准。
 
 ## 背景
 
@@ -24,7 +26,7 @@
 
 ### 1.1 粘性操作底栏
 
-**文件：** `public/index.html` + `public/styles.css` + `public/app.js`
+**文件：** `public/index.html` + `public/styles.css` + `web/src/app.ts`（原 `public/app.js`）
 
 **结构：** 固定底部 bar，含重新生成/下载 ZIP/重置三个按钮，生成成功后显示。
 
@@ -196,7 +198,7 @@ AI 表情流程 badge    内部开发页 badge  🌙
 |------|----------|---------|
 | `public/index.html` | +83 行 | step-nav, view-tabs, config-area/preview-area wrappers, sticky bar, lightbox, drag overlay, dark mode toggle, hero-topline-right, 内部开发页 badge |
 | `public/styles.css` | +316 行（净） | 暗色模式全覆盖、sticky bar、step nav、view tabs、collapse、platform selector、lightbox、drag overlay、progress 动画、底部间距、安全区 |
-| `public/app.js` | ~150 行新逻辑 | syncViewTab, collapseStepCard, updateStepNav, restoreFromHistory, initStickyBar, initDarkMode, drop handler, lightbox toggle, keyboard shortcuts, 持久化修复 |
+| `web/src/app.ts`（原 `public/app.js`） | ~150 行新逻辑 | syncViewTab, collapseStepCard, updateStepNav, restoreFromHistory, initStickyBar, initDarkMode, drop handler, lightbox toggle, keyboard shortcuts, 持久化修复 |
 | `src/app.ts` | -13 行 | 移除 dev-only 链接注入 |
 | `test/publicPage.test.ts` | 调整 | 适配新 HTML 结构、测试数据修正 |
 | `docs/ux-improvement-v2.md` | 本文 | — |

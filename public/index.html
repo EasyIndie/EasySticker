@@ -2,7 +2,11 @@
 <html lang="zh-CN">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" href="/logo.svg">
+    <link rel="icon" href="/favicon.ico?v=2" sizes="32x32">
+    <link rel="icon" href="/logo.svg?v=2" type="image/svg+xml">
+    <link rel="icon" href="/favicon-32.png?v=2" type="image/png" sizes="32x32">
+    <link rel="icon" href="/favicon-16.png?v=2" type="image/png" sizes="16x16">
+    <link rel="apple-touch-icon" href="/favicon-128.png?v=2">
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>EasySticker</title>
     <meta name="theme-color" id="themeMeta" content="#07c160" />
@@ -16,7 +20,7 @@
         if (meta) meta.content = theme === "dark" ? "#111827" : "#07c160";
       })();
     </script>
-    <link rel="stylesheet" href="/styles.css?v=3" />
+    <link rel="stylesheet" href="/styles.css?v=14" />
   </head>
   <body>
     <a href="#mainContent" class="skip-link">跳到主要内容</a>
@@ -25,7 +29,7 @@
     <div id="authOverlay" class="auth-overlay" aria-modal="true" role="dialog" aria-label="登录" hidden>
       <div class="auth-box">
         <div class="auth-header">
-          <button type="button" id="authClose" class="auth-close" aria-label="关闭">✕</button>
+          <button type="button" id="authClose" class="auth-close" aria-label="关闭"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
           <h2 id="authTitle">登录 EasySticker</h2>
           <p class="muted" id="authSubtitle">输入邮箱和密码进入工作台</p>
         </div>
@@ -59,7 +63,7 @@
     <!-- Drop Zone Overlay -->
     <div id="dropZone" class="drop-zone-overlay" aria-hidden="true">
       <div class="drop-zone-content">
-        <span class="drop-icon">📁</span>
+        <span class="drop-icon"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg></span>
         <div class="drop-text">放开以上传图片</div>
         <div class="drop-hint">支持 PNG / JPG / WebP</div>
       </div>
@@ -71,13 +75,18 @@
           <span class="badge" id="heroBadge">AI 表情流程</span>
           <span id="envBadge" class="badge badge-neutral" hidden style="display:none">开发环境</span>
           <div class="hero-topline-right">
-            <button type="button" id="loginBtn" class="hero-btn" aria-label="登录" title="登录">👤</button>
-            <a href="/admin.html" id="adminEntry" class="hero-btn admin-entry" hidden title="管理后台">⚙️</a>
-            <button type="button" id="darkModeToggle" class="hero-btn" aria-label="切换深色模式" title="切换深色模式">🌙</button>
+            <button type="button" id="loginBtn" class="hero-btn" aria-label="登录" title="登录"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></button>
+            <a href="/admin.html" id="adminEntry" class="hero-btn admin-entry" hidden title="管理后台"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg></a>
+            <button type="button" id="darkModeToggle" class="hero-btn" aria-label="切换深色模式" title="切换深色模式"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg></button>
           </div>
         </div>
-        <h1>EasySticker</h1>
-        <p class="hero-text" id="heroText">上传参考图，补充提示词，一键生成可预览、可下载的微信表情包。</p>
+        <div class="hero-title">
+          <span class="hero-logo" aria-hidden="true"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/></svg></span>
+          <div class="hero-title-text">
+            <h1>EasySticker</h1>
+            <p class="hero-text" id="heroText">上传参考图，补充提示词，一键生成可预览、可下载的多平台表情包。</p>
+          </div>
+        </div>
         <div id="globalNotice" class="notice" role="status" aria-live="polite">先上传一张主体清晰的图片。</div>
       </header>
 
@@ -106,11 +115,6 @@
         </ol>
       </nav>
 
-      <div id="viewTabs" class="view-tabs">
-        <button type="button" class="view-tab active" data-view="config" aria-pressed="true">⚙️ 配置</button>
-        <button type="button" class="view-tab" data-view="preview" aria-pressed="false">🖼️ 预览</button>
-      </div>
-
       <section class="flow">
         <div class="config-area">
         <article class="card step-card" data-step-index="0">
@@ -124,19 +128,19 @@
             <div class="platform-selector" id="platformSelector" role="radiogroup" aria-label="目标平台">
               <label class="platform-option" data-platform="wechat_stickers">
                 <input type="radio" name="platform" value="wechat_stickers" checked />
-                <span class="platform-icon">💬</span>
+                <span class="platform-icon"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg></span>
                 <span class="platform-name">微信</span>
                 <span class="platform-spec">240×240 PNG</span>
               </label>
               <label class="platform-option" data-platform="telegram_static">
                 <input type="radio" name="platform" value="telegram_static" />
-                <span class="platform-icon">✈️</span>
+                <span class="platform-icon"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg></span>
                 <span class="platform-name">Telegram</span>
                 <span class="platform-spec">512×512 PNG</span>
               </label>
               <label class="platform-option" data-platform="whatsapp_webp">
                 <input type="radio" name="platform" value="whatsapp_webp" />
-                <span class="platform-icon">📱</span>
+                <span class="platform-icon"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="2" width="14" height="20" rx="2" ry="2"/><line x1="12" y1="18" x2="12.01" y2="18"/></svg></span>
                 <span class="platform-name">WhatsApp</span>
                 <span class="platform-spec">512×512 WebP</span>
               </label>
@@ -163,7 +167,7 @@
           <form id="uploadForm" class="step-body">
             <label class="upload-panel" for="file">
               <span class="upload-title"><span class="required-mark">*</span>选择图片</span>
-              <span class="upload-text">点击选择一张参考图，用于生成整套微信表情。</span>
+              <span class="upload-text">点击选择一张参考图，用于生成整套表情包。</span>
               <input
                 id="file"
                 name="file"
@@ -222,12 +226,12 @@
               <label class="field" for="importRewardGuide">
                 <span class="section-title">赞赏引导图<span class="optional-mark">可选</span></span>
                 <input id="importRewardGuide" type="file" accept="image/png,image/jpeg,image/webp,image/gif" />
-                <div class="field-hint">上传后处理为 750 × 400，并自动包含赞赏资源。</div>
+                <div class="field-hint">上传后处理为 750 × 560。</div>
               </label>
               <label class="field" for="importRewardThanks">
                 <span class="section-title">赞赏答谢图<span class="optional-mark">可选</span></span>
                 <input id="importRewardThanks" type="file" accept="image/png,image/jpeg,image/webp,image/gif" />
-                <div class="field-hint">上传后处理为 750 × 400，并自动包含赞赏资源。</div>
+                <div class="field-hint">上传后处理为 750 × 560。</div>
               </label>
             </div>
           </form>
@@ -243,7 +247,7 @@
           <div id="aiConfigFields">
             <label class="field" for="wechatAiProvider">
               <span class="section-title"><span class="required-mark">*</span>AI 提供商选择</span>
-              <select id="wechatAiProvider" class="style-options" style="padding: 8px; border-radius: var(--radius-sm); border: 1px solid var(--color-border-subtle); background: var(--surface-card); color: var(--color-text);">
+              <select id="wechatAiProvider" class="select-field">
                 <option value="mock" selected>加载中...</option>
               </select>
             </label>
@@ -271,26 +275,27 @@
               <div id="wechatAiStyleHint" class="field-hint">请选择 1 种生成风格，系统会按选中风格推荐提示词。</div>
               <div id="wechatAiStyleError" class="field-error" hidden></div>
             </div>
-            <div class="config-grid">
             <label class="field" for="wechatAiCount">
               <span class="section-title"><span class="required-mark">*</span>贴纸数量</span>
-              <div class="stepper-row">
-                <button id="wechatAiCountDec" type="button" class="stepper-button" aria-label="减少贴纸数量">−</button>
-                <input
-                  id="wechatAiCount"
-                  type="number"
-                  min="8"
-                  max="24"
-                  step="1"
-                  value="8"
-                  aria-describedby="wechatAiCountHint"
-                />
-                <button id="wechatAiCountInc" type="button" class="stepper-button" aria-label="增加贴纸数量">＋</button>
+              <div class="count-row">
+                <div class="stepper-row" role="group" aria-label="贴纸数量调节">
+                  <button id="wechatAiCountDec" type="button" class="stepper-button" aria-label="减少贴纸数量">−</button>
+                  <input
+                    id="wechatAiCount"
+                    type="number"
+                    min="8"
+                    max="24"
+                    step="1"
+                    value="8"
+                    inputmode="numeric"
+                    aria-describedby="wechatAiCountHint"
+                  />
+                  <button id="wechatAiCountInc" type="button" class="stepper-button" aria-label="增加贴纸数量">＋</button>
+                </div>
+                <div id="wechatAiCountHint" class="field-hint">推荐 8-24 张，系统会额外补齐封面、图标和横幅资源。</div>
               </div>
-              <div id="wechatAiCountHint" class="field-hint">推荐 8-24 张，系统会额外补齐封面、图标和横幅资源。</div>
               <div id="wechatAiCountError" class="field-error" hidden></div>
             </label>
-            </div>
           </div>
             <div class="field" id="wechatAiRewardField">
               <span class="section-title">赞赏功能<span class="optional-mark">可选</span></span>
@@ -298,7 +303,7 @@
                 <input id="wechatAiRewardEnabled" type="checkbox" aria-describedby="wechatAiRewardEnabledHint" />
                 <span>开启后自动生成赞赏图</span>
               </label>
-              <div id="wechatAiRewardEnabledHint" class="field-hint">额外生成 2 张 750 × 400 资源。</div>
+              <div id="wechatAiRewardEnabledHint" class="field-hint">额外生成 2 张 750 × 560 资源。</div>
             </div>
           <label id="wechatAiRewardMessageField" class="field" for="wechatAiRewardMessage" hidden>
             <span class="section-title"><span class="required-mark">*</span>赞赏引导语</span>
@@ -401,45 +406,35 @@
           <div id="previewSectionsContainer">
             <div id="wechatAiFeedback" class="feedback-card" data-tone="idle" aria-live="polite">
               <div class="section-title">预览状态</div>
-              <p class="muted">等待生成后展示 cover、icon、banner 与表情预览。</p>
+              <p class="muted">等待生成后按组展示表情主图、横幅 / 封面 / 图标与赞赏图。</p>
             </div>
 
-            <!-- 表情主图区 -->
+            <!-- 组 1：表情主图 -->
             <div class="preview-section" id="sectionPrimary" hidden>
               <div class="section-title">表情主图</div>
+              <p class="muted section-desc">微信表情平台的主表情图，尺寸随所选平台自动规范。</p>
               <div id="wechatAiPreview" class="grid"></div>
             </div>
 
-            <!-- Cover & Icon 区 -->
-            <div class="preview-section" id="sectionCoverIcon" hidden>
-              <div class="grid" style="grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: var(--space-4);">
-                <div>
-                  <div class="section-title" style="margin-bottom: var(--space-3);">表情封面图 (Cover)</div>
-                  <div id="wechatAiCover" class="grid" style="grid-template-columns: 1fr;"></div>
-                </div>
-                <div>
-                  <div class="section-title" style="margin-bottom: var(--space-3);">聊天面板图标 (Icon)</div>
-                  <div id="wechatAiIcon" class="grid" style="grid-template-columns: 1fr;"></div>
-                </div>
+            <!-- 组 2：横幅 / 封面 / 图标 -->
+            <div class="preview-section" id="sectionAssetsGroup" hidden>
+              <div class="section-title">横幅 / 封面 / 图标</div>
+              <p class="muted section-desc">详情页横幅、表情封面图与聊天面板图标，同属一组素材。</p>
+              <div class="preview-assets-grid">
+                <div id="wechatAiBanner" class="asset-slot asset-slot-full"></div>
+                <div id="wechatAiCover" class="asset-slot"></div>
+                <div id="wechatAiIcon" class="asset-slot"></div>
               </div>
             </div>
 
-            <!-- Banner 横幅区 -->
-            <div class="preview-section" id="sectionBanner" hidden>
-              <div class="section-title">详情页横幅 (Banner)</div>
-              <div id="wechatAiBanner" class="grid" style="grid-template-columns: 1fr;"></div>
-            </div>
-
-            <!-- 赞赏引导图区 -->
-            <div class="preview-section" id="sectionRewardGuide" hidden>
-              <div class="section-title">赞赏引导图</div>
-              <div id="wechatAiRewardGuide" class="grid" style="grid-template-columns: 1fr;"></div>
-            </div>
-
-            <!-- 赞赏感谢图区 -->
-            <div class="preview-section" id="sectionRewardThanks" hidden>
-              <div class="section-title">赞赏感谢图</div>
-              <div id="wechatAiRewardThanks" class="grid" style="grid-template-columns: 1fr;"></div>
+            <!-- 组 3：赞赏引导图 / 赞赏感谢图 -->
+            <div class="preview-section" id="sectionRewardGroup" hidden>
+              <div class="section-title">赞赏引导图 / 赞赏感谢图</div>
+              <p class="muted section-desc">微信表情平台的赞赏资源组，尺寸均为 750 × 560。</p>
+              <div class="preview-assets-grid">
+                <div id="wechatAiRewardGuide" class="asset-slot"></div>
+                <div id="wechatAiRewardThanks" class="asset-slot"></div>
+              </div>
             </div>
           </div>
 
@@ -468,12 +463,14 @@
         <div class="step-index">H</div>
         <div class="step-head" id="historyToggle" role="button" tabindex="0">
           <h2>历史记录</h2>
+          <button id="clearHistory" type="button" class="btn-icon-clear" title="清空历史" aria-label="清空历史">
+            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
+          </button>
         </div>
         <div class="step-head-sub" id="historySubRow">
-          <button id="clearHistory" type="button" class="btn-clear-history">清空历史</button>
           <span id="historySummary" class="history-summary">最近生成的表情包</span>
           <span id="historyToggleSub" class="collapse-btn" role="button" tabindex="0">
-            <span class="collapse-icon" id="historyCollapseIcon">▶</span>
+            <span class="collapse-icon" id="historyCollapseIcon"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="9 18 15 12 9 6"/></svg></span>
           </span>
         </div>
         <div class="step-body" id="historyBody" style="display:none">
@@ -487,9 +484,9 @@
             <span id="stickyStatus" class="sticky-status"></span>
           </div>
           <div class="sticky-action-right">
-            <button type="button" id="stickyRegenerate" class="sticky-action-btn secondary">🔄 重新生成</button>
-            <button type="button" id="stickyDownload" class="sticky-action-btn">📥 下载 ZIP</button>
-            <button type="button" id="stickyReset" class="sticky-action-btn secondary">↺ 重置</button>
+            <button type="button" id="stickyRegenerate" class="sticky-action-btn secondary"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg> 重新生成</button>
+            <button type="button" id="stickyDownload" class="sticky-action-btn"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> 下载 ZIP</button>
+            <button type="button" id="stickyReset" class="sticky-action-btn secondary"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg> 重置</button>
           </div>
         </div>
       </div>
@@ -501,7 +498,7 @@
     <!-- Lightbox -->
     <div id="lightbox" class="lightbox" hidden aria-modal="true" role="dialog">
       <div class="lightbox-backdrop" id="lightboxBackdrop"></div>
-      <button type="button" class="lightbox-close" id="lightboxClose" aria-label="关闭">✕</button>
+      <button type="button" class="lightbox-close" id="lightboxClose" aria-label="关闭"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
       <img class="lightbox-image" id="lightboxImage" alt="放大的贴图预览" />
     </div>
 
@@ -517,6 +514,10 @@
       <p class="footer-muted">EasySticker · 本地部署</p>
     </footer>
 
-    <script src="/app.js?v=4"></script>
+    <script src="/js/auth.js"></script>
+    <script src="/js/preview.js"></script>
+    <script src="/js/generator-api.js"></script>
+    <script src="/js/ui.js"></script>
+    <script src="/js/app.js"></script>
   </body>
 </html>

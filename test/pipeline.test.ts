@@ -217,6 +217,14 @@ describe("pipeline", () => {
     const rewardThanksRes = await app.inject({ method: "GET", url: `/api/assets/${json.extras.rewardThanksAssetId}` });
     expect(rewardThanksRes.statusCode).toBe(200);
 
+    // 微信赞赏图规范：750×560（与横幅 750×400 不同）
+    const guideMeta = await sharp(rewardGuideRes.rawPayload).metadata();
+    expect(guideMeta.width).toBe(750);
+    expect(guideMeta.height).toBe(560);
+    const thanksMeta = await sharp(rewardThanksRes.rawPayload).metadata();
+    expect(thanksMeta.width).toBe(750);
+    expect(thanksMeta.height).toBe(560);
+
     const zipRes = await app.inject({ method: "GET", url: json.downloadUrl });
     expect(zipRes.statusCode).toBe(200);
     expect(zipRes.headers["content-type"]).toContain("application/zip");
@@ -296,13 +304,23 @@ describe("pipeline", () => {
     expect(bannerInfo.width).toBe(750);
     expect(bannerInfo.height).toBe(400);
 
+    // 赞赏图需符合微信规范 750×560（不同于横幅 750×400）
+    const guideRes = await app.inject({ method: "GET", url: `/api/assets/${json.extras.rewardGuideAssetId}` });
+    const guideInfo = await sharp(guideRes.rawPayload).metadata();
+    expect(guideInfo.width).toBe(750);
+    expect(guideInfo.height).toBe(560);
+    const thanksRes = await app.inject({ method: "GET", url: `/api/assets/${json.extras.rewardThanksAssetId}` });
+    const thanksInfo = await sharp(thanksRes.rawPayload).metadata();
+    expect(thanksInfo.width).toBe(750);
+    expect(thanksInfo.height).toBe(560);
+
     const zipRes = await app.inject({ method: "GET", url: json.downloadUrl });
     expect(zipRes.statusCode).toBe(200);
     expect(zipRes.headers["content-type"]).toContain("application/zip");
   });
 
-  it("wechat ai generate via http provider with base64 reference", async () => {
-    const hits: any[] = [];
+  it("wechat ai generate via openai-compatible provider with base64 reference", async () => {
+    const hits: { url: string; contentType: string; body: Buffer }[] = [];
     const server = http.createServer(async (req, res) => {
       if (req.method !== "POST") {
         res.writeHead(404);
@@ -312,8 +330,11 @@ describe("pipeline", () => {
 
       const chunks: Buffer[] = [];
       for await (const chunk of req) chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
-      const body = JSON.parse(Buffer.concat(chunks).toString("utf8"));
-      hits.push(body);
+      hits.push({
+        url: req.url || "",
+        contentType: req.headers["content-type"] || "",
+        body: Buffer.concat(chunks)
+      });
 
       const png = await sharp({
         create: { width: 1024, height: 1024, channels: 4, background: { r: 40, g: 120, b: 220, alpha: 1 } }
@@ -321,8 +342,9 @@ describe("pipeline", () => {
         .png()
         .toBuffer();
 
+      // OpenAI Images API 兼容响应
       res.writeHead(200, { "content-type": "application/json" });
-      res.end(JSON.stringify({ mime: "image/png", imageBase64: png.toString("base64") }));
+      res.end(JSON.stringify({ data: [{ b64_json: png.toString("base64") }] }));
     });
 
     await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", () => resolve()));
@@ -334,26 +356,28 @@ describe("pipeline", () => {
       ...originalConfig,
       ai: {
         ...originalConfig.ai,
-        defaultProvider: "http",
+        defaultProvider: "openai-test",
         referenceMode: "base64",
         providers: {
           ...originalConfig.ai.providers,
-          http: {
-            type: "http",
-            endpoint: `http://127.0.0.1:${port}`
+          "openai-test": {
+            type: "openai",
+            baseUrl: `http://127.0.0.1:${port}/v1`,
+            apiKey: "test-key",
+            model: "test-model"
           }
         }
       }
     });
 
     try {
-      const png = await sharp({
+      const refPng = await sharp({
         create: { width: 256, height: 256, channels: 4, background: { r: 255, g: 180, b: 80, alpha: 1 } }
       })
         .png()
         .toBuffer();
 
-      const mp = multipartPayload("file", "ref.png", "image/png", png);
+      const mp = multipartPayload("file", "ref.png", "image/png", refPng);
       const uploadRes = await app.inject({
         method: "POST",
         url: "/api/uploads",
@@ -366,7 +390,7 @@ describe("pipeline", () => {
       const startRes = await app.inject({
         method: "POST",
         url: "/api/generate/start",
-        payload: { referenceAssetId: upload.uploadId, prompt: "http-test", provider: "http", stickerCount: 8, styles: ["flat"] },
+        payload: { referenceAssetId: upload.uploadId, prompt: "openai-test", provider: "openai-test", stickerCount: 8, styles: ["flat"] },
         headers: { "content-type": "application/json" }
       });
       expect(startRes.statusCode).toBe(200);
@@ -388,12 +412,116 @@ describe("pipeline", () => {
       const json = done;
       expect(json.meta.referenceMode).toBe("base64");
       expect(hits.length).toBeGreaterThan(0);
-      expect(typeof hits[0].referenceImageBase64).toBe("string");
-      expect(hits[0].referenceImageBase64.length).toBeGreaterThan(10);
-      expect(hits[0].referenceImageUrl).toBeUndefined();
+      // 参考图走 multipart 上传到 OpenAI 兼容的 /images/edits 端点
+      expect(hits[0].url).toContain("/images/edits");
+      expect(hits[0].contentType).toContain("multipart/form-data");
+      // 参考图原始 PNG 字节原样出现在 multipart 文件部分
+      expect(hits[0].body.includes(refPng)).toBe(true);
     } finally {
       vi.restoreAllMocks();
       await new Promise<void>((resolve, reject) => server.close((err) => (err ? reject(err) : resolve())));
+    }
+  }, 120000);
+
+  it("POST /api/generate/resource 只重生成单张资源（扩展图 / 贴纸 / 编辑）", async () => {
+    const originalConfig = promptConfigModule.loadPromptConfig();
+    vi.spyOn(promptConfigModule, "loadPromptConfig").mockReturnValue({
+      ...originalConfig,
+      ai: {
+        ...originalConfig.ai,
+        defaultProvider: "mock",
+        providers: { ...originalConfig.ai.providers, mock: { type: "mock", name: "本地模拟" } }
+      }
+    });
+
+    try {
+      const refPng = await solidPng(256, 256, { r: 200, g: 120, b: 60 });
+      const mp = multipartPayload("file", "ref.png", "image/png", refPng);
+      const uploadRes = await app.inject({
+        method: "POST",
+        url: "/api/uploads",
+        payload: mp.body,
+        headers: { "content-type": `multipart/form-data; boundary=${mp.boundary}` }
+      });
+      expect(uploadRes.statusCode).toBe(200);
+      const upload = uploadRes.json();
+
+      // 1) 扩展图：赞赏感谢图 → 750×560
+      const thanksRes = await app.inject({
+        method: "POST",
+        url: "/api/generate/resource",
+        payload: {
+          presetId: "wechat_stickers",
+          referenceAssetId: upload.uploadId,
+          prompt: "Q版大头",
+          styles: ["贴纸"],
+          target: { kind: "extra", key: "rewardThanksAssetId" }
+        },
+        headers: { "content-type": "application/json" }
+      });
+      expect(thanksRes.statusCode).toBe(200);
+      const thanks = thanksRes.json();
+      expect(thanks.assetId).toBeTypeOf("string");
+      expect(thanks.url).toBe(`/api/assets/${thanks.assetId}`);
+      expect(thanks.prompt).toContain("感谢打赏");
+      const thanksAsset = await app.inject({ method: "GET", url: `/api/assets/${thanks.assetId}` });
+      expect(thanksAsset.statusCode).toBe(200);
+      const thanksMeta = await sharp(thanksAsset.rawPayload).metadata();
+      expect(thanksMeta.width).toBe(750);
+      expect(thanksMeta.height).toBe(560);
+
+      // 2) 贴纸第 3 张 → 240×240，label 003
+      const stickerRes = await app.inject({
+        method: "POST",
+        url: "/api/generate/resource",
+        payload: {
+          presetId: "wechat_stickers",
+          referenceAssetId: upload.uploadId,
+          prompt: "Q版大头",
+          styles: ["贴纸"],
+          target: { kind: "sticker", index: 2 }
+        },
+        headers: { "content-type": "application/json" }
+      });
+      expect(stickerRes.statusCode).toBe(200);
+      const sticker = stickerRes.json();
+      expect(sticker.label).toBe("003");
+      const stickerAsset = await app.inject({ method: "GET", url: `/api/assets/${sticker.assetId}` });
+      const stickerMeta = await sharp(stickerAsset.rawPayload).metadata();
+      expect(stickerMeta.width).toBe(240);
+      expect(stickerMeta.height).toBe(240);
+
+      // 3) 编辑模式：以已生成资源为源图，instruction 进入提示词
+      const editRes = await app.inject({
+        method: "POST",
+        url: "/api/generate/resource",
+        payload: {
+          presetId: "wechat_stickers",
+          referenceAssetId: upload.uploadId,
+          prompt: "Q版大头",
+          styles: ["贴纸"],
+          target: { kind: "sticker", index: 2 },
+          mode: "edit",
+          sourceAssetId: sticker.assetId,
+          instruction: "把背景改成浅蓝色"
+        },
+        headers: { "content-type": "application/json" }
+      });
+      expect(editRes.statusCode).toBe(200);
+      const edited = editRes.json();
+      expect(edited.assetId).not.toBe(sticker.assetId);
+      expect(edited.prompt).toContain("把背景改成浅蓝色");
+
+      // 4) 非法 target → 400
+      const badRes = await app.inject({
+        method: "POST",
+        url: "/api/generate/resource",
+        payload: { referenceAssetId: upload.uploadId, prompt: "x", target: { kind: "extra", key: "nope" } },
+        headers: { "content-type": "application/json" }
+      });
+      expect(badRes.statusCode).toBe(400);
+    } finally {
+      vi.restoreAllMocks();
     }
   }, 120000);
 });

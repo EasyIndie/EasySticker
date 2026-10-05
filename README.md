@@ -22,7 +22,7 @@
   <br />
   <span>微信 · Telegram · WhatsApp 三平台支持</span>
   <br />
-  <span>Doubao · OpenAI · HuggingFace · ComfyUI · 自定义 HTTP</span>
+  <span>OpenAI 兼容 API · 任意兼容端点</span>
 </p>
 
 ---
@@ -45,11 +45,12 @@
 | 功能 | 说明 |
 |------|------|
 | **图生图** | 上传参考人物/角色，AI 基于角色生成多组情绪表情 |
-| **多风格** | 支持扁平插画、3D 卡通、日系 Q 版、像素风、国潮风等多种风格（可自定义） |
-| **多 AI 后端** | 豆包大模型、OpenAI、HuggingFace、ComfyUI、自定义 HTTP，自由切换 |
+| **多风格** | 支持扁平插画、贴纸、3D 卡通、日系 Q 版、像素风、国潮风等多种风格（可自定义） |
+| **多 AI 后端** | 统一 OpenAI 兼容接口，可对接 OpenAI 或任意 OpenAI 兼容网关，自由切换 |
 | **SSE 实时推送** | 生成进度逐张展示，含进度条和百分比 |
 | **智能提示词** | 上传参考图后自动生成推荐提示词 |
 | **赞赏图** | 可选开启赞赏，自动生成引导图和答谢图 |
+| **单资源重生成** | 某张图失败时点该卡片只重生成这一张（`POST /api/generate/resource`），不重跑整包；单张扩展资源失败不会中断整包 |
 
 ### 📦 导入已有图片
 | 功能 | 说明 |
@@ -81,33 +82,56 @@ cd EasySticker
 npm install
 ```
 
-### 2. 配置 AI 提供商（可选）
-不配置也能以随机图片模式启动。需要真实 AI 生成能力时复制配置模板并填入 API Key：
+### 2. 创建环境变量文件
 
 ```bash
-cp prompt-config.default.json prompt-config.json
+cp .env.example .env
 ```
 
-编辑 `prompt-config.json`，配置至少一个 AI 提供商（以火山引擎豆包为例）：
+本地开发无需修改（默认 `development` + Mock 模式，可直接跑起来）。要用真实模型，见下一步。
+
+### 3. 配置 AI 提供商（可选）
+
+不配置也能以 Mock 模式启动。默认模板 `prompt-config.default.json` 已内置 `mock` / `seedream` / `openai` 三个 provider。
+
+`prompt-config.json` **只需写要覆盖的字段**，其余自动继承默认值（无需复制整份模板）。例如把默认生图切到豆包 Seedream：
+
+```json
+{
+  "ai": { "defaultProvider": "seedream" }
+}
+```
+
+要自定义模型/端点（如换 Seedream 版本），只覆盖对应 provider 的字段即可（其余字段仍继承默认）：
 
 ```json
 {
   "ai": {
-    "defaultProvider": "doubao",
+    "defaultProvider": "seedream",
     "providers": {
-      "doubao": {
-        "type": "doubao",
-        "name": "豆包大模型",
+      "seedream": {
+        "type": "openai",
+        "name": "豆包 Seedream（火山方舟）",
         "baseUrl": "https://ark.cn-beijing.volces.com/api/v3",
-        "model": "doubao-seedream-5-0-260128",
-        "apiKey": "YOUR_ARK_API_KEY"
+        "model": "doubao-seedream-5-0-flash-260915",
+        "variant": "generic"
       }
     }
   }
 }
 ```
 
-### 3. 启动
+> 🔐 **推荐**：API Key 不要写进 `prompt-config.json`，而是放到 `.env`（已在 `.gitignore` 中）：
+> ```bash
+> AI_SEEDREAM_API_KEY=你的火山方舟KEY
+> ```
+> 命名规则 `AI_<PROVIDER_ID>_API_KEY`（provider id 见 `ai.providers` 的键名）。环境变量优先于配置文件，`apiKey` 字段留空即可，密钥不会随配置文件分享/备份/Docker 镜像而泄露。
+
+> 💡 **不想手改文件？** 两种懒人方式：
+> - 命令行向导：`npm run setup`（交互式选择模型并填入 Key）
+> - 网页配置：启动后进管理后台 →「设置 → AI 提供商」，可视化编辑并**一键测试连通**
+
+### 4. 启动
 ```bash
 # 开发模式（热更新）
 npm run dev
@@ -135,32 +159,31 @@ docker compose up -d
 
 ## 🔧 支持的 AI 提供商
 
-| 提供商 | 类型 | 说明 | 成本 |
-|--------|------|------|------|
-| **豆包大模型** (火山引擎) | `doubao` | 中文理解好，生图质量稳定，推荐优先使用 | 按量付费（便宜） |
-| **OpenAI** | `openai` | GPT Image，参考图强编辑 | 按量付费（中等） |
-| **HuggingFace** | `hf` | 开源模型，免费额度 | 免费额度 / 付费 |
-| **ComfyUI 本地** | `http` | 本地图生图，数据不出门，可精调参数 | 自备 GPU |
-| **自定义 HTTP** | `http` | 对接私有部署或第三方 API | 自定 |
-| **随机图片 (Mock/Picsum)** | `mock` / `picsum` | 无需 API Key，用于功能测试 | 免费 |
+所有真实生图统一走 **OpenAI 兼容 Images API**（`/images/generations`），`baseUrl` 可指向任意兼容端点，通过 `variant` 切换参数画像：
+
+| 提供商 | 类型 / variant | 说明 | 透明底 |
+|--------|---------------|------|--------|
+| **OpenAI gpt-image-1.x** | `openai` / `gpt-image` | 参考图生图、文字改图、文字生图全覆盖 | ✅ 原生 |
+| **豆包 Seedream（火山方舟）** | `openai` / `generic` | 国内模型，支付宝/对公付费 | ❌ 实底 |
+| **任意 OpenAI 兼容端点**（硅基流动 FLUX 等） | `openai` / `generic` | 换 `baseUrl`/`model` 即可接入 | 视模型 |
+| **本地模拟 (Mock)** | `mock` | 无需 API Key，用于功能测试 | — |
 
 ---
 
 ## 🏗 Architecture
 
 ```
-┌─────────────┐    ┌──────────────────┐    ┌──────────────┐
-│   Web UI    │    │   Fastify API    │    │  AI Provider │
-│  (原生 JS)   │───▶│  (Node.js + TS)  │────│  (插件化)     │
-│             │    │                  │    │ ┌──────────┐ │
-│  · 上传参考图 │    │  · 图生图流水线   │    │ │ Doubao   │ │
-│  · 编辑信息  │    │  · 表情校验      │    │ │ OpenAI   │ │
-│  · 预览下载  │    │  · ZIP 打包     │    │ │ HF       │ │
-│  · 历史记录  │    │  · SSE 流推送   │    │ │ ComfyUI  │ │
-└─────────────┘    │  · 元数据注入    │    │ │ HTTP     │ │
-                   └───────┬──────────┘    │ │ Mock     │ │
-                           │                │ └──────────┘ │
-                           ▼                └──────────────┘
+┌─────────────┐    ┌──────────────────┐    ┌──────────────────────┐
+│   Web UI    │    │   Fastify API    │    │     AI Provider      │
+│ (TS + Vite) │───▶│  (Node.js + TS)  │────│      (插件化)        │
+│             │    │                  │    │ ┌──────────────────┐ │
+│  · 上传参考图 │    │  · 图生图流水线   │    │ │ OpenAI 兼容 API  │ │
+│  · 编辑信息  │    │  · 表情校验      │    │ │ (任意兼容端点)    │ │
+│  · 预览下载  │    │  · ZIP 打包     │    │ │ Mock (本地模拟)   │ │
+│  · 历史记录  │    │  · SSE 流推送   │    │ └──────────────────┘ │
+└─────────────┘    │  · 元数据注入    │    └──────────────────────┘
+                   └───────┬──────────┘
+                           ▼
                    ┌──────────────┐
                    │  Sharp 图片   │
                    │  处理引擎     │
@@ -193,7 +216,7 @@ docker compose up -d
 ## 🤔 FAQ
 
 **Q: 需要自己的 AI API Key 吗？**
-A: 不需要也能启动（随机图片模式）。但想要真正的 AI 生成能力，需要至少配置一个 AI 提供商（豆包、OpenAI、HF 等）。
+A: 不需要也能启动（本地模拟 Mock 模式）。但想要真正的 AI 生成能力，需要配置一个 OpenAI 兼容的 AI 提供商并填入 `apiKey`。
 
 **Q: 生成的图片存储在哪里？**
 A: 全部存储在服务器的 `data/` 目录下。任务状态在内存中默认 1h 后自动过期；磁盘上的 `data/uploads/` 与 `data/packs/` 需用 `node scripts/cleanup.mjs --days 7` 或 Docker `cleanup` profile 定期清理。
@@ -202,16 +225,16 @@ A: 全部存储在服务器的 `data/` 目录下。任务状态在内存中默�
 A: 输出 ZIP 包完全符合微信表情开放平台的上架规范，可以直接用该 ZIP 提交审核。目前不支持通过 API 自动提审。
 
 **Q: 支持商用吗？**
-A: 项目采用 MIT 许可证，可自由使用和修改。注意生成的图片版权取决于底层的 AI 模型服务条款。
+A: 项目采用 Apache-2.0 许可证，可自由使用和修改。注意生成的图片版权取决于底层的 AI 模型服务条款。
 
 **Q: 生图质量不满意怎么办？**
-A: 可调整提示词、更换风格、切换 AI 提供商。ComfyUI 用户可通过 qualityPreset 调参。
+A: 可调整提示词、更换风格、切换 AI 提供商；也可在 `prompt-config.json` 里调整 provider 的 `quality` / `outputFormat` / `size`（generic 变体）以及全局 `ai.imageSize`。某张图不满意时，直接点击该预览卡片即可单张重生成，无需整包重跑。
 
 ---
 
 ## 📄 License
 
-MIT © 2025-2026 EasySticker Contributors
+Apache-2.0 © 2025-2026 EasySticker Contributors
 
 ---
 

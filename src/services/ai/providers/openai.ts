@@ -2,6 +2,7 @@ import createHttpError from "http-errors";
 import { fetch, FormData } from "undici";
 import { type AiGenerateInput, type AiGenerateOutput, type AiProvider } from "../provider";
 import { registerProvider } from "../registry";
+import { providerApiKeyEnvName, resolveProviderApiKey } from "../apiKey";
 
 type OpenAiImageOptions = {
   background?: "transparent" | "opaque" | "auto";
@@ -9,6 +10,10 @@ type OpenAiImageOptions = {
   outputFormat?: "png" | "jpeg" | "webp";
   moderation?: "low" | "auto";
   inputFidelity?: "low" | "high";
+  /** "gpt-image" 为 OpenAI gpt-image-1.x；"generic" 为通用 OpenAI 兼容生图接口（豆包 Seedream、硅基流动 FLUX 等） */
+  variant?: "gpt-image" | "generic";
+  /** generic 变体输出尺寸覆盖；不设则取输入图尺寸（即 ai.imageSize） */
+  size?: string;
 };
 
 export class OpenAiImageProvider implements AiProvider {
@@ -20,13 +25,10 @@ export class OpenAiImageProvider implements AiProvider {
   ) {}
 
   async generateImage(input: AiGenerateInput, signal?: AbortSignal): Promise<AiGenerateOutput> {
-    const hasReference = Boolean(input.referenceImageBase64 || input.referenceImageUrl);
-    const endpoint = `${this.baseUrl.replace(/\/+$/, "")}/images/${hasReference ? "edits" : "generations"}`;
     const prompt = this.buildPrompt(input);
-
-    const res = hasReference
-      ? await this.createEdit(endpoint, input, prompt, signal)
-      : await this.createGeneration(endpoint, input, prompt, signal);
+    const res = this.options.variant === "generic"
+      ? await this.createGenericGeneration(input, prompt, signal)
+      : await this.createGptImage(input, prompt, signal);
 
     if (!res.ok) {
       const message = await this.readErrorMessage(res, "openai provider error");
@@ -52,6 +54,45 @@ export class OpenAiImageProvider implements AiProvider {
 
     console.error("[OpenAiImageProvider] Unexpected response:", JSON.stringify(json).slice(0, 300));
     throw createHttpError(502, "openai provider returned no image data");
+  }
+
+  private createGptImage(input: AiGenerateInput, prompt: string, signal?: AbortSignal) {
+    const hasReference = Boolean(input.referenceImageBase64 || input.referenceImageUrl);
+    const endpoint = `${this.baseUrl.replace(/\/+$/, "")}/images/${hasReference ? "edits" : "generations"}`;
+    return hasReference
+      ? this.createEdit(endpoint, input, prompt, signal)
+      : this.createGeneration(endpoint, input, prompt, signal);
+  }
+
+  private async createGenericGeneration(input: AiGenerateInput, prompt: string, signal?: AbortSignal) {
+    const endpoint = `${this.baseUrl.replace(/\/+$/, "")}/images/generations`;
+    const body: Record<string, unknown> = {
+      model: this.model,
+      prompt,
+      n: 1,
+      size: this.options.size || `${input.width}x${input.height}`,
+      response_format: "b64_json",
+      watermark: false
+    };
+
+    // 通用 OpenAI 兼容接口（豆包 Seedream / 硅基流动等）的图生图：
+    // 参考图通过 image 字段以 data URI 或 URL 传入，而不是 /images/edits。
+    if (input.referenceImageUrl) {
+      body.image = input.referenceImageUrl;
+    } else if (input.referenceImageBase64) {
+      const mime = input.referenceImageMime || "image/png";
+      body.image = `data:${mime};base64,${input.referenceImageBase64}`;
+    }
+
+    return fetch(endpoint, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        authorization: `Bearer ${this.apiKey}`
+      },
+      body: JSON.stringify(body),
+      signal
+    });
   }
 
   private async createGeneration(endpoint: string, input: AiGenerateInput, prompt: string, signal?: AbortSignal) {
@@ -189,16 +230,21 @@ export class OpenAiImageProvider implements AiProvider {
 
 registerProvider("openai", (config, providerId) => {
   const baseUrl = config.baseUrl || "https://api.openai.com/v1";
-  const apiKey = config.apiKey;
+  const apiKey = resolveProviderApiKey(providerId, config);
   const model = config.model || "gpt-image-1.5";
-  if (!apiKey || typeof apiKey !== "string" || apiKey.length === 0) {
-    throw createHttpError(500, `apiKey is required and cannot be empty in prompt-config.json for provider: ${providerId}`);
+  if (!apiKey) {
+    throw createHttpError(
+      500,
+      `apiKey is required for provider "${providerId}": set env ${providerApiKeyEnvName(providerId)} (recommended) or ai.providers.${providerId}.apiKey in prompt-config.json`
+    );
   }
   return new OpenAiImageProvider(baseUrl, apiKey, model, {
     background: config.background,
     quality: config.quality,
     outputFormat: config.outputFormat,
     moderation: config.moderation,
-    inputFidelity: config.inputFidelity
+    inputFidelity: config.inputFidelity,
+    variant: config.variant,
+    size: config.size
   });
 });
