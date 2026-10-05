@@ -14,7 +14,8 @@
   <a href="#-quick-start">快速开始</a> •
   <a href="#-features">功能</a> •
   <a href="#-configuration">配置</a> •
-  <a href="#-faq">FAQ</a>
+  <a href="#-faq">FAQ</a> •
+  <a href="docs/README.md">文档</a>
 </p>
 
 <p align="center">
@@ -23,6 +24,28 @@
   <span>微信 · Telegram · WhatsApp 三平台支持</span>
   <br />
   <span>OpenAI 兼容 API · 任意兼容端点</span>
+</p>
+
+---
+
+## 📸 界面
+
+<p align="center">
+  <img src="docs/screenshots/home.png" width="880" alt="选择平台与创建方式" />
+  <br />
+  <sub>选择目标平台与创建方式 —— 微信 / Telegram / WhatsApp，或改为批量导入已有图片</sub>
+</p>
+
+<p align="center">
+  <img src="docs/screenshots/config.png" width="620" alt="配置与信息" />
+  <br />
+  <sub>逐卡片配置：提供商、提示词、风格、数量、标题作者、赞赏信息</sub>
+</p>
+
+<p align="center">
+  <img src="docs/screenshots/preview.png" width="880" alt="预览与下载" />
+  <br />
+  <sub>预览会逐张标注实际使用的提示词 / 情绪 / 风格，每张都能单独重新生成或编辑图片</sub>
 </p>
 
 ---
@@ -350,7 +373,15 @@ docker compose up -d
 A: 不需要也能启动（本地模拟 Mock 模式）。但想要真正的 AI 生成能力，需要配置一个 OpenAI 兼容的 AI 提供商并填入 `apiKey`。
 
 **Q: 生成的图片存储在哪里？**
-A: 全部存储在服务器的 `data/` 目录下。任务状态在内存中默认 1h 后自动过期；磁盘上的 `data/uploads/` 与 `data/packs/` 需用 `node scripts/cleanup.mjs --days 7` 或 Docker `cleanup` profile 定期清理。
+A: 全部在服务器的 `data/` 目录下：`data/uploads/` 是**所有素材**（只存一份），
+`data/packs/` 是每个包的清单（几 KB，含逐张提示词/尺寸/归属）。生成的 ZIP **不落盘**，用户点下载时才现场打包。
+
+磁盘回收是自动的：服务端每 6 小时巡检一次，清孤儿素材与旧备份，并按保留期（默认 30 天）删包。
+也可以手动跑 `npm run gc`（默认只体检不删，`--apply` 才执行）。详见
+[运维手册](docs/operations.md#3-存储清理与回收)。
+
+> ⚠️ 不要用 `find data -mtime +N -delete` 这类按修改时间的清理方式。素材的 mtime 与
+> 「是否仍被包引用」无关，直接删会把包打坏。
 
 **Q: 支持微信表情开放平台提审吗？**
 A: 输出 ZIP 包完全符合微信表情开放平台的上架规范，可以直接用该 ZIP 提交审核。目前不支持通过 API 自动提审。
@@ -362,7 +393,7 @@ A: 项目采用 Apache-2.0 许可证，可自由使用和修改。注意生成�
 A: 可调整提示词、更换风格、切换 AI 提供商；也可在 `prompt-config.json` 里调整 provider 的 `quality` / `outputFormat` / `size`（generic 变体）以及全局 `ai.imageSize`。某张图不满意时，直接点击该预览卡片即可单张重生成，无需整包重跑。
 
 **Q: 早期导出的 ZIP 里 metadata.json 没有尺寸 / 提示词，能补回来吗？**
-A: 图片本身不会丢（都在 `data/packs/*.zip` 与 `data/uploads/` 里）。用 `npm run repair-pack` 可以把旧包就地升级到最新 schema，用 `sharp` 重新测量每张图的尺寸并补齐角色、`files` 等字段；若 `uploads/` 里还留着参考图，也会一并收进 `source/reference.*`（原包备份成 `<packId>.zip.orig`，下载链接不变）：
+A: 图片本身不会丢（素材都在 `data/uploads/`，旧包的整包 ZIP 与素材内容重复）。用 `npm run repair-pack` 可以把旧包就地升级到最新 schema，用 `sharp` 重新测量每张图的尺寸并补齐角色、`files` 等字段；若 `uploads/` 里还留着参考图，也会一并收进 `source/reference.*`（原包备份成 `<packId>.zip.orig`，下载链接不变）：
 
 ```bash
 npm run repair-pack -- <packId>          # 修复单个包
@@ -382,6 +413,20 @@ copy(localStorage.getItem('easysticker:last-wechat-pack'))
 ```bash
 npm run repair-pack -- <packId> --context context.json
 ```
+
+---
+
+## 📚 文档
+
+| 文档 | 内容 |
+|------|------|
+| [docs/architecture.md](docs/architecture.md) | 架构分层、模块边界、已落地的设计决策与取舍 |
+| [docs/configuration-reference.md](docs/configuration-reference.md) | 全部配置项、提示词模板、环境变量 |
+| [docs/operations.md](docs/operations.md) | 部署、反向代理、日志、存储回收、备份、压测、排障 |
+| [docs/HANDOFF.md](docs/HANDOFF.md) | 会话交接与下一步计划 |
+| [docs/history.md](docs/history.md) | 改造历史与关键决策（含后来被推翻的做法） |
+| [docs/business/](docs/business/) | 市场调研与运营策略 |
+| [docs/README.md](docs/README.md) | 文档索引与维护规则 |
 
 ---
 

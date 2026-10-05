@@ -28,13 +28,21 @@ services:
       # - ./prompt-config.json:/app/prompt-config.json:ro
     restart: unless-stopped
 
-  # Optional: daily cleanup of old temp files (disabled by default, enable via profile)
+  # Optional: 定时回收（默认不启用，用 profile 打开）
+  #
+  # 用 dist/cli/gc.js（与 `npm run gc` 同一实现）：它按**引用关系**判断孤儿素材，
+  # 并遵守保留期「不追溯既往」。不要用按 mtime 的 find/rm —— 素材的 mtime 与
+  # 「是否仍被引用」无关，直接删会把包打坏（图片 404、ZIP 打不出来）。
+  #
+  #   docker compose --profile cleanup run --rm cleanup
+  #
+  # 只体检不删：去掉 --apply（并注意保留期的默认值是 30 天）
   cleanup:
     build: .
     container_name: easysticker-cleanup
     profiles:
       - cleanup
-    command: node scripts/cleanup.mjs --days 7
+    command: node dist/cli/gc.js --apply
     volumes:
       - ./data:/app/data
     restart: "no"
