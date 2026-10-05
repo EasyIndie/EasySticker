@@ -65,7 +65,11 @@ input { font-family: inherit; }
   font-size: 13px;
   text-decoration: none;
   transition: color .2s;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
 }
+.login-card .login-back .icon { width: 15px; height: 15px; }
 
 .login-card .login-back a:hover {
   color: #fff;
@@ -222,6 +226,9 @@ input { font-family: inherit; }
   padding: 4px 8px;
   border-radius: var(--radius-sm);
   transition: background 0.15s, color 0.15s;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .topbar-left .topbar-back:hover {
@@ -494,7 +501,9 @@ input { font-family: inherit; }
 
 /* ── Messages ─────────────────────────────────────────────── */
 .error-msg { color: var(--c-danger); font-size: 13px; margin-top: 12px; }
-.status-msg { font-size: 13px; margin-top: 12px; }
+.status-msg { font-size: 13px; margin-top: 12px; display: inline-flex; align-items: center; gap: 6px; }
+.status-msg .icon { width: 15px; height: 15px; }
+.status-msg.info { color: var(--c-text-secondary); }
 .status-msg.success { color: var(--c-success); }
 .status-msg.error { color: var(--c-danger); }
 
@@ -518,6 +527,7 @@ input { font-family: inherit; }
   font-size: 14px;
   color: var(--c-text-secondary);
 }
+.empty-state .icon { width: 18px; height: 18px; vertical-align: -0.25em; }
 
 /* ── Responsive ───────────────────────────────────────────── */
 @media (max-width: 900px) {
@@ -563,13 +573,16 @@ input { font-family: inherit; }
   font-size: 12px;
 }
 .badge {
-  display: inline-block;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
   padding: 2px 8px;
   border-radius: 999px;
   font-size: 12px;
   font-weight: 600;
   line-height: 1.5;
 }
+.badge .icon { width: 12px; height: 12px; }
 .badge-muted { background: #F3F4F6; color: var(--c-text-secondary); }
 .badge-warn { background: var(--c-warning-light); color: #B8860B; }
 .badge-default { background: var(--c-primary-light); color: var(--c-primary); }

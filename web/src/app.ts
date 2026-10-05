@@ -1435,6 +1435,49 @@ function initStickyBar(): void {
 }
 const ICON_SUN = '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>';
 const ICON_MOON = '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>';
+const ICON_UPLOAD = '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>';
+
+// 原生 file input 的外观由浏览器接管、无法跟随主题，统一替换为自定义选择器。
+function initFilePickers(): void {
+  const inputs = document.querySelectorAll<HTMLInputElement>('input[type="file"]');
+  inputs.forEach((input) => {
+    if (input.dataset.pickerReady === "true") return;
+    input.dataset.pickerReady = "true";
+    input.classList.add("file-native");
+
+    const picker = document.createElement("span");
+    picker.className = "file-picker";
+    picker.dataset.empty = "true";
+
+    const trigger = document.createElement("span");
+    trigger.className = "file-picker-trigger";
+    trigger.innerHTML = `${ICON_UPLOAD}<span>选择文件</span>`;
+
+    const name = document.createElement("span");
+    name.className = "file-picker-name";
+    name.textContent = "未选择文件";
+
+    picker.appendChild(trigger);
+    picker.appendChild(name);
+    input.insertAdjacentElement("afterend", picker);
+
+    const sync = () => {
+      const files = input.files;
+      if (!files || files.length === 0) {
+        picker.dataset.empty = "true";
+        name.textContent = "未选择文件";
+        name.removeAttribute("title");
+        return;
+      }
+      picker.dataset.empty = "false";
+      const label = files.length === 1 ? files[0]!.name : `已选择 ${files.length} 个文件`;
+      name.textContent = label;
+      name.title = label;
+    };
+    input.addEventListener("change", sync);
+    sync();
+  });
+}
 
 function setDarkModeIcon(toggle: HTMLElement, theme: string): void {
   toggle.innerHTML = theme === "dark" ? ICON_SUN : ICON_MOON;
@@ -1739,6 +1782,7 @@ async function initApp(): Promise<void> {
   initStickyBar();
   initDarkMode();
   initDropZone();
+  initFilePickers();
   initLightbox();
   initKeyboardShortcuts();
 }

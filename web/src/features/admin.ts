@@ -8,6 +8,35 @@
 const API_BASE = "/api";
 let _refreshTimer: ReturnType<typeof setInterval> | null = null;
 
+// ── 统一 SVG 图标（stroke=currentColor，自动适配亮/暗模式）─────────────────
+const ICON_CHECK =
+  '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>';
+const ICON_CROSS =
+  '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>';
+const ICON_WARN =
+  '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>';
+const ICON_CLOCK =
+  '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>';
+const ICON_CHECK_CIRCLE =
+  '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>';
+
+function setStatusMsg(
+  el: HTMLElement | null,
+  tone: "success" | "error" | "info",
+  text: string,
+  icon: string
+): void {
+  if (!el) return;
+  el.className = `status-msg ${tone}`;
+  el.innerHTML = `${icon}<span>${escHtml(text)}</span>`;
+}
+
+function clearStatusMsg(el: HTMLElement | null): void {
+  if (!el) return;
+  el.className = "status-msg";
+  el.innerHTML = "";
+}
+
 function byId<T extends HTMLElement = HTMLElement>(id: string): T | null {
   return document.getElementById(id) as T | null;
 }
@@ -218,7 +247,7 @@ async function loadAlerts(): Promise<void> {
 function renderAlerts(alerts: any[]): void {
   const container = req("alerts-container");
   if (!alerts || alerts.length === 0) {
-    container.innerHTML = '<div class="empty-state">✅ 当前无活跃告警</div>';
+    container.innerHTML = `<div class="empty-state">${ICON_CHECK_CIRCLE} 当前无活跃告警</div>`;
     return;
   }
 
@@ -444,9 +473,9 @@ async function saveSettings(): Promise<void> {
   };
   const result = await apiCall("PUT", "/admin/settings", body);
   const msg = req("settings-msg");
-  if (result && !(result as any).error) { msg.textContent = "✅ 设置已保存"; msg.className = "status-msg success"; }
-  else { msg.textContent = "❌ 保存失败"; msg.className = "status-msg error"; }
-  setTimeout(() => { msg.textContent = ""; }, 3000);
+  if (result && !(result as any).error) setStatusMsg(msg, "success", "设置已保存", ICON_CHECK);
+  else setStatusMsg(msg, "error", "保存失败", ICON_CROSS);
+  setTimeout(() => clearStatusMsg(msg), 3000);
 }
 
 // ── AI providers ────────────────────────────────────────────────────────────
@@ -474,8 +503,8 @@ function renderAiProviders(): void {
     const status = isMock
       ? '<span class="badge badge-muted">本地模拟</span>'
       : (p.ready
-        ? '<span class="badge badge-ok">✓ 可用</span>'
-        : '<span class="badge badge-warn">⚠ 缺少 Key</span>');
+        ? `<span class="badge badge-ok">${ICON_CHECK} 可用</span>`
+        : `<span class="badge badge-warn">${ICON_WARN} 缺少 Key</span>`);
     const fields = isMock ? "" : (
       '<div class="ai-provider-fields">' +
         '<div class="input-group"><label>模型</label><input type="text" data-field="model" value="' + escHtmlAttr(p.model || "") + '" placeholder="如 doubao-seedream-5-0-flash-260915"></div>' +
@@ -526,25 +555,23 @@ async function saveAiProviders(): Promise<void> {
     aiProvidersState = result.providers || [];
     aiDefaultProvider = result.defaultProvider || "mock";
     renderAiProviders();
-    msg.textContent = "✓ AI 配置已保存"; msg.className = "status-msg success";
+    setStatusMsg(msg, "success", "AI 配置已保存", ICON_CHECK);
   } else {
-    msg.textContent = "✗ 保存失败"; msg.className = "status-msg error";
+    setStatusMsg(msg, "error", "保存失败", ICON_CROSS);
   }
-  setTimeout(() => { msg.textContent = ""; }, 4000);
+  setTimeout(() => clearStatusMsg(msg), 4000);
 }
 
 async function testAiProvider(id: string): Promise<void> {
   const msg = req("ai-msg");
-  msg.textContent = "⏳ 测试中（真实调用一次，请稍候）…"; msg.className = "status-msg";
+  setStatusMsg(msg, "info", "测试中（真实调用一次，请稍候）…", ICON_CLOCK);
   const result = await apiCall<any>("POST", "/admin/ai/test", { providerId: id });
   if (result && result.ok) {
-    msg.textContent = "✓ " + id + " 连通正常（" + result.ms + "ms，" + result.bytes + " bytes）";
-    msg.className = "status-msg success";
+    setStatusMsg(msg, "success", `${id} 连通正常（${result.ms}ms，${result.bytes} bytes）`, ICON_CHECK);
   } else {
-    msg.textContent = "✗ " + id + " 测试失败：" + (result?.error || "未知错误");
-    msg.className = "status-msg error";
+    setStatusMsg(msg, "error", `${id} 测试失败：${result?.error || "未知错误"}`, ICON_CROSS);
   }
-  setTimeout(() => { msg.textContent = ""; }, 8000);
+  setTimeout(() => clearStatusMsg(msg), 8000);
 }
 
 // ── Alert rules ─────────────────────────────────────────────────────────────
@@ -602,9 +629,9 @@ async function saveAlertRules(): Promise<void> {
   });
   const saveResult = await apiCall("PUT", "/admin/alerts/rules", { rules });
   const msg = req("rules-msg");
-  if (saveResult && !(saveResult as any).error) { msg.textContent = "✅ 规则已保存"; msg.className = "status-msg success"; void loadAlertRules(); }
-  else { msg.textContent = "❌ 保存失败"; msg.className = "status-msg error"; }
-  setTimeout(() => { msg.textContent = ""; }, 3000);
+  if (saveResult && !(saveResult as any).error) { setStatusMsg(msg, "success", "规则已保存", ICON_CHECK); void loadAlertRules(); }
+  else setStatusMsg(msg, "error", "保存失败", ICON_CROSS);
+  setTimeout(() => clearStatusMsg(msg), 3000);
 }
 
 // ── Password reset ──────────────────────────────────────────────────────────
@@ -619,8 +646,8 @@ function showResetPassword(email: string): void {
 
 async function resetPassword(email: string, newPassword: string): Promise<void> {
   const result = await apiCall<any>("POST", "/auth/reset-password", { email, newPassword });
-  if (result && result.success) alert("✅ 密码已重置");
-  else alert("❌ 重置失败: " + (result?.message || "请重试"));
+  if (result && result.success) alert("密码已重置");
+  else alert("重置失败: " + (result?.message || "请重试"));
 }
 
 // ── Utils ───────────────────────────────────────────────────────────────────
