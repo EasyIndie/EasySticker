@@ -816,3 +816,19 @@ input { font-family: inherit; }
 @media (prefers-reduced-motion: reduce) {
   .live-indicator[data-tone="live"]::before { animation: none; }
 }
+
+/* 操作失败提示条：以前后台的写操作失败是静默的（按钮点了没反应），
+   至少要让人看见到底为什么没生效。 */
+.admin-notice {
+  margin: 0 0 14px;
+  padding: 10px 14px;
+  border-radius: var(--radius-md, 10px);
+  border: 1px solid rgba(255, 77, 79, 0.35);
+  background: rgba(255, 77, 79, 0.1);
+  color: var(--c-danger, #ff4d4f);
+  font-size: 13px;
+}
+
+.admin-notice[hidden] {
+  display: none;
+}

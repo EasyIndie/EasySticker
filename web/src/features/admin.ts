@@ -7,6 +7,7 @@
 
 const API_BASE = "/api";
 import { openMonitoringStream, type MonitoringStream } from "../api/admin-stream";
+import { buildRequestInit } from "../api/request";
 
 /** 仪表盘实时数据流；只在仪表盘标签页可见时保持连接。 */
 let _dashboardStream: MonitoringStream | null = null;
@@ -79,23 +80,36 @@ function req<T extends HTMLElement = HTMLElement>(id: string): T {
 async function apiCall<T = any>(method: string, path: string, body?: unknown): Promise<T | null> {
   const token = localStorage.getItem("easysticker_token");
   try {
-    const res = await fetch(API_BASE + path, {
-      method,
-      headers: {
-        "Content-Type": "application/json",
-        ...(token ? { Authorization: `Bearer ${token}` } : {})
-      },
-      body: body !== undefined ? JSON.stringify(body) : undefined
-    });
+    const res = await fetch(API_BASE + path, buildRequestInit({ method, token, body }));
     if (res.status === 401) {
       logout();
       return null;
     }
-    return res.json() as Promise<T>;
+    const data = (await res.json().catch(() => null)) as any;
+    if (!res.ok) {
+      // 以前这里把错误响应也当成成功往下传，于是「确认告警」这类操作
+      // 失败时界面毫无反应。至少要让人看见，而不是静默。
+      console.error("API call failed:", method, path, res.status, data);
+      setGlobalAdminNotice(data?.message || data?.error || `操作失败（${res.status}）`);
+      return null;
+    }
+    return data as T;
   } catch (err) {
     console.error("API call failed:", method, path, err);
+    setGlobalAdminNotice("网络异常，操作未生效");
     return null;
   }
+}
+
+/** 后台没有 toast 组件，用顶部提示条显示一次性错误。 */
+let _noticeTimer: ReturnType<typeof setTimeout> | null = null;
+function setGlobalAdminNotice(text: string): void {
+  const el = byId("admin-notice");
+  if (!el) return;
+  el.textContent = text;
+  el.hidden = false;
+  if (_noticeTimer) clearTimeout(_noticeTimer);
+  _noticeTimer = setTimeout(() => { el.hidden = true; }, 6000);
 }
 
 async function login(): Promise<void> {
@@ -364,14 +378,19 @@ function renderUsers(users: any[]): void {
     const statusBadge = u.disabled ? '<span class="badge badge-disabled">已禁用</span>' : '<span class="badge badge-active">正常</span>';
     const toggleText = u.disabled ? "启用" : "禁用";
     const toggleClass = u.disabled ? "btn-success" : "btn-warning";
+    // 禁用自己会当场把自己锁在后台外面（且没有任何提示），直接不给点。
+    const isSelf = u.email === getCurrentUser()?.email;
+    const toggleBtn = isSelf
+      ? '<button class="btn btn-outline btn-sm" disabled title="不能禁用当前登录的账号">' + toggleText + '</button>'
+      : '<button class="btn ' + toggleClass + ' btn-sm" data-action="toggle-user" data-email="' + escHtmlAttr(u.email) + '">' + toggleText + '</button>';
     return (
       '<tr class="' + disabled + '">' +
-        '<td>' + escHtml(u.email) + '</td>' +
+        '<td>' + escHtml(u.email) + (isSelf ? ' <span class="badge badge-user">当前账号</span>' : '') + '</td>' +
         '<td>' + roleBadge + '</td>' +
         '<td>' + formatTime(u.createdAt) + '</td>' +
         '<td>' + (u.lastLogin ? formatTime(u.lastLogin) : "从未") + '</td>' +
         '<td>' + statusBadge + '</td>' +
-        '<td><button class="btn ' + toggleClass + ' btn-sm" data-action="toggle-user" data-email="' + escHtmlAttr(u.email) + '">' + toggleText + '</button></td>' +
+        '<td>' + toggleBtn + '</td>' +
         '<td><button class="btn btn-outline btn-sm" data-action="reset-password" data-email="' + escHtmlAttr(u.email) + '">重置密码</button></td>' +
       '</tr>'
     );
@@ -385,8 +404,23 @@ function renderUsers(users: any[]): void {
 }
 
 async function toggleUser(email: string): Promise<void> {
+  // 双保险：按钮已禁用，这里再挡一次（键盘/程序化触发也拦得住）
+  if (email === getCurrentUser()?.email) {
+    setGlobalAdminNotice("不能禁用当前登录的账号，否则会立刻失去后台访问权限。");
+    return;
+  }
   const result = await apiCall("POST", "/admin/users/" + encodeURIComponent(email) + "/toggle");
   if (result) void loadUsers();
+}
+
+/** 读取当前登录用户（localStorage 里的 easysticker_user）。 */
+function getCurrentUser(): any | null {
+  try {
+    const raw = localStorage.getItem("easysticker_user");
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
 }
 
 // ── Stats ───────────────────────────────────────────────────────────────────
