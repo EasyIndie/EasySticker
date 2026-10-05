@@ -47,7 +47,8 @@ export async function generateAssetsAndPack(
   req: PlatformGenerateRequest,
   emit?: (event: string, data: unknown) => void,
   isCanceled?: () => boolean,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  owner?: string | null
 ) {
   const preset = getPlatformPreset(presetId);
   if (!preset) throw createHttpError(400, `unknown presetId: ${presetId}`);
@@ -241,7 +242,7 @@ export async function generateAssetsAndPack(
     metadata: req.metadata,
     generation,
     extraDetails
-  });
+  }, owner);
 
   const result = {
     packId,

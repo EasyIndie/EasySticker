@@ -5,6 +5,7 @@ import archiver from "archiver";
 import { nanoid } from "nanoid";
 import sharp from "sharp";
 import type { AssetStore } from "../../lib/assets";
+import { expiryFor } from "../maintenance/retention";
 
 /** 包内每个文件的角色。 */
 export type PackFileRole =
@@ -95,6 +96,11 @@ export type PackInfo = {
 export type PackManifest = {
   packId: string;
   downloadFilename: string;
+  /**
+   * 归属：已登录用户是邮箱，未登录是 `client:<id>`，null 表示无法归属。
+   * **只存在清单里，不进 ZIP 的 metadata.json** —— 那个会随表情包分发给别人。
+   */
+  owner?: string | null;
   /** 会原样写进 ZIP 里那份 `metadata.json` 的内容。 */
   metadata: PackMetadata;
 };
@@ -217,7 +223,12 @@ const EXTRA_FILES: Array<{ role: PackFileRole; field: keyof PackRequest }> = [
  * 双倍占用；而且前端每次单资源重生成都会 `POST /api/packs` 重建整包，一份结果会被
  * 复制 N 次。现在下载时按需现打，存储降到约一半，重建也从「搬几 MB」变成「写几 KB」。
  */
-export async function createPack(assetStore: AssetStore, dataDir: string, req: PackRequest) {
+export async function createPack(
+  assetStore: AssetStore,
+  dataDir: string,
+  req: PackRequest,
+  owner?: string | null
+) {
   const normalizedAssets: PackAssetInput[] =
     req.assets && req.assets.length
       ? req.assets
@@ -318,7 +329,7 @@ export async function createPack(assetStore: AssetStore, dataDir: string, req: P
     assets: entries
   };
 
-  const manifest: PackManifest = { packId, downloadFilename, metadata };
+  const manifest: PackManifest = { packId, downloadFilename, owner: owner ?? null, metadata };
   fs.mkdirSync(packsDir(dataDir), { recursive: true });
   fs.writeFileSync(packInfoPath(dataDir, packId), JSON.stringify(manifest, null, 2));
 
@@ -340,6 +351,7 @@ export function readPackManifest(dataDir: string, packId: string): PackManifest 
     return {
       packId: parsed.packId ?? packId,
       downloadFilename: parsed.downloadFilename ?? `${packId}.zip`,
+      owner: parsed.owner ?? null,
       metadata: parsed.metadata
     };
   } catch {
@@ -422,13 +434,25 @@ export type PackSummary = {
   stickerCount: number;
   bytes: number;
   hasZip: boolean;
+  /** 归属者（邮箱或 `client:<id>`）；旧包可能是 null。 */
+  owner: string | null;
+  styles: string[];
+  rewardEnabled: boolean;
+  rewardMessage: string | null;
+  hasReference: boolean;
+  /** 开启保留期时，这个包会在什么时候被自动清理。 */
+  expiresAt: string | null;
 };
 
 /**
  * 列出服务端保存的所有包。会扫描 packs 目录，仅供后台/低频接口使用。
  * 已压缩（只有清单）的包能给出完整信息；仍是旧 ZIP 的包只回退到文件时间与体积。
  */
-export function listPacks(dataDir: string): PackSummary[] {
+export function listPacks(
+  dataDir: string,
+  retentionDays = 0,
+  retentionStartedAt: string | null = null
+): PackSummary[] {
   const dir = packsDir(dataDir);
   if (!fs.existsSync(dir)) return [];
   const ids = new Set<string>();
@@ -445,32 +469,48 @@ export function listPacks(dataDir: string): PackSummary[] {
     if (manifest) {
       const stickerCount = manifest.metadata.files.filter((f) => f.role === "sticker").length;
       const bytes = manifest.metadata.files.reduce((sum, f) => sum + (f.bytes ?? 0), 0) + zipBytes;
+      const createdAt = manifest.metadata.createdAt;
       out.push({
         packId,
         downloadUrl: `/api/packs/${packId}/download`,
         downloadFilename: manifest.downloadFilename,
-        createdAt: manifest.metadata.createdAt,
+        createdAt,
         presetId: manifest.metadata.presetId ?? null,
         title: manifest.metadata.metadata?.title ?? null,
         author: manifest.metadata.metadata?.author ?? null,
         stickerCount,
         bytes,
-        hasZip: Boolean(zipPath)
+        hasZip: Boolean(zipPath),
+        owner: manifest.owner ?? null,
+        styles: manifest.metadata.generation?.styles ?? [],
+        rewardEnabled: Boolean(
+          manifest.metadata.extras?.rewardGuideAssetId || manifest.metadata.extras?.rewardThanksAssetId
+        ),
+        rewardMessage: manifest.metadata.metadata?.rewardMessage ?? null,
+        hasReference: manifest.metadata.files.some((f) => f.role === "reference"),
+        expiresAt: expiryFor(createdAt, retentionDays, retentionStartedAt)
       });
       continue;
     }
     const fallback = getPackInfo(dataDir, packId);
+    const legacyCreatedAt = new Date(zipBytes ? fs.statSync(zipPath!).mtimeMs : 0).toISOString();
     out.push({
       packId,
       downloadUrl: `/api/packs/${packId}/download`,
       downloadFilename: fallback.downloadFilename,
-      createdAt: new Date(zipBytes ? fs.statSync(zipPath!).mtimeMs : 0).toISOString(),
+      createdAt: legacyCreatedAt,
       presetId: null,
       title: null,
       author: null,
       stickerCount: 0,
       bytes: zipBytes,
-      hasZip: Boolean(zipPath)
+      hasZip: Boolean(zipPath),
+      owner: null,
+      styles: [],
+      rewardEnabled: false,
+      rewardMessage: null,
+      hasReference: false,
+      expiresAt: expiryFor(legacyCreatedAt, retentionDays, retentionStartedAt)
     });
   }
   return out.sort((a, b) => b.createdAt.localeCompare(a.createdAt));

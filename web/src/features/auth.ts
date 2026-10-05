@@ -1,4 +1,5 @@
 import type { AuthUser, LoginRequest, RegisterRequest } from "../../../src/shared/contracts";
+import { withClientId } from "../api/clientId";
 import { login as apiLogin, register as apiRegister, getQuota } from "../api/auth";
 import { authStore } from "../store/auth";
 
@@ -169,6 +170,7 @@ async function legacyApi(url: string, opts: RequestInit = {}): Promise<Response>
   if (authStore.token) {
     headers.set("Authorization", `Bearer ${authStore.token}`);
   }
+  withClientId(headers);
   const res = await fetch(url, { ...opts, headers });
   if (res.status === 401 && !url.includes("/auth/")) {
     authStore.logout();
