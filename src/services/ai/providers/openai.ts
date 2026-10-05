@@ -77,12 +77,11 @@ export class OpenAiImageProvider implements AiProvider {
 
     // 通用 OpenAI 兼容接口（豆包 Seedream / 硅基流动等）的图生图：
     // 参考图通过 image 字段以 data URI 或 URL 传入，而不是 /images/edits。
-    if (input.referenceImageUrl) {
-      body.image = input.referenceImageUrl;
-    } else if (input.referenceImageBase64) {
-      const mime = input.referenceImageMime || "image/png";
-      body.image = `data:${mime};base64,${input.referenceImageBase64}`;
-    }
+    // 多张参考图时该字段传数组（Ark 的 image 支持 string | string[]）；
+    // 只有一张时仍传字符串，保持既有行为不变。
+    const references = this.collectReferenceImages(input);
+    if (references.length === 1) body.image = references[0];
+    else if (references.length > 1) body.image = references;
 
     return fetch(endpoint, {
       method: "POST",
@@ -119,12 +118,37 @@ export class OpenAiImageProvider implements AiProvider {
     });
   }
 
+  /**
+   * 汇总参考图（主图在前，附加图在后），统一转成 data URI 或 URL。
+   * 顺序就是模型看到的顺序，所以调用方要保证「待修改的图」在前。
+   */
+  private collectReferenceImages(input: AiGenerateInput): string[] {
+    const out: string[] = [];
+    if (input.referenceImageUrl) out.push(input.referenceImageUrl);
+    else if (input.referenceImageBase64) {
+      out.push(`data:${input.referenceImageMime || "image/png"};base64,${input.referenceImageBase64}`);
+    }
+    for (const extra of input.additionalReferenceImages ?? []) {
+      if (extra.url) out.push(extra.url);
+      else if (extra.base64) out.push(`data:${extra.mime || "image/png"};base64,${extra.base64}`);
+    }
+    return out;
+  }
+
   private async createEdit(endpoint: string, input: AiGenerateInput, prompt: string, signal?: AbortSignal) {
+    const extras = input.additionalReferenceImages ?? [];
     if (input.referenceImageUrl && !input.referenceImageBase64) {
       const body: Record<string, unknown> = {
         model: this.model,
         prompt,
-        images: [{ image_url: input.referenceImageUrl }],
+        images: [
+          { image_url: input.referenceImageUrl },
+          ...extras
+            .map((extra) =>
+              extra.url ? { image_url: extra.url } : extra.base64 ? { image_url: `data:${extra.mime || "image/png"};base64,${extra.base64}` } : null
+            )
+            .filter((item): item is { image_url: string } => item !== null)
+        ],
         n: 1,
         size: this.toOpenAiSize(input.width, input.height)
       };
@@ -152,6 +176,13 @@ export class OpenAiImageProvider implements AiProvider {
     this.addCommonImageOptions(form);
     this.addEditOptions(form);
     form.set("image", new Blob([Buffer.from(input.referenceImageBase64 || "", "base64")], { type: mime }), `reference.${ext}`);
+    // 附加参考图：OpenAI 风格的数组字段是 `image[]`
+    extras.forEach((extra, index) => {
+      const extraMime = extra.mime || "image/png";
+      const bytes = extra.base64 ? Buffer.from(extra.base64, "base64") : null;
+      if (!bytes) return;
+      form.append("image[]", new Blob([bytes], { type: extraMime }), `reference-${index + 2}.${this.extensionFromMime(extraMime)}`);
+    });
 
     return fetch(endpoint, {
       method: "POST",

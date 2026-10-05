@@ -11,7 +11,7 @@
     <title>EasySticker</title>
     <meta name="theme-color" id="themeMeta" content="#07c160" data-dark="#111827" />
     <script src="/js/theme.js?v=2"></script>
-    <link rel="stylesheet" href="/styles.css?v=20" />
+    <link rel="stylesheet" href="/styles.css?v=22" />
   </head>
   <body>
     <a href="#mainContent" class="skip-link">跳到主要内容</a>
@@ -521,6 +521,17 @@
               <div class="field-hint">只改这一张，其他图片不受影响。描述越具体效果越稳定。</div>
             </label>
             <div class="edit-chips" id="editChips" aria-label="常用修改"></div>
+            <div class="edit-ref">
+              <label class="field" for="editReference">
+                <span class="section-title">附加参考图<span class="optional-mark">可选</span></span>
+                <input id="editReference" type="file" accept="image/png,image/jpeg,image/webp" />
+                <div class="field-hint">再给模型一张图当参考，例如「换成另一张图里的角色」。留空则只基于当前这张图修改。</div>
+              </label>
+              <label class="checkbox-row" for="editUseOriginalRef">
+                <input id="editUseOriginalRef" type="checkbox" />
+                <span>同时参考本包上传的原始参考图</span>
+              </label>
+            </div>
           </div>
         </div>
         <div class="edit-dialog-foot">

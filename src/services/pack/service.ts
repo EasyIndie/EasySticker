@@ -31,6 +31,8 @@ export type PackAssetInput = {
   emotion?: string;
   /** 二次编辑时这张图的来源资源。 */
   sourceAssetId?: string;
+  /** 二次编辑时额外提供的那张参考图。 */
+  editReferenceAssetId?: string;
 };
 
 /**
@@ -80,7 +82,10 @@ export type PackRequest = {
   generation?: PackGenerationInfo;
   /** 每张扩展资源（cover/icon/banner/reward-*）的生成细节。 */
   extraDetails?: Partial<
-    Record<PackFileRole, { prompt?: string; style?: string; sourceAssetId?: string }>
+    Record<
+      PackFileRole,
+      { prompt?: string; style?: string; sourceAssetId?: string; editReferenceAssetId?: string }
+    >
   >;
 };
 
@@ -121,6 +126,7 @@ export type PackFileMetadata = {
   style?: string;
   emotion?: string;
   sourceAssetId?: string;
+  editReferenceAssetId?: string;
 };
 
 export type PackMetadata = {
@@ -265,7 +271,8 @@ export async function createPack(
       ...(asset.prompt ? { prompt: asset.prompt } : {}),
       ...(asset.style ? { style: asset.style } : {}),
       ...(asset.emotion ? { emotion: asset.emotion } : {}),
-      ...(asset.sourceAssetId ? { sourceAssetId: asset.sourceAssetId } : {})
+      ...(asset.sourceAssetId ? { sourceAssetId: asset.sourceAssetId } : {}),
+      ...(asset.editReferenceAssetId ? { editReferenceAssetId: asset.editReferenceAssetId } : {})
     });
   }
 
@@ -286,7 +293,8 @@ export async function createPack(
       ...(await readFileFacts(file.filePath)),
       ...(detail?.prompt ? { prompt: detail.prompt } : {}),
       ...(detail?.style ? { style: detail.style } : {}),
-      ...(detail?.sourceAssetId ? { sourceAssetId: detail.sourceAssetId } : {})
+      ...(detail?.sourceAssetId ? { sourceAssetId: detail.sourceAssetId } : {}),
+      ...(detail?.editReferenceAssetId ? { editReferenceAssetId: detail.editReferenceAssetId } : {})
     });
   }
 

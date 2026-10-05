@@ -2951,3 +2951,35 @@ textarea:focus-visible {
     max-width: 180px;
   }
 }
+
+/* 二次编辑：附加参考图 */
+.edit-ref {
+  display: grid;
+  gap: 10px;
+  padding-top: 12px;
+  border-top: 1px dashed var(--color-border-default);
+}
+
+.checkbox-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: var(--font-13, 13px);
+  color: var(--color-text-secondary);
+  cursor: pointer;
+}
+
+/* 全局 `input { width:100%; padding:12px }` 会把复选框撑成大方块，这里复位 */
+.checkbox-row input[type="checkbox"] {
+  flex: 0 0 auto;
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  padding: 0;
+  border-radius: 4px;
+  accent-color: var(--color-primary);
+}
+
+.checkbox-row input[type="checkbox"]:disabled + span {
+  opacity: 0.5;
+}
