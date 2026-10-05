@@ -226,6 +226,56 @@ test.describe("单图编辑", () => {
     });
     expect(broken).toBe(0);
 
+    // 刷新后这些逐张信息（含「已编辑」标记）不能丢：持久化时曾经只存
+    // label/url/assetId/prompt，导致刷新后标记消失、再次编辑不再记录来源。
+    await page.reload();
+    await waitForApp(page);
+    await expect(page.locator("#wechatAiPreview .preview-item")).toHaveCount(3);
+    await expect(page.locator("#wechatAiPreview .preview-item img")).toHaveCount(3);
+    await expect(page.locator("#wechatAiPreview .preview-edited-tag")).toHaveCount(1);
+
+    await apiRequest(page.request, "delete", `/api/packs/${packId}`);
+  });
+
+  test("刷新后再次编辑，以编辑后的版本为源（不会退回原图）", async ({ page }) => {
+    test.setTimeout(120000);
+    const { packId } = await seedGeneratedPack(page, 1);
+    await page.selectOption("#wechatAiProvider", "mock");
+
+    const card = page.locator("#wechatAiPreview .preview-item").first();
+    await card.locator('[data-action="edit-resource"]').click();
+    await page.fill("#editInstruction", "第一次修改");
+    const [req1] = await Promise.all([
+      page.waitForRequest((r) => r.url().includes("/api/generate/resource") && r.method() === "POST"),
+      page.locator("#editDialogSubmit").click()
+    ]);
+    const firstBody = JSON.parse(req1.postData() || "{}");
+    await expect(page.locator("#editDialog")).toBeHidden({ timeout: 60_000 });
+    const editedSrc = await card.locator("img").getAttribute("src");
+    expect(editedSrc).toBeTruthy();
+
+    // 刷新：预览必须还是编辑后的图，标记也还在
+    await page.reload();
+    await waitForApp(page);
+    // 刷新后创建方式默认回到「导入」，AI 配置区（含提供商选择）是隐藏的
+    await page.locator("#creationModeAi").click({ force: true });
+    await page.selectOption("#wechatAiProvider", "mock");
+    const card2 = page.locator("#wechatAiPreview .preview-item").first();
+    await expect(card2.locator(".preview-edited-tag")).toHaveCount(1);
+    expect(await card2.locator("img").getAttribute("src")).toBe(editedSrc);
+
+    // 再编辑一次：源必须是第一次编辑的结果，而不是最初那张
+    await card2.locator('[data-action="edit-resource"]').click();
+    await page.fill("#editInstruction", "第二次修改");
+    const [req2] = await Promise.all([
+      page.waitForRequest((r) => r.url().includes("/api/generate/resource") && r.method() === "POST"),
+      page.locator("#editDialogSubmit").click()
+    ]);
+    const secondBody = JSON.parse(req2.postData() || "{}");
+    expect(secondBody.sourceAssetId).not.toBe(firstBody.sourceAssetId);
+    expect(editedSrc).toContain(secondBody.sourceAssetId);
+
+    await expect(page.locator("#editDialog")).toBeHidden({ timeout: 60_000 });
     await apiRequest(page.request, "delete", `/api/packs/${packId}`);
   });
 });
