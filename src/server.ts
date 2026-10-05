@@ -14,6 +14,47 @@ import { createMailer } from "./lib/mailer";
 import { createAlertNotifier } from "./lib/alertNotifier";
 import type { AppDeps } from "./lib/deps";
 import { loadPromptConfig, type PromptConfig } from "./services/generate/promptConfig";
+import { getDefaultProviderSummary } from "./services/ai/index";
+
+/**
+ * 配置优先级（从高到低）：
+ *   1. 真实环境变量（shell / 系统 / CI 注入）
+ *   2. `.env` 文件（本地密钥 / 覆盖项，不提交到版本控制）
+ *   3. `prompt-config.json` 的 `server.*` 段
+ *   4. 代码默认值
+ *
+ * 加载 `.env` 时不会覆盖已存在的环境变量，因此真实环境变量永远优先于
+ * `.env`，而 `.env` 又优先于 prompt-config.json（见下方各处 `process.env
+ * ?? config ?? default` 的取值方式）。
+ */
+function loadEnvFile(filePath = path.join(process.cwd(), ".env")): void {
+  try {
+    if (!fs.existsSync(filePath)) return;
+    const content = fs.readFileSync(filePath, "utf-8");
+    for (const rawLine of content.split(/\r?\n/)) {
+      const line = rawLine.trim();
+      if (!line || line.startsWith("#")) continue;
+
+      const eq = line.indexOf("=");
+      if (eq <= 0) continue;
+
+      let key = line.slice(0, eq).trim();
+      // 支持 `export KEY=VALUE` 写法
+      key = key.replace(/^export\s+/, "");
+      let value = line.slice(eq + 1).trim();
+      // 去掉成对引号
+      if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
+        value = value.slice(1, -1);
+      }
+
+      if (key && process.env[key] === undefined) {
+        process.env[key] = value;
+      }
+    }
+  } catch (err) {
+    console.warn("Failed to load .env file:", err instanceof Error ? err.message : err);
+  }
+}
 
 function loadSecurityConfig(config: PromptConfig): SecurityConfig {
   const security = config.server?.security ?? {};
@@ -44,6 +85,9 @@ function loadSecurityConfig(config: PromptConfig): SecurityConfig {
 }
 
 async function main() {
+  // 先加载 .env（不覆盖真实环境变量），再读取其余配置。
+  loadEnvFile();
+
   const config = loadPromptConfig();
   const serverConfig = config.server || {};
 
@@ -177,6 +221,18 @@ async function main() {
     console.log(`   地址:   http://${host}:${port}`);
   }
   console.log(`   管理后台: http://localhost:${port}/admin.html`);
+
+  // AI 状态：让用户一眼看清是否配置好真实模型
+  const ai = getDefaultProviderSummary();
+  if (ai.ready && ai.type !== "mock") {
+    console.log(`   🤖 AI:   ${ai.id}${ai.model ? ` (${ai.model})` : ""} ✅`);
+  } else if (ai.type === "mock") {
+    console.log(`   🤖 AI:   mock（本地模拟）`);
+    console.log(`           配置真实模型：在 .env 填入 AI_<provider>_API_KEY，或访问管理后台「AI 提供商」`);
+  } else {
+    console.log(`   🤖 AI:   ${ai.id} ⚠️  不可用 —— ${ai.reason}`);
+    console.log(`           当前将回退到 mock；请修正后重启或访问管理后台「AI 提供商」`);
+  }
   console.log();
 }
 

@@ -85,6 +85,19 @@
   --danger-ink: var(--color-danger-ink);
   --success-ink: var(--color-success);
   --checkerboard: repeating-conic-gradient(rgba(17, 24, 39, 0.06) 0% 25%, transparent 0% 50%) 50% / 22px 22px;
+
+  /* 兼容别名（补齐历史 CSS 中引用但未定义的变量） */
+  --color-bg-subtle: var(--color-surface-secondary);
+  --surface-page: var(--color-surface-primary);
+  --color-muted: var(--color-text-secondary);
+  --color-text: var(--color-text-primary);
+  --color-border: var(--color-border-default);
+  --danger-subtle: var(--color-danger-soft);
+  --link-color: var(--color-primary);
+  --text-muted: var(--color-text-secondary);
+  --text-md: 15px;
+  --text-sm: 12px;
+  --progress-width: 0%;
 }
 
 /* ========== Dark Mode ========== */
@@ -1051,43 +1064,90 @@ select {
   background: var(--color-surface-tertiary);
 }
 
-.stepper-row {
-  display: grid;
-  grid-template-columns: 44px 1fr 44px;
-  gap: var(--space-2);
+.count-row {
+  display: flex;
   align-items: center;
+  gap: var(--space-4);
+  flex-wrap: wrap;
+}
+
+.count-row .field-hint {
+  margin: 0;
+  flex: 1 1 auto;
+  min-width: 200px;
+}
+
+/* 分段式步进器：一个整体胶囊，[-] [值] [+] 无缝拼接 */
+.stepper-row {
+  display: inline-grid;
+  grid-template-columns: 40px 64px 40px;
+  align-items: stretch;
+  gap: 0;
+  width: max-content;
+  border: 1px solid var(--color-border-default);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  background: var(--color-surface-secondary);
+}
+
+.stepper-row:focus-within {
+  border-color: var(--color-primary-border);
+  box-shadow: 0 0 0 3px var(--focus-ring);
+}
+
+.field[data-invalid="true"] .stepper-row {
+  border-color: var(--color-danger);
 }
 
 .stepper-button {
-  height: 44px;
+  height: 40px;
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: var(--radius-md);
-  border: 1px solid var(--color-border-default);
-  background: var(--color-surface-secondary);
+  border: 0;
+  border-radius: 0;
+  background: transparent;
   color: var(--text);
-  font-size: var(--font-16);
-  font-weight: 800;
+  font-size: 18px;
+  font-weight: 700;
+  line-height: 1;
   cursor: pointer;
   padding: 0;
-  transition: background 0.2s ease, border-color 0.2s ease;
+  transition: background 0.15s ease;
 }
 
 .stepper-button:hover:not(:disabled) {
   background: var(--color-surface-hover);
-  border-color: var(--color-border-strong);
-}
-
-.stepper-row input {
-  text-align: center;
-  height: 44px;
-  padding: 0;
 }
 
 .stepper-button:disabled {
-  opacity: 0.5;
+  opacity: 0.45;
   cursor: not-allowed;
+}
+
+.stepper-row input {
+  height: 40px;
+  width: 64px;
+  padding: 0;
+  margin: 0;
+  text-align: center;
+  border: 0;
+  border-left: 1px solid var(--color-border-subtle);
+  border-right: 1px solid var(--color-border-subtle);
+  border-radius: 0;
+  background: var(--color-surface-primary);
+  color: var(--text);
+  font-size: var(--font-16);
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  appearance: textfield;
+  -moz-appearance: textfield;
+}
+
+.stepper-row input::-webkit-outer-spin-button,
+.stepper-row input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
 }
 
 .toggle-row input[type="checkbox"] {
@@ -1109,7 +1169,6 @@ select {
 
 .config-grid[hidden] {
   display: none;
-}
 }
 
 .style-options {
@@ -1363,11 +1422,26 @@ select {
   margin-bottom: var(--space-3);
 }
 
+.preview-section .section-desc {
+  margin: -8px 0 var(--space-3);
+  font-size: 0.85rem;
+}
+
 .preview-item {
   padding: 12px;
   border: 1px solid var(--color-border-subtle);
   border-radius: var(--radius-md);
   background: var(--color-surface-elevated);
+}
+
+/* 生成失败的卡片可点击重新生成 */
+.preview-item[data-tone="error"] {
+  cursor: pointer;
+}
+
+.preview-item[data-tone="error"]:hover {
+  border-color: var(--color-danger-border);
+  background: var(--color-surface-hover);
 }
 
 .preview-head {
@@ -1921,46 +1995,6 @@ select {
   }
 }
 
-/* ========== View Tabs (all screen sizes) ========== */
-.view-tabs {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 4px;
-  margin-bottom: var(--space-4);
-  padding: 4px;
-  border: 1px solid var(--color-border-subtle);
-  border-radius: var(--radius-md);
-  background: var(--color-surface-secondary);
-}
-
-.view-tab {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 4px;
-  min-height: 42px;
-  padding: 9px 12px;
-  border: 1px solid transparent;
-  border-radius: 8px;
-  background: transparent;
-  color: var(--color-text-tertiary);
-  font-weight: 700;
-  font-size: var(--font-13);
-  cursor: pointer;
-  transition: background 0.2s ease, border-color 0.2s ease, color 0.2s ease, box-shadow 0.2s ease;
-}
-
-.view-tab.active {
-  border-color: var(--color-primary-border);
-  background: var(--color-surface-primary);
-  color: var(--color-primary);
-  box-shadow: var(--shadow-sm);
-}
-
-.view-tab:hover:not(.active) {
-  background: var(--color-surface-hover);
-}
-
 /* ========== History Section ========== */
 #historySection {
   margin-top: var(--gap);
@@ -2038,7 +2072,7 @@ select {
   margin-top: 12px;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 10px;
 }
 
 .history-item {
@@ -2243,11 +2277,6 @@ select {
 }
 
 /* dark mode transition */
-.page,
-.sticky-action-bar,
-.preview-item,
-.history-item,
-.step-card,
 .site-footer {
   margin-top: 2.5rem;
   padding: 1.5rem 1rem;
@@ -2287,4 +2316,305 @@ select {
 .drop-zone-overlay {
   transition: background 0.2s ease, color 0.2s ease, border-color 0.2s ease,
     box-shadow 0.2s ease;
+}
+
+/* =====================================================================
+   v2 UI 重设计：布局、层级与视觉打磨
+   ===================================================================== */
+
+/* --- 缺失组件补全 --- */
+.preview-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 140px;
+  padding: var(--space-4);
+  border: 1px dashed var(--color-border-default);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-secondary);
+  color: var(--muted);
+  font-size: var(--font-13);
+  text-align: center;
+}
+
+.preview-item-wide { grid-column: 1 / -1; }
+.preview-media-wide { height: auto; aspect-ratio: 750 / 400; }
+.preview-media-reward { height: auto; aspect-ratio: 750 / 560; }
+
+.asset-slot {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--space-3);
+  margin-top: var(--space-2);
+}
+
+.preview-assets-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-4);
+}
+
+.preview-assets-grid > .asset-slot { margin-top: 0; }
+.asset-slot-full { grid-column: 1 / -1; }
+
+@media (max-width: 720px) {
+  .preview-assets-grid { grid-template-columns: 1fr; }
+}
+
+.select-field {
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--color-border-default);
+  background: var(--color-surface-primary);
+  color: var(--color-text-primary);
+}
+
+/* --- 页面容器：更宽敞的工作台 --- */
+.page {
+  max-width: 1200px;
+  padding: var(--space-6) var(--space-5) 96px;
+}
+
+/* --- 统一单栏步骤流：所有步骤卡片自上而下依次排布 --- */
+.flow {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--space-6);
+}
+
+/* 步骤卡片之间的呼吸间距（config-area / preview-area 内部同样等距排布） */
+.config-area,
+.preview-area {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+}
+
+/* --- Hero 重设计 --- */
+.hero {
+  padding: var(--space-6);
+  margin-bottom: var(--space-6);
+  background:
+    radial-gradient(640px 220px at 88% -12%, var(--color-primary-soft), transparent 70%),
+    radial-gradient(520px 200px at 8% -20%, var(--color-info-soft), transparent 70%),
+    var(--card);
+  overflow: hidden;
+}
+
+.hero-title {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  margin-top: var(--space-2);
+}
+
+.hero-logo {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 60px;
+  height: 60px;
+  flex-shrink: 0;
+  font-size: 32px;
+  border-radius: var(--radius-lg);
+  background: linear-gradient(135deg, var(--color-primary-soft), var(--color-info-soft));
+  border: 1px solid var(--color-border-subtle);
+  box-shadow: var(--shadow-sm);
+}
+
+.hero-title-text { min-width: 0; }
+
+.hero-title-text h1 {
+  margin: 0;
+  font-size: clamp(28px, 5vw, 38px);
+  font-weight: 900;
+  letter-spacing: -0.03em;
+}
+
+.hero-title-text .hero-text {
+  margin: 6px 0 0;
+  font-size: var(--font-14);
+  line-height: 1.6;
+}
+
+@media (max-width: 520px) {
+  .hero-logo {
+    width: 48px;
+    height: 48px;
+    font-size: 26px;
+  }
+  .hero-title { gap: var(--space-3); }
+}
+
+/* --- 卡片打磨 --- */
+.card {
+  border-radius: var(--radius-lg);
+  border-color: var(--color-border-subtle);
+  box-shadow: 0 1px 2px rgba(17, 24, 39, 0.04), 0 8px 24px rgba(17, 24, 39, 0.06);
+}
+
+/* --- 按钮打磨 --- */
+button {
+  border-radius: var(--radius-md);
+  padding: 11px 16px;
+  font-weight: 700;
+  box-shadow: 0 1px 2px rgba(17, 24, 39, 0.10);
+}
+
+button:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 16px rgba(7, 193, 96, 0.24);
+}
+
+button.secondary { box-shadow: none; }
+button.secondary:hover { box-shadow: 0 4px 12px rgba(17, 24, 39, 0.10); }
+button:disabled { box-shadow: none; }
+
+/* --- 输入框打磨 --- */
+input,
+select,
+textarea {
+  border-color: var(--color-border-default);
+  background: var(--color-surface-primary);
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+input:hover:not(:disabled),
+select:hover:not(:disabled),
+textarea:hover:not(:disabled) {
+  border-color: var(--color-border-strong);
+}
+
+input:focus,
+select:focus,
+textarea:focus {
+  border-color: var(--color-primary);
+}
+
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: none;
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px var(--color-primary-soft);
+}
+
+/* --- 步骤导航打磨 --- */
+.step-nav-item {
+  gap: 8px;
+  padding: 8px 14px;
+}
+
+.step-nav-item::after {
+  content: "";
+  width: 22px;
+  height: 1px;
+  margin-left: 0;
+  background: var(--color-border-default);
+  color: transparent;
+}
+
+.step-nav-number {
+  width: 26px;
+  height: 26px;
+  font-weight: 800;
+}
+
+/* --- 平台 / 创建方式选择器打磨 --- */
+.platform-option:has(input:checked),
+.mode-option:has(input:checked) {
+  background: var(--color-primary-soft);
+  color: var(--color-primary);
+  border-color: var(--color-primary-border);
+}
+
+/* --- 预览卡片打磨 --- */
+.preview-item {
+  border-radius: var(--radius-md);
+  background: var(--color-surface-elevated);
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.preview-item:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-sm);
+}
+
+/* =====================================================================
+   统一 SVG 图标（stroke 使用 currentColor，自动适配亮/暗模式）
+   ===================================================================== */
+.icon {
+  width: 1.1em;
+  height: 1.1em;
+  display: inline-block;
+  vertical-align: -0.18em;
+  flex-shrink: 0;
+}
+
+/* 平台选择器图标尺寸 */
+.platform-icon .icon {
+  width: 20px;
+  height: 20px;
+  vertical-align: middle;
+}
+
+/* 拖拽上传大图标 */
+.drop-icon .icon {
+  width: 44px;
+  height: 44px;
+  display: block;
+  margin: 0 auto;
+}
+
+/* Hero 品牌图标 */
+.hero-logo .icon {
+  width: 28px;
+  height: 28px;
+}
+
+/* 按钮内图标与文字对齐 */
+.hero-btn .icon,
+.sticky-action-btn .icon,
+.tab-btn .icon {
+  vertical-align: -0.22em;
+}
+
+/* =====================================================================
+   [hidden] 统一生效
+   组件自带的 display（如 .preview-empty 的 flex）会覆盖 UA 的
+   [hidden]{display:none}，导致 JS 设置 hidden 后元素仍然可见。
+   这里靠“同优先级但顺序靠后”兜底；不使用 !important，
+   以免压过用 inline style.display 显示（但仍带 hidden）的元素。
+   ===================================================================== */
+[hidden] { display: none; }
+
+/* 历史记录标题行：标题 + 清空图标按钮 */
+#historyToggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.btn-icon-clear {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: none;
+  background: none;
+  border-radius: var(--radius-sm);
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background 0.15s, color 0.15s;
+}
+.btn-icon-clear:hover {
+  background: var(--danger-subtle, rgba(239, 68, 68, 0.1));
+  color: var(--color-danger, #ef4444);
+}
+.btn-icon-clear .icon {
+  width: 16px;
+  height: 16px;
 }

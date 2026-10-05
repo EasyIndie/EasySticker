@@ -1,14 +1,18 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
-    <link rel="icon" href="/logo.svg">
+    <link rel="icon" href="/favicon.ico?v=2" sizes="32x32">
+  <link rel="icon" href="/logo.svg?v=2" type="image/svg+xml">
+  <link rel="icon" href="/favicon-32.png?v=2" type="image/png" sizes="32x32">
+  <link rel="icon" href="/favicon-16.png?v=2" type="image/png" sizes="16x16">
+  <link rel="apple-touch-icon" href="/favicon-128.png?v=2">
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
   <meta http-equiv="Pragma" content="no-cache">
   <meta http-equiv="Expires" content="0">
   <title>EasySticker 管理后台</title>
-  <link rel="stylesheet" href="admin.css?v=2">
+  <link rel="stylesheet" href="admin.css?v=4">
 </head>
 <body>
 
@@ -51,10 +55,10 @@
 
     <!-- Tab 切换 -->
     <nav class="tab-bar">
-      <button class="tab-btn active" data-tab="dashboard">📊 仪表盘</button>
-      <button class="tab-btn" data-tab="users">👥 用户</button>
-      <button class="tab-btn" data-tab="stats">📈 统计</button>
-      <button class="tab-btn" data-tab="settings">⚙️ 设置</button>
+      <button class="tab-btn active" data-tab="dashboard"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg> 仪表盘</button>
+      <button class="tab-btn" data-tab="users"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg> 用户</button>
+      <button class="tab-btn" data-tab="stats"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg> 统计</button>
+      <button class="tab-btn" data-tab="settings"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg> 设置</button>
     </nav>
 
     <!-- 内容区 -->
@@ -116,7 +120,7 @@
         <!-- 告警列表 -->
         <section class="section-card">
           <div class="section-header">
-            <h3>🚨 活跃告警</h3>
+            <h3><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg> 活跃告警</h3>
             <button class="btn btn-outline btn-sm" id="load-alerts-btn">刷新</button>
           </div>
           <div id="alerts-container">
@@ -151,7 +155,7 @@
 
         <!-- 使用趋势 -->
         <section class="section-card">
-          <h3>📊 请求趋势</h3>
+          <h3><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg> 请求趋势</h3>
           <div class="chart-container">
             <svg id="chart-requests" viewBox="0 0 700 200" preserveAspectRatio="none" width="100%" height="200"></svg>
           </div>
@@ -160,7 +164,7 @@
 
         <!-- 系统趋势 -->
         <section class="section-card">
-          <h3>📈 系统资源</h3>
+          <h3><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg> 系统资源</h3>
           <div class="chart-container">
             <svg id="chart-system" viewBox="0 0 700 200" preserveAspectRatio="none" width="100%" height="200"></svg>
           </div>
@@ -197,6 +201,17 @@
           <p id="settings-msg" class="status-msg"></p>
         </section>
 
+        <!-- AI 提供商 -->
+        <section class="section-card">
+          <div class="section-header">
+            <h3><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="2"/><rect x="9" y="9" width="6" height="6"/><line x1="9" y1="1" x2="9" y2="4"/><line x1="15" y1="1" x2="15" y2="4"/><line x1="9" y1="20" x2="9" y2="23"/><line x1="15" y1="20" x2="15" y2="23"/><line x1="20" y1="9" x2="23" y2="9"/><line x1="20" y1="14" x2="23" y2="14"/><line x1="1" y1="9" x2="4" y2="9"/><line x1="1" y1="14" x2="4" y2="14"/></svg> AI 提供商</h3>
+            <button class="btn btn-primary btn-sm" id="save-ai-btn">保存 AI 配置</button>
+          </div>
+          <p class="section-desc">配置生图模型。API Key 会写入服务器的 <code>.env</code>（不回显），其余字段仅保存与默认不同的部分。</p>
+          <div id="ai-providers-container"><p class="loading-text">加载中...</p></div>
+          <p id="ai-msg" class="status-msg"></p>
+        </section>
+
         <!-- 告警规则 -->
         <section class="section-card">
           <div class="section-header">
@@ -213,6 +228,6 @@
     </main>
   </div>
 
-  <script src="admin.js?v=3"></script>
+  <script src="/js/admin.js"></script>
 </body>
 </html>

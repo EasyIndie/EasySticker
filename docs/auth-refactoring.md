@@ -1,6 +1,8 @@
 # 认证模块重构 — 实施记录
 
 > 2026-06-03 已完成实施。本文档从「设计方案」更新为「实施记录」。
+>
+> ⚠️ **路径已过时：** 文中提到的 `public/admin.js` / `public/app.js` 已删除，分别迁至 `web/src/features/admin.ts` 与 `web/src/store/auth.ts` + `web/src/features/auth.ts`（构建为 `public/js/*.js`）。
 
 ## 现状
 
@@ -43,5 +45,5 @@
 
 ### 文件变更
 
-- `public/admin.js` — token 读写全部 localStorage，checkAuth 精简
-- `public/app.js` — 增加 `window.addEventListener('storage')` 跨标签页同步
+- `web/src/features/admin.ts`（原 `public/admin.js`）— token 读写全部 localStorage，checkAuth 精简
+- `web/src/store/auth.ts`（原 `public/app.js` 的 auth 部分）— 单一状态源 + 跨标签页同步

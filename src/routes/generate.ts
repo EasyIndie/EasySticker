@@ -1,7 +1,8 @@
-import { type FastifyInstance } from "fastify";
+import { type FastifyInstance, type FastifyRequest } from "fastify";
 import { generateAssetsAndPack, getPromptTemplate } from "../services/generate/flow";
+import { generateSingleResource } from "../services/generate/single";
 import { importStickerPack } from "../services/generate/import";
-import { promptSchema, generateSchema, cancelSchema } from "../shared/contracts";
+import { promptSchema, generateSchema, cancelSchema, resourceSchema } from "../shared/contracts";
 import {
   createTask,
   getTask,
@@ -39,15 +40,9 @@ export function registerGenerateRoutes(deps: AppDeps) {
     return result;
   });
 
-  app.post("/generate/start", async (req, reply) => {
-    const parsed = generateSchema.safeParse(req.body);
-    if (!parsed.success) {
-      reply.status(400);
-      return { error: "BadRequest", message: "invalid request body", issues: parsed.error.issues };
-    }
-    const task = createTask();
-
-    // Daily quota: registered users capped per account, anonymous users capped per IP.
+  // Daily quota: registered users capped per account, anonymous users capped per IP.
+  // 返回 null 表示放行；否则返回要为客户端回写的错误体。
+  async function enforceGenerationQuota(req: FastifyRequest): Promise<{ status: number; body: unknown } | null> {
     const dailyQuota = deps.securityConfig?.dailyQuota;
     const registeredLimit = dailyQuota?.maxGenerations ?? 100;
     const anonymousLimit = dailyQuota?.anonymousMaxGenerations ?? 10;
@@ -61,16 +56,48 @@ export function registerGenerateRoutes(deps: AppDeps) {
       deps.usageStore.maybeRotate();
       const quota = deps.usageStore.checkDailyQuota(quotaKey, limit);
       if (!quota.allowed) {
-        reply.status(429);
         return {
-          error: "QuotaExceeded",
-          message: isRegistered
-            ? `今日生成配额已用完（注册用户每日 ${limit} 次）。`
-            : `今日生成配额已用完（匿名用户每日 ${limit} 次），登录后可提升配额。`
+          status: 429,
+          body: {
+            error: "QuotaExceeded",
+            message: isRegistered
+              ? `今日生成配额已用完（注册用户每日 ${limit} 次）。`
+              : `今日生成配额已用完（匿名用户每日 ${limit} 次），登录后可提升配额。`
+          }
         };
       }
       deps.usageStore.log({ email: quotaKey, action: "generate", success: true });
     } catch {}
+    return null;
+  }
+
+  app.post("/generate/resource", async (req, reply) => {
+    const parsed = resourceSchema.safeParse(req.body);
+    if (!parsed.success) {
+      reply.status(400);
+      return { error: "BadRequest", message: "invalid request body", issues: parsed.error.issues };
+    }
+    const quotaError = await enforceGenerationQuota(req);
+    if (quotaError) {
+      reply.status(quotaError.status);
+      return quotaError.body;
+    }
+    return generateSingleResource(deps.assetStore, parsed.data.presetId, parsed.data);
+  });
+
+  app.post("/generate/start", async (req, reply) => {
+    const parsed = generateSchema.safeParse(req.body);
+    if (!parsed.success) {
+      reply.status(400);
+      return { error: "BadRequest", message: "invalid request body", issues: parsed.error.issues };
+    }
+    const task = createTask();
+
+    const quotaError = await enforceGenerationQuota(req);
+    if (quotaError) {
+      reply.status(quotaError.status);
+      return quotaError.body;
+    }
 
     const abortController = new AbortController();
     setTaskCancelHandler(task.id, () => abortController.abort());

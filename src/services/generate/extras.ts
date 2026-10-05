@@ -3,7 +3,7 @@ import { nanoid } from "nanoid";
 import type { AssetStore } from "../../lib/assets";
 import { validateAsset } from "../platform/validate";
 import { compilePrompt, type PromptConfig } from "./promptConfig";
-import { convertToPlatformFormat, toBannerPng } from "./convert";
+import { convertToPlatformFormat, toBannerPng, toRewardPng } from "./convert";
 import type { AiGenerateInput, AiGenerateOutput } from "../ai/provider";
 
 type ImageClient = {
@@ -21,7 +21,6 @@ export type ExtrasContext = {
   referenceBase64: string;
   referenceUrl?: string;
   referenceImageAssetId?: string;
-  providerComfyOptions?: Record<string, unknown>;
   emit?: (event: string, data: unknown) => void;
   isCanceled?: () => boolean;
   signal?: AbortSignal;
@@ -36,13 +35,31 @@ export type ExtrasOptions = {
   totalImageCount: number;
 };
 
+export type ExtraAssetKey =
+  | "coverAssetId"
+  | "iconAssetId"
+  | "bannerAssetId"
+  | "rewardGuideAssetId"
+  | "rewardThanksAssetId";
+
 export type ExtrasResult = {
   coverAssetId?: string;
   iconAssetId?: string;
   bannerAssetId?: string;
   rewardGuideAssetId?: string;
   rewardThanksAssetId?: string;
+  /** 单张资源生成失败时记录原因，其余资源继续生成，不再中断整包。 */
+  failures: Partial<Record<ExtraAssetKey, string>>;
   currentGenerated: number;
+};
+
+type ExtraJob = {
+  key: ExtraAssetKey;
+  label: string;
+  enabled: boolean;
+  promptKey: "cover" | "icon" | "banner" | "rewardGuide" | "rewardThanks";
+  validatePreset: string;
+  convert: (buf: Buffer) => Promise<Buffer>;
 };
 
 /** Generate WeChat-specific extra assets (cover/icon/banner/reward). */
@@ -75,8 +92,7 @@ export async function generateWechatExtras(ctx: ExtrasContext, opts: ExtrasOptio
           ctx.referenceMode === "base64" || ctx.referenceMode === "multipart" ? ctx.referenceBase64 : undefined,
         referenceImageUrl: ctx.referenceMode === "url" ? ctx.referenceUrl : undefined,
         referenceImageMime: "image/png",
-        referenceImageAssetId: ctx.referenceMode === "assetId" ? ctx.referenceImageAssetId : undefined,
-        providerOptions: ctx.providerComfyOptions ? { comfy: ctx.providerComfyOptions } : undefined
+        referenceImageAssetId: ctx.referenceMode === "assetId" ? ctx.referenceImageAssetId : undefined
       },
       ctx.signal
     );
@@ -84,109 +100,83 @@ export async function generateWechatExtras(ctx: ExtrasContext, opts: ExtrasOptio
     return { ...res, prompt: compiledPrompt };
   };
 
-  const result: ExtrasResult = { currentGenerated };
-
-  if (opts.includeCover) {
-    throwIfCanceled();
-    ctx.emit?.("progress", { phase: "extras", label: "表情封面图", current: currentGenerated + 1, total });
-    const out = await generateExtraImage(ctx.promptConfig.extraPrompts.cover);
-    const cover = await convertToPlatformFormat(out.bytes, ctx.presetId, 240, 240);
-    const id = nanoid();
-    ctx.assetStore.save(cover, id);
-    const v = await validateAsset(ctx.assetStore, "wechat_cover", id);
-    if (!v.ok) throw createHttpError(400, "wechat cover validation failed");
-    result.coverAssetId = id;
-    currentGenerated++;
-    ctx.emit?.("extra", {
+  const jobs: ExtraJob[] = [
+    {
       key: "coverAssetId",
-      assetId: id,
-      url: `/api/assets/${id}`,
-      prompt: out.prompt,
-      current: currentGenerated,
-      total
-    });
-  }
-
-  if (opts.includeIcon) {
-    throwIfCanceled();
-    ctx.emit?.("progress", { phase: "extras", label: "聊天面板图标", current: currentGenerated + 1, total });
-    const out = await generateExtraImage(ctx.promptConfig.extraPrompts.icon);
-    const icon = await convertToPlatformFormat(out.bytes, ctx.presetId, 50, 50);
-    const id = nanoid();
-    ctx.assetStore.save(icon, id);
-    const v = await validateAsset(ctx.assetStore, "wechat_icon", id);
-    if (!v.ok) throw createHttpError(400, "wechat icon validation failed");
-    result.iconAssetId = id;
-    currentGenerated++;
-    ctx.emit?.("extra", {
+      label: "表情封面图",
+      enabled: !!opts.includeCover,
+      promptKey: "cover",
+      validatePreset: "wechat_cover",
+      convert: (b) => convertToPlatformFormat(b, ctx.presetId, 240, 240)
+    },
+    {
       key: "iconAssetId",
-      assetId: id,
-      url: `/api/assets/${id}`,
-      prompt: out.prompt,
-      current: currentGenerated,
-      total
-    });
-  }
-
-  if (opts.includeBanner) {
-    throwIfCanceled();
-    ctx.emit?.("progress", { phase: "extras", label: "详情页横幅", current: currentGenerated + 1, total });
-    const out = await generateExtraImage(ctx.promptConfig.extraPrompts.banner);
-    const banner = await toBannerPng(out.bytes);
-    const id = nanoid();
-    ctx.assetStore.save(banner, id);
-    const v = await validateAsset(ctx.assetStore, "wechat_banner", id);
-    if (!v.ok) throw createHttpError(400, "wechat banner validation failed");
-    result.bannerAssetId = id;
-    currentGenerated++;
-    ctx.emit?.("extra", {
+      label: "聊天面板图标",
+      enabled: !!opts.includeIcon,
+      promptKey: "icon",
+      validatePreset: "wechat_icon",
+      convert: (b) => convertToPlatformFormat(b, ctx.presetId, 50, 50)
+    },
+    {
       key: "bannerAssetId",
-      assetId: id,
-      url: `/api/assets/${id}`,
-      prompt: out.prompt,
-      current: currentGenerated,
-      total
-    });
-  }
-
-  if (opts.enableReward) {
-    throwIfCanceled();
-    ctx.emit?.("progress", { phase: "extras", label: "赞赏引导图", current: currentGenerated + 1, total });
-    const outGuide = await generateExtraImage(ctx.promptConfig.extraPrompts.rewardGuide);
-    const rewardGuide = await toBannerPng(outGuide.bytes);
-    const guideId = nanoid();
-    ctx.assetStore.save(rewardGuide, guideId);
-    const guideValidation = await validateAsset(ctx.assetStore, "wechat_reward_guide", guideId);
-    if (!guideValidation.ok) throw createHttpError(400, "wechat reward guide validation failed");
-    result.rewardGuideAssetId = guideId;
-    currentGenerated++;
-    ctx.emit?.("extra", {
+      label: "详情页横幅",
+      enabled: !!opts.includeBanner,
+      promptKey: "banner",
+      validatePreset: "wechat_banner",
+      convert: (b) => toBannerPng(b)
+    },
+    {
       key: "rewardGuideAssetId",
-      assetId: guideId,
-      url: `/api/assets/${guideId}`,
-      prompt: outGuide.prompt,
-      current: currentGenerated,
-      total
-    });
-
-    throwIfCanceled();
-    ctx.emit?.("progress", { phase: "extras", label: "赞赏感谢图", current: currentGenerated + 1, total });
-    const outThanks = await generateExtraImage(ctx.promptConfig.extraPrompts.rewardThanks);
-    const rewardThanks = await toBannerPng(outThanks.bytes);
-    const thanksId = nanoid();
-    ctx.assetStore.save(rewardThanks, thanksId);
-    const thanksValidation = await validateAsset(ctx.assetStore, "wechat_reward_thanks", thanksId);
-    if (!thanksValidation.ok) throw createHttpError(400, "wechat reward thanks validation failed");
-    result.rewardThanksAssetId = thanksId;
-    currentGenerated++;
-    ctx.emit?.("extra", {
+      label: "赞赏引导图",
+      enabled: !!opts.enableReward,
+      promptKey: "rewardGuide",
+      validatePreset: "wechat_reward_guide",
+      convert: (b) => toRewardPng(b)
+    },
+    {
       key: "rewardThanksAssetId",
-      assetId: thanksId,
-      url: `/api/assets/${thanksId}`,
-      prompt: outThanks.prompt,
-      current: currentGenerated,
-      total
-    });
+      label: "赞赏感谢图",
+      enabled: !!opts.enableReward,
+      promptKey: "rewardThanks",
+      validatePreset: "wechat_reward_thanks",
+      convert: (b) => toRewardPng(b)
+    }
+  ];
+
+  const result: ExtrasResult = { failures: {}, currentGenerated };
+
+  for (const job of jobs) {
+    if (!job.enabled) continue;
+    throwIfCanceled();
+    ctx.emit?.("progress", { phase: "extras", label: job.label, current: currentGenerated + 1, total });
+    try {
+      const out = await generateExtraImage(ctx.promptConfig.extraPrompts[job.promptKey]);
+      const converted = await job.convert(out.bytes);
+      const id = nanoid();
+      ctx.assetStore.save(converted, id);
+      const validation = await validateAsset(ctx.assetStore, job.validatePreset, id);
+      if (!validation.ok) {
+        throw createHttpError(400, `${job.validatePreset} validation failed: ${validation.issues.map((i) => i.message).join("; ")}`);
+      }
+      result[job.key] = id;
+      currentGenerated++;
+      ctx.emit?.("extra", {
+        key: job.key,
+        assetId: id,
+        url: `/api/assets/${id}`,
+        prompt: out.prompt,
+        current: currentGenerated,
+        total
+      });
+    } catch (error) {
+      // 取消：中断整个任务；其余失败：记录原因后继续，让整包仍可产出，
+      // 前端会为该资源显示失败卡片并支持单资源重生成。
+      if ((error as { statusCode?: number })?.statusCode === 499) throw error;
+      const message = error instanceof Error ? error.message : "生成失败";
+      result.failures[job.key] = message;
+      currentGenerated++;
+      ctx.emit?.("extra", { key: job.key, assetId: null, error: message, current: currentGenerated, total });
+    }
   }
 
   result.currentGenerated = currentGenerated;

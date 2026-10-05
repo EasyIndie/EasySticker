@@ -1,5 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import { loadPromptConfig } from "../services/generate/promptConfig";
+import { resolveProviderApiKey } from "../services/ai/apiKey";
 import { PLATFORM_PRESETS } from "../services/platform/presets";
 
 export async function registerConfigRoutes(app: FastifyInstance) {
@@ -12,23 +13,14 @@ export async function registerConfigRoutes(app: FastifyInstance) {
     const providers = promptConfig.ai?.providers || {};
     for (const [id, config] of Object.entries(providers)) {
       const type = config.type || id;
-      if ((type === "mock" || type === "picsum") && isProd) continue;
-      
+      if (type === "mock" && isProd) continue;
+
       let name = config.name || id;
       let isValid = true;
-      
-      if (type === "doubao") {
-        if (!config.name) name = "豆包大模型 (Ark)";
-        isValid = typeof config.apiKey === "string" && config.apiKey.length > 0;
-      } else if (type === "openai") {
-        if (!config.name) name = "OpenAI 图片生成";
-        isValid = typeof config.apiKey === "string" && config.apiKey.length > 0;
-      } else if (type === "hf") {
-        if (!config.name) name = "HuggingFace Inference";
-        isValid = !!config.endpoint && typeof config.apiKey === "string" && config.apiKey.length > 0;
-      } else if (type === "http") {
-        if (!config.name) name = "通用 HTTP 服务";
-        isValid = !!config.endpoint;
+
+      if (type === "openai") {
+        if (!config.name) name = "OpenAI 兼容图片生成";
+        isValid = Boolean(resolveProviderApiKey(id, config));
       }
 
       if (isValid) {

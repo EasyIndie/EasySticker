@@ -11,12 +11,12 @@
     "build": "tsup",
     "typecheck": "tsc --noEmit",
     "web:dev": "vite",
-    "web:build": "vite build",
+    "web:build": "vite build && vite build --config web/vite.auth.config.ts && vite build --config web/vite.preview.config.ts && vite build --config web/vite.generator-api.config.ts && vite build --config web/vite.ui.config.ts && vite build --config web/vite.app.config.ts && vite build --config web/vite.admin.config.ts",
     "web:typecheck": "tsc -p web/tsconfig.json",
     "start": "node dist/server.js",
     "prod": "NODE_ENV=production node dist/server.js",
+    "setup": "node scripts/setup.mjs",
     "mock-ai": "node scripts/mock-ai-server.mjs",
-    "comfy-adapter": "node scripts/comfy-adapter.mjs",
     "test": "npm run typecheck && npm run web:typecheck && npm run build && node ./node_modules/.bin/vitest run",
     "test:e2e": "playwright test"
   },
@@ -51,7 +51,7 @@
     "vitest": "^3.0.9"
   },
   "description": "AI-powered WeChat sticker auto-production pipeline — upload reference, generate expressions, auto-validate, one-click ZIP export",
-  "license": "MIT",
+  "license": "Apache-2.0",
   "repository": {
     "type": "git",
     "url": "https://github.com/EasyIndie/EasySticker.git"
