@@ -767,31 +767,61 @@ const EXTRA_ASSET_KEYS = [
   "rewardThanksAssetId"
 ] as const;
 
-/** 汇总当前预览中已有的资源，用于重新打包。 */
+/** currentExtras 的资源 key → metadata.json 中的文件 role。 */
+const EXTRA_ROLE_BY_KEY: Record<string, string> = {
+  coverAssetId: "cover",
+  iconAssetId: "icon",
+  bannerAssetId: "banner",
+  rewardGuideAssetId: "reward-guide",
+  rewardThanksAssetId: "reward-thanks"
+};
+
+/** 汇总当前预览中已有的资源（含生成上下文），用于重新打包。 */
 function collectPackAssets(): {
-  assets: Array<{ label: string; assetId: string }>;
+  assets: Array<{ label: string; assetId: string; role: string; prompt?: string; style?: string; emotion?: string }>;
   extras: Record<string, string>;
+  extraDetails: Record<string, { prompt?: string; style?: string }>;
 } {
   const assets = currentStickers
     .filter((s) => s && s.assetId)
-    .map((s, i) => ({ label: String(s.label ?? i + 1).padStart(3, "0"), assetId: s.assetId as string }));
+    .map((s, i) => ({
+      label: String(s.label ?? i + 1).padStart(3, "0"),
+      assetId: s.assetId as string,
+      role: "sticker",
+      ...(s.prompt ? { prompt: s.prompt } : {}),
+      ...(s.style ? { style: s.style } : {}),
+      ...(s.emotion ? { emotion: s.emotion } : {})
+    }));
   const extras: Record<string, string> = {};
+  const extraDetails: Record<string, { prompt?: string; style?: string }> = {};
   for (const key of EXTRA_ASSET_KEYS) {
     const id = currentExtras[key];
     if (typeof id === "string" && id) extras[key] = id;
+    const detail: { prompt?: string; style?: string } = {};
+    if (currentExtras[`${key}_prompt`]) detail.prompt = currentExtras[`${key}_prompt`];
+    if (currentExtras[`${key}_style`]) detail.style = currentExtras[`${key}_style`];
+    if (Object.keys(detail).length) extraDetails[EXTRA_ROLE_BY_KEY[key]!] = detail;
   }
-  return { assets, extras };
+  return { assets, extras, extraDetails };
 }
 
 /** 用当前资源重新打包 ZIP，让下载内容与预览保持一致。 */
 async function rebuildPackFromState(): Promise<void> {
-  const { assets, extras } = collectPackAssets();
+  const { assets, extras, extraDetails } = collectPackAssets();
   if (!assets.length) return;
   try {
+    const body: Record<string, unknown> = {
+      presetId: currentPlatform,
+      assets,
+      ...extras,
+      metadata: getMetadataPayload()
+    };
+    if (Object.keys(extraDetails).length) body.extraDetails = extraDetails;
+    if (lastPackResult?.generation) body.generation = lastPackResult.generation;
     const res = await requestJson("/api/packs", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ presetId: currentPlatform, assets, ...extras, metadata: getMetadataPayload() })
+      body: JSON.stringify(body)
     });
     lastPackResult = {
       ...(lastPackResult ?? {}),
@@ -846,7 +876,9 @@ async function regenerateResource(target: { kind: string; index?: number; key?: 
           label: res.label ?? existing.label,
           assetId: res.assetId,
           url,
-          prompt: res.prompt
+          prompt: res.prompt,
+          style: res.style ?? existing.style,
+          emotion: res.emotion ?? existing.emotion
         };
         // renderPreview 带增量渲染，已存在的卡片不会重绘；先清空以强制整组重建。
         wechatAiPreview.innerHTML = "";
@@ -855,6 +887,7 @@ async function regenerateResource(target: { kind: string; index?: number; key?: 
     } else if (target.key) {
       currentExtras[target.key] = res.assetId;
       currentExtras[`${target.key}_prompt`] = res.prompt;
+      if (res.style) currentExtras[`${target.key}_style`] = res.style;
       delete currentExtras[`${target.key}_error`];
       window._preview!.renderExtraAssets(currentExtras, "success");
     }
@@ -1169,7 +1202,14 @@ async function generatePlatformPack(): Promise<void> {
         return;
       }
       if (eventName === "sticker") {
-        currentStickers.push({ label: data.label, assetId: data.assetId, url: data.url, prompt: data.prompt });
+        currentStickers.push({
+          label: data.label,
+          assetId: data.assetId,
+          url: data.url,
+          prompt: data.prompt,
+          style: data.style,
+          emotion: data.emotion
+        });
         window._preview!.renderPreview(currentStickers, "loading");
         const current = Number(data?.current || currentStickers.length);
         window._ui!.setStatus(generateState, `生成中 (${current}/${totalCount})`, "loading");
@@ -1180,6 +1220,7 @@ async function generatePlatformPack(): Promise<void> {
         if (data?.key) {
           currentExtras[data.key] = data.assetId ?? null;
           currentExtras[`${data.key}_prompt`] = data.prompt ?? null;
+          if (data.style) currentExtras[`${data.key}_style`] = data.style;
           if (data.error) currentExtras[`${data.key}_error`] = data.error;
           else delete currentExtras[`${data.key}_error`];
         }

@@ -40,6 +40,10 @@ export type ResourceGenerateResult = {
   prompt: string;
   label?: string;
   key?: ExtraAssetKey;
+  /** 本次使用的风格/情绪，以及最终落盘尺寸，便于写回 pack 的 metadata.json。 */
+  style?: string;
+  emotion?: string;
+  targetSize?: { width: number; height: number };
 };
 
 type ExtraSpec = {
@@ -47,6 +51,7 @@ type ExtraSpec = {
   validatePreset: string;
   convert: (buf: Buffer) => Promise<Buffer>;
   label: string;
+  size: { width: number; height: number };
 };
 
 const EXTRA_SPECS: Record<ExtraAssetKey, ExtraSpec> = {
@@ -54,31 +59,36 @@ const EXTRA_SPECS: Record<ExtraAssetKey, ExtraSpec> = {
     promptKey: "cover",
     validatePreset: "wechat_cover",
     convert: (b) => convertToPlatformFormat(b, "wechat_stickers", 240, 240),
-    label: "表情封面图"
+    label: "表情封面图",
+    size: { width: 240, height: 240 }
   },
   iconAssetId: {
     promptKey: "icon",
     validatePreset: "wechat_icon",
     convert: (b) => convertToPlatformFormat(b, "wechat_stickers", 50, 50),
-    label: "聊天面板图标"
+    label: "聊天面板图标",
+    size: { width: 50, height: 50 }
   },
   bannerAssetId: {
     promptKey: "banner",
     validatePreset: "wechat_banner",
     convert: (b) => toBannerPng(b),
-    label: "详情页横幅"
+    label: "详情页横幅",
+    size: { width: 750, height: 400 }
   },
   rewardGuideAssetId: {
     promptKey: "rewardGuide",
     validatePreset: "wechat_reward_guide",
     convert: (b) => toRewardPng(b),
-    label: "赞赏引导图"
+    label: "赞赏引导图",
+    size: { width: 750, height: 560 }
   },
   rewardThanksAssetId: {
     promptKey: "rewardThanks",
     validatePreset: "wechat_reward_thanks",
     convert: (b) => toRewardPng(b),
-    label: "赞赏感谢图"
+    label: "赞赏感谢图",
+    size: { width: 750, height: 560 }
   }
 };
 
@@ -148,6 +158,9 @@ export async function generateSingleResource(
   let label: string | undefined;
   let targetKey: ExtraAssetKey | undefined;
   let saveExt = "png";
+  let usedStyle: string | undefined;
+  let usedEmotion: string | undefined;
+  let targetSize: { width: number; height: number } | undefined;
 
   if (req.target.kind === "sticker") {
     const index = req.target.index;
@@ -165,6 +178,9 @@ export async function generateSingleResource(
     validatePreset = presetId;
     label = String(index + 1).padStart(3, "0");
     saveExt = presetId === "whatsapp_webp" ? "webp" : "png";
+    usedStyle = style;
+    usedEmotion = emotion;
+    targetSize = { width, height };
   } else {
     const spec = EXTRA_SPECS[req.target.key];
     targetKey = req.target.key;
@@ -177,6 +193,8 @@ export async function generateSingleResource(
     convert = spec.convert;
     validatePreset = spec.validatePreset;
     label = spec.label;
+    usedStyle = style;
+    targetSize = spec.size;
   }
 
   const out = await client.generateImage({
@@ -208,6 +226,9 @@ export async function generateSingleResource(
     url: `/api/assets/${id}`,
     prompt: compiledPrompt,
     label,
-    key: targetKey
+    key: targetKey,
+    ...(usedStyle ? { style: usedStyle } : {}),
+    ...(usedEmotion ? { emotion: usedEmotion } : {}),
+    ...(targetSize ? { targetSize } : {})
   };
 }

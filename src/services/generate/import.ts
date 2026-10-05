@@ -191,8 +191,22 @@ export async function importStickerPack(assetStore: AssetStore, dataDir: string,
 
   const assets = stickerAssetIds.map((assetId, idx) => ({
     label: String(idx + 1).padStart(3, "0"),
-    assetId
+    assetId,
+    role: "sticker" as const
   }));
+
+  const generation = {
+    source: "import" as const,
+    stickerCount: assets.length,
+    targetSize: { width: targetW, height: targetH },
+    referenceMode: "import",
+    include: {
+      cover: Boolean(coverAssetId),
+      icon: Boolean(iconAssetId),
+      banner: Boolean(bannerAssetId),
+      reward: includeReward
+    }
+  };
 
   const { packId, downloadFilename, metadataJson } = await buildZipPack(assetStore, dataDir, {
     presetId,
@@ -202,7 +216,8 @@ export async function importStickerPack(assetStore: AssetStore, dataDir: string,
     bannerAssetId,
     rewardGuideAssetId,
     rewardThanksAssetId,
-    metadata
+    metadata,
+    generation
   });
 
   return {
@@ -211,6 +226,7 @@ export async function importStickerPack(assetStore: AssetStore, dataDir: string,
     downloadFilename,
     stickers: assets.map((a) => ({ ...a, url: `/api/assets/${a.assetId}` })),
     metadataJson,
+    generation,
     meta: {
       count: assets.length,
       styles: ["导入图片"],

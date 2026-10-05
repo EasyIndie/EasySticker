@@ -50,6 +50,8 @@ export type ExtrasResult = {
   rewardThanksAssetId?: string;
   /** 单张资源生成失败时记录原因，其余资源继续生成，不再中断整包。 */
   failures: Partial<Record<ExtraAssetKey, string>>;
+  /** 每张扩展资源实际使用的提示词/风格，写入 metadata.json 供二次编辑。 */
+  details: Partial<Record<ExtraAssetKey, { prompt: string; style: string }>>;
   currentGenerated: number;
 };
 
@@ -97,7 +99,7 @@ export async function generateWechatExtras(ctx: ExtrasContext, opts: ExtrasOptio
       ctx.signal
     );
     throwIfCanceled();
-    return { ...res, prompt: compiledPrompt };
+    return { ...res, prompt: compiledPrompt, style };
   };
 
   const jobs: ExtraJob[] = [
@@ -143,7 +145,7 @@ export async function generateWechatExtras(ctx: ExtrasContext, opts: ExtrasOptio
     }
   ];
 
-  const result: ExtrasResult = { failures: {}, currentGenerated };
+  const result: ExtrasResult = { failures: {}, details: {}, currentGenerated };
 
   for (const job of jobs) {
     if (!job.enabled) continue;
@@ -159,12 +161,14 @@ export async function generateWechatExtras(ctx: ExtrasContext, opts: ExtrasOptio
         throw createHttpError(400, `${job.validatePreset} validation failed: ${validation.issues.map((i) => i.message).join("; ")}`);
       }
       result[job.key] = id;
+      result.details[job.key] = { prompt: out.prompt, style: out.style };
       currentGenerated++;
       ctx.emit?.("extra", {
         key: job.key,
         assetId: id,
         url: `/api/assets/${id}`,
         prompt: out.prompt,
+        style: out.style,
         current: currentGenerated,
         total
       });
