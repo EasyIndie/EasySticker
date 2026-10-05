@@ -19,6 +19,33 @@ const ICON_CLOCK =
   '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>';
 const ICON_CHECK_CIRCLE =
   '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>';
+const ICON_SUN =
+  '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>';
+const ICON_MOON =
+  '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>';
+
+/** 与主站共用 easysticker-theme，保证跳转时主题一致。 */
+function initTheme(): void {
+  const toggle = byId<HTMLButtonElement>("theme-toggle");
+  const meta = byId<HTMLMetaElement>("themeMeta");
+  const apply = (theme: string) => {
+    document.documentElement.setAttribute("data-theme", theme);
+    if (meta) meta.content = theme === "dark" ? "#0f172a" : "#F0F2F5";
+    if (toggle) {
+      toggle.innerHTML = theme === "dark" ? ICON_SUN : ICON_MOON;
+      const label = theme === "dark" ? "切换浅色模式" : "切换深色模式";
+      toggle.setAttribute("aria-label", label);
+      toggle.setAttribute("title", label);
+    }
+  };
+  const current = document.documentElement.getAttribute("data-theme") === "dark" ? "dark" : "light";
+  apply(current);
+  toggle?.addEventListener("click", () => {
+    const next = document.documentElement.getAttribute("data-theme") === "dark" ? "light" : "dark";
+    localStorage.setItem("easysticker-theme", next);
+    apply(next);
+  });
+}
 
 function setStatusMsg(
   el: HTMLElement | null,
@@ -671,6 +698,7 @@ function formatTime(isoStr: string): string {
 
 // ── Mount / event binding ───────────────────────────────────────────────────
 export function mountAdmin(): void {
+  initTheme();
   checkAuth();
 
   req("login-btn").addEventListener("click", () => void login());
