@@ -4,6 +4,8 @@ import type { AppDeps } from "../lib/deps";
 import { loadPromptConfig, updatePromptConfig } from "../services/generate/promptConfig";
 import { getAiProvider } from "../services/ai/index";
 import { providerApiKeyEnvName, resolveProviderApiKey, setProviderApiKey } from "../services/ai/apiKey";
+import { runGc } from "../services/maintenance/gc";
+import { deletePack, listPacks } from "../services/pack/service";
 
 export function registerAdminRoutes(deps: AppDeps) {
   return async (app: FastifyInstance): Promise<void> => {
@@ -240,6 +242,52 @@ export function registerAdminRoutes(deps: AppDeps) {
           error: error instanceof Error ? error.message : String(error)
         };
       }
+    });
+
+    // ── 存储：占用体检 / 手动清理 / 包列表 ──────────────────────────────
+    // 这些是运维视角的接口：整个服务的磁盘占用与包清单（用户侧看不到彼此的数据）。
+    app.get("/admin/storage", { preHandler: [requireAdmin] }, async () => {
+      const report = await runGc({ dataDir: deps.dataDir, dryRun: true });
+      return {
+        report,
+        packs: listPacks(deps.dataDir).map((p) => ({
+          packId: p.packId,
+          title: p.title,
+          createdAt: p.createdAt,
+          stickerCount: p.stickerCount,
+          bytes: p.bytes,
+          hasZip: p.hasZip
+        }))
+      };
+    });
+
+    app.post("/admin/storage/gc", { preHandler: [requireAdmin] }, async (req) => {
+      const body = (req.body as {
+        dryRun?: boolean;
+        packRetentionDays?: number;
+        orphanMinAgeHours?: number;
+        compactLegacyPacks?: boolean;
+        dropOrigBackups?: boolean;
+      }) || {};
+      const report = await runGc({
+        dataDir: deps.dataDir,
+        dryRun: body.dryRun !== false,
+        packRetentionDays: body.packRetentionDays ?? 0,
+        ...(body.orphanMinAgeHours !== undefined ? { orphanMinAgeMs: body.orphanMinAgeHours * 3600_000 } : {}),
+        compactLegacyPacks: body.compactLegacyPacks !== false,
+        dropOrigBackups: body.dropOrigBackups !== false
+      });
+      return { ok: true, report };
+    });
+
+    app.delete("/admin/packs/:packId", { preHandler: [requireAdmin] }, async (req, reply) => {
+      const { packId } = req.params as { packId: string };
+      const removed = deletePack(deps.dataDir, packId);
+      if (!removed) {
+        reply.status(404);
+        return { error: "NotFound", message: "pack not found" };
+      }
+      return { ok: true, packId };
     });
   };
 }

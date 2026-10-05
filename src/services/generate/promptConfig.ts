@@ -38,6 +38,15 @@ export interface PromptConfig {
     logLevel?: string;
     taskTtlMs?: number;
     taskGcIntervalMs?: number;
+    /** 数据目录定期清理（`data/uploads` / `data/packs`）。 */
+    maintenance?: {
+      gcEnabled?: boolean;
+      gcIntervalMs?: number;
+      packRetentionDays?: number;
+      orphanMinAgeHours?: number;
+      compactLegacyPacks?: boolean;
+      dropOrigBackups?: boolean;
+    };
     security?: {
       apiToken?: string;
       enableAuth?: boolean;

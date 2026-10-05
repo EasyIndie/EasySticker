@@ -158,7 +158,8 @@ async function main() {
     dataDir,
     logLevel,
     security: securityConfig,
-    monitorRetentionDays: config.server?.security?.monitorRetentionDays ?? 7
+    monitorRetentionDays: config.server?.security?.monitorRetentionDays ?? 7,
+    maintenance: config.server?.maintenance ?? {}
   };
 
   const app = buildApp(appConfig, deps);
