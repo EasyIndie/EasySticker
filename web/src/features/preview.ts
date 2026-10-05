@@ -844,8 +844,14 @@ function buildMetadataPreviewText(result: PackResult): string {
         }))
     : [];
 
+  const referenceAssetId = result?.meta?.referenceAssetId ?? result?.generation?.referenceAssetId;
+  // 参考图放在 source/ 下（扩展名以服务端实际落盘为准，此处尽力而为）
+  const referenceFiles = referenceAssetId
+    ? [{ role: "reference", assetId: referenceAssetId, filename: "reference.png", zipPath: "source/reference.png" }]
+    : [];
+
   const metadata = {
-    schema: "easysticker-pack@0.2",
+    schema: "easysticker-pack@0.3",
     packId: result?.packId ?? null,
     presetId: ctx.getPlatformId(),
     createdAt: null,
@@ -866,7 +872,7 @@ function buildMetadataPreviewText(result: PackResult): string {
           rewardThanksAssetId: result?.extras?.rewardThanksAssetId ?? null
         }
       : {},
-    files: [...stickerFiles, ...extraFiles],
+    files: [...stickerFiles, ...extraFiles, ...referenceFiles],
     assets: stickerFiles.map((f) => ({ assetId: f.assetId, filename: f.filename, zipPath: f.zipPath }))
   };
 

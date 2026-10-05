@@ -818,6 +818,9 @@ async function rebuildPackFromState(): Promise<void> {
     };
     if (Object.keys(extraDetails).length) body.extraDetails = extraDetails;
     if (lastPackResult?.generation) body.generation = lastPackResult.generation;
+    // 参考图一并打进 source/，保证重建后的 ZIP 仍可完整还原
+    const referenceAssetId = currentUploadId ?? lastPackResult?.generation?.referenceAssetId;
+    if (referenceAssetId) body.referenceAssetId = referenceAssetId;
     const res = await requestJson("/api/packs", {
       method: "POST",
       headers: { "content-type": "application/json" },

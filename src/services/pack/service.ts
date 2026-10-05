@@ -13,7 +13,9 @@ export type PackFileRole =
   | "icon"
   | "banner"
   | "reward-guide"
-  | "reward-thanks";
+  | "reward-thanks"
+  /** 生成时使用的参考图（源素材，不是交付资源）。 */
+  | "reference";
 
 /** 打包入参中的一张贴纸（可携带它的生成上下文）。 */
 export type PackAssetInput = {
@@ -63,6 +65,8 @@ export type PackRequest = {
   iconAssetId?: string;
   rewardGuideAssetId?: string;
   rewardThanksAssetId?: string;
+  /** 生成时使用的参考图；有则一并打进 `source/`，便于完整还原。 */
+  referenceAssetId?: string;
   metadata?: {
     title?: string;
     author?: string;
@@ -272,9 +276,28 @@ export async function buildZipPack(assetStore: AssetStore, dataDir: string, req:
     });
   }
 
+  // 参考图是可选的补充素材：缺失时跳过而不是让整个打包失败
+  // （例如重建 ZIP 时 uploads 已被清理）。
+  if (req.referenceAssetId) {
+    const reference = assetStore.find(req.referenceAssetId);
+    if (reference) {
+      const ext = path.extname(reference.filename).toLowerCase();
+      const name = `reference${ext}`;
+      const inZip = path.posix.join("source", name);
+      zip.file(reference.filePath, { name: inZip });
+      files.push({
+        role: "reference",
+        assetId: req.referenceAssetId,
+        filename: name,
+        zipPath: inZip,
+        ...(await readFileFacts(reference.filePath))
+      });
+    }
+  }
+
   const createdAt = new Date().toISOString();
   const metadata: PackMetadata = {
-    schema: "easysticker-pack@0.2",
+    schema: "easysticker-pack@0.3",
     packId,
     presetId: req.presetId,
     createdAt,
