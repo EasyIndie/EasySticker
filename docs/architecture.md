@@ -1,7 +1,9 @@
-# EasySticker 架构与演进路线
+# EasySticker 架构与设计决策
 
-> 本文记录目标架构、模块边界与分阶段迁移计划，用于指导长期迭代时保持功能解耦。
-> 原则：**模块化单体（modular monolith）+ 契约优先 + 组合根装配 + 前端组件化**。不引入微服务。
+> 本文记录**目标架构**、**模块边界**，以及**已落地的关键设计决策**（连同当时的理由）。
+> 原则：模块化单体（modular monolith）+ 契约优先 + 组合根装配 + 前端按功能垂直切片。不引入微服务。
+>
+> 只读的历史改造记录见 [history.md](history.md)；文档分工见 [README.md](README.md)。
 
 ---
 
@@ -10,14 +12,14 @@
 ```
 interfaces（HTTP 层）     routes：只做参数校验/鉴权/序列化，不写业务
         │ 调用
-application（用例层）     generation.service / import.service / auth.service
+application（用例层）     generate / import / restore / pack / auth
         │ 依赖接口（Port）
-domain（领域/策略）       ai 接口+registry、platform 策略、pipeline steps、config schema
+domain（领域/策略）       ai 接口+registry、platform preset、config schema、契约
         ▲
-infrastructure（适配器）  providers 实现、exporters、repositories、mailer、monitor
+infrastructure（适配器）  providers 实现、fileAssetStore、mailer、monitorStore
 ```
 
-依赖方向只指向内层；`infrastructure` 实现 `domain` 定义的接口，由 `server.ts`（组合根）装配。
+依赖方向只指向内层；`infrastructure` 实现 `domain` 定义的接口，由 `src/server.ts`（组合根）装配。
 
 ---
 
@@ -25,139 +27,161 @@ infrastructure（适配器）  providers 实现、exporters、repositories、mai
 
 | 模块 | 职责 | 当前状态 |
 |------|------|---------|
-| `auth` | 注册/登录/JWT/邮箱验证 | route+store 混在一起，待抽 service |
-| `generation` | 生成编排、任务、SSE 进度 | `flow.ts` 单体，待拆 pipeline |
-| `ai` | Provider 接口 + 注册表 + 实现 | ✅ 已注册表化 |
-| `platform` | 平台 preset + 校验策略 | 数据驱动，逻辑待策略化 |
-| `pack` | ZIP 打包 | 待按平台拆 exporter |
-| `assets` | 图片/文件存储 | 待仓储化 |
-| `usage` / `monitoring` | 统计 / 监控告警 | 直接读写文件，待仓储化 |
-| `config` | 配置加载/校验 | 待 zod schema 化 |
-| `shared` | 契约、错误、通用工具 | ✅ 契约已起步（`shared/contracts.ts`） |
+| `auth` | 注册/登录/JWT/邮箱验证 | route + `lib/security.ts` + `lib/userStore.ts`，待抽 service |
+| `generation` | 生成编排、任务、SSE 进度 | `flow.ts` 编排，`single.ts` / `extras.ts` / `restore.ts` / `import.ts` 已拆出 |
+| `ai` | Provider 接口 + 注册表 + 实现 | ✅ 已注册表化（`mock` / `openai` 两个实现） |
+| `platform` | 平台 preset + 校验策略 | ✅ 数据驱动（`PlatformPreset`），`generate/convert.ts` 做尺寸/格式转换 |
+| `pack` | 包清单 + 现场打包 | ✅ `pack/service.ts`：清单落盘、ZIP 按需现打 |
+| `assets` | 素材存储 | ✅ `AssetStore` 接口 + `createFileAssetStore`；查找 O(1) |
+| `usage` / `monitoring` | 统计 / 监控告警 | 工厂 + JSONL，未做仓储接口（够用） |
+| `config` | 配置加载/校验 | `promptConfig.ts` 深合并；路由层仍用 Fastify JSON schema |
+| `shared` | 契约、类型、通用工具 | ✅ `shared/contracts.ts`（zod） |
+| `maintenance` | GC / 保留期 | ✅ `services/maintenance/{gc,scheduler,retention}.ts` |
 
 ---
 
-## 3. 已落地
+## 3. 已落地的设计决策
 
-- **AI Provider 注册表**：`src/services/ai/registry.ts`。新增 provider = 新增一个文件并自注册，不再改 `index.ts` 的 if/else。
-- **共享契约**：`src/shared/contracts.ts`。生成/打包请求的 zod schema 与推断类型收敛于此。
-- **配置深合并**：`promptConfig.ts` 对 `server.security` 深合并，避免子字段整体丢失。
-- **组合根 + 依赖注入**：`server.ts` 装配全部依赖，`src/lib/deps.ts` 定义 `AppDeps`；路由/服务不再 `app.decorate("xxx")`，彻底移除 `declare module "fastify"` 的 `FastifyInstance` 增强。
-- **领域层去 Fastify 化**：`findAssetFile`/`buildZipPack`/`generateAssetsAndPack` 等不再接收 `FastifyInstance`。
-- **平台策略化**：`PlatformPreset.supportsExtras` 取代散落的 `isWeChat` 判断；微信额外资源生成抽到 `generate/extras.ts`。
-- **单资源重生成**：`generate/single.ts` + `POST /api/generate/resource`。按 `target`（`sticker.index` 或 `extra.key`）只重生成一张，复用统一提示词模板、尺寸与平台校验；`mode="edit"` + `sourceAssetId` + `instruction` 已落到前端：卡片上的「编辑图片」会以**当前这张图**为参考图、把 `instruction` 以「编辑要求：…」追加到提示词，只重做这一张，并把 `sourceAssetId` 写回 metadata 供追溯；还可再附一张参考图（`editReferenceAssetId`），
-它会被记进 metadata，因此不会被 GC 当作孤儿素材回收。多图通过 `AiGenerateInput.additionalReferenceImages`
-往下传 —— generic 变体把 `image` 传成数组（实测豆包 Seedream 接受），gpt-image 变体用 `image[]` 字段；
-**只有一张时不走数组**，既有单图路径行为不变。扩展资源改为「单张失败不中断整包」：`extras.ts` 记录 `failures` 并发出发带 `error` 的 `extra` 事件，前端将该卡片渲染为可点击重试的错误态。
-- **导入 ZIP 还原生成现场**：`generate/restore.ts` + `POST /api/generate/import-pack`。读回下载包里 `metadata.json` 记录的逐张提示词 / 风格 / 情绪与 `source/reference.*`，图片按原字节重新入库（不重编码）。还原后的结果与 AI 生成结果同构，可直接单张重生成或重建 ZIP。ZIP 读取由 `src/lib/zip.ts` 完成（仅依赖 Node 内置 `zlib`，不引第三方库）。
-- **历史记录一键还原**：同一还原核心的第二个入口 `POST /api/packs/:packId/restore`（`restorePackById`）。包已在服务端且下载链接有效，直接复用不再复制；`packId` 走白名单正则校验，防路径穿越。
-- **资产仓储 seam**：`AssetStore` 接口 + `createFileAssetStore(dataDir)` 默认实现，注入到服务；未来可换对象存储。
-- **资源查找 O(1)**：`findAssetFile` 按已知扩展名 `statSync` 探测，而不是 `readdirSync` 扫目录。后者是 O(目录大小) 的同步 I/O，挂在 `GET /api/assets/:id`（结果页每张图一个请求）与打包（每包约 30 次）的热路径上；实测 333 文件时单次 0.699ms → 0.023ms，且不随规模退化。同时用字符集白名单挡住 assetId 路径穿越。
-- **包只存清单，ZIP 按需现打**：`packs/<packId>.json` 保存 `metadata.json`（逐张提示词/尺寸/角色），下载时由 `createPackArchive` 现场打包并边打边发。避免了「uploads 一份 + zip 一份」的双倍占用，也让「单资源重生成 → 重建整包」从搬几 MB 变成写几 KB。旧包（仅 `.zip`）仍可直接流式下载，无需迁移。
-- **包归属（owner）**：清单里记录 `owner`（已登录 = 邮箱；未登录 = 前端持久化的 `x-client-id`）。`GET /api/packs` 只返回请求者自己的包 —— 无归属的旧包不会出现在任何人的列表里，避免把别人的包列出来。`owner` **只存在清单，不进 ZIP 的 `metadata.json`**（那个会随表情包分发出去）。删包要求 owner 匹配或管理员。
-- **保留期不追溯既往**：`services/maintenance/retention.ts` 记录策略生效起点（`data/maintenance.json`），过期时间 = `max(创建时间, 生效起点) + 保留天数`，避免开启策略当天清空既有数据。
-- **单资源改动走定点更新**：`renderPreview` 只能追加卡片（增量渲染），所以早期更新一张图时只能 `innerHTML=""` + 整组重绘 —— 24 张贴纸会把 24 个 `<img>` 全部销毁重建，实测多出 26 次图片请求与 136ms 长任务。现在 `updatePreviewCard(index)` / `updateExtraAsset(key)` 只替换受影响的那个节点（重测：0 次图片请求、0 长任务）。
-- **弹窗不做背景模糊**：`backdrop-filter` 会强制浏览器对弹窗背后的整个视口重新做模糊合成，首次打开多出约 30ms 长任务；换成纯色遮罩后视觉几乎一致。另外挂载后空闲时空跑一次弹窗，把首次绘制的样式/合成开销前移。
-- **前端资源用构建期内容哈希**：`scripts/version-assets.mjs`（`npm run web:build` 自动跑）把 `public/**/*.html` 里每个本地 `js/css/svg/ico/png` 引用改写成 `?v=<sha256 前 8 位>`。于是缓存策略能分三档：HTML 永远 `no-cache`（每次一个便宜 304，是整套方案的地基 —— 只有它总在重新校验，新哈希才会被发现）；带哈希的 JS/CSS/图标 `immutable` 缓存一年（内容变则 URL 变，旧 URL 本来就该命中旧内容）；**没带版本号的一律退回 `no-cache`**，避免变成"永久缓存旧文件"的陷阱。`test/httpCaching.test.ts` 有一条测试专门扫描所有 HTML，确保没有遗漏的未版本化引用 —— 一旦这条纪律被破坏，immutable 就会从优化变成事故。
-- **静态资源缓存分两类**：`/api/assets/:id` 是内容不可变的 nanoid（写入即定、永不覆盖），用 `public, max-age=31536000, immutable` 长缓存 —— 这条头直接决定预览区会不会每次导航都重传几十张图（修复前 24 张贴纸每次约 1MB，修复后预热即 0 请求）。HTML/JS/CSS 则 `no-cache` 每次校验：改前端不用记得 bump `?v=` 也能立刻生效，命中就是 304。注意 `@fastify/static` 的 `maxAge: "3600"` 会被 `send` 按**毫秒**解析（= 3.6 秒），要写成 `"1h"`；同理它的 `setHeaders` 会被随后的 `reply.headers()` 覆盖，想改 cache-control 要用 `onSend` 钩子。
-- **后台仪表盘用 SSE 而不是轮询**：`GET /api/admin/monitoring/stream` 每 5 秒推一帧快照、告警只在内容变化时推。原先前端是 `setInterval(loadDashboard, 15000)`：每个开着的后台页面每 15 秒发 2 个请求，数据却永远滞后。改成一条长连接后，实测 20 秒内 `/api/admin/monitoring` 请求数从 2 降到 **0**（首帧立即到达，不用等采样周期）。前端用 `fetch` + `SseParser` 而不是原生 `EventSource`——后者不能带 `Authorization` 头，把 JWT 放进 URL 会漏进访问日志。切到别的标签页或浏览器标签页被隐藏时前端主动 `close()`，断线按 1s→30s 指数退避重连，重连期间退回拉一次 `/admin/monitoring` 兜底。
-- **数据目录 GC**：`services/maintenance/gc.ts` + `scheduler.ts`，服务端每 6 小时巡检（`server.maintenance` 配置）。只做可证明安全的回收：压缩旧包、清孤儿素材（需过 6 小时安全期）、清 `.orig` 备份；按保留期删包默认关闭。CLI 入口 `src/cli/gc.ts`（`npm run gc`），后台「存储」面板同源调用。
-- **静态资源豁免**：`isPublicRoute` 放行 `/api/assets/:id` 与 `/api/packs/:id/download`（前缀匹配）。它们既豁免鉴权（`<img>`/`<a>` 无法携带 `Authorization`），也不计入 API 频率限制，避免结果页并发加载几十张图触发 429。
-- **typecheck 门禁**：`npm run typecheck`（`tsc --noEmit`）已接入 `npm test`，当前 0 错误。
+### 3.1 后端
+
+- **AI Provider 注册表**（`services/ai/registry.ts`）：新增 provider = 新增一个文件并自注册，不改中心 switch。生图**统一为 OpenAI 兼容 Images API**，通过 `variant` 切换参数画像（`gpt-image` / `generic`）。
+- **密钥只走环境变量**：`AI_<PROVIDER_ID>_API_KEY`。优先级 真实环境变量 > `.env` > `prompt-config.json` > 代码默认。`/api/config` 与后台接口都不回显 Key。`.env` 由 `lib/envFile.ts` 读写，启动时 `loadEnvFile()` 自动加载且**不覆盖**已有环境变量。
+- **配置基线必需**：`prompt-config.default.json` 缺失或非法即启动报错；`prompt-config.json` 只写与默认不同的字段，按 section 深合并（`providers` 按 id、`global`/`templates`/`extraPrompts` 按 key、`emotions` 整体替换）。
+- **组合根 + 依赖注入**：`server.ts` 装配全部依赖，`lib/deps.ts` 定义 `AppDeps`。路由/服务不通过 `app.decorate()` 取依赖，也没有 `declare module "fastify"` 增强。
+- **领域层去 Fastify 化**：`findAssetFile` / `createPackArchive` / 生成流水线都不接收 `FastifyInstance`。
+- **单资源重生成**（`generate/single.ts` + `POST /api/generate/resource`）：按 `target`（`sticker.index` 或 `extra.key`）只重做一张，复用同一套提示词模板/尺寸/平台校验。前端「编辑图片」用 `mode="edit"`：以**当前这张图**为参考图，把 `instruction` 以「编辑要求：…」追加进提示词，只重做这一张，并把 `sourceAssetId` 写回 metadata 供追溯；还可再附一张参考图（`editReferenceAssetId`，同时记入 metadata 并纳入 GC 引用，避免刚上传就被当孤儿回收）。多图经 `AiGenerateInput.additionalReferenceImages` 下传：generic 变体把 `image` 传数组（实测豆包 Seedream 接受），gpt-image 变体用 `image[]`；**只有一张时不走数组**，单图路径行为不变。
+- **扩展资源单张失败不中断整包**：`extras.ts` 记录 `failures` 并照常发带 `error` 的 `extra` 事件，前端把该卡片渲染成可点击重试的错误态。
+- **素材查找 O(1)**：`lib/assets.ts` 按已知扩展名 `statSync` 探测，而不是 `readdirSync` 扫目录。后者是 O(目录大小) 的**同步** I/O，挂在 `GET /api/assets/:id`（结果页每张图一个请求）和打包（每包约 30 次）热路径上；实测 333 文件时 0.699ms → 0.023ms，且不随规模退化。同时用 `ASSET_ID_PATTERN` 白名单挡路径穿越。
+- **包只存清单，ZIP 按需现打**：`packs/<packId>.json` 存 `PackManifest`（逐张提示词/尺寸/角色），下载时 `createPackArchive` 现场打包、边打边发。消除了「uploads 一份 + ZIP 一份」的双倍占用，也让「单资源重生成 → 重建整包」从搬几 MB 变成写几 KB。旧包（仅 `.zip`）仍可直接流式下载，无需迁移。
+- **包归属（owner）**：清单记录 `owner`（已登录 = 邮箱，未登录 = 前端持久化的 `x-client-id`）。注意它与**匿名日配额**用的是不同键：配额按 `ip:<req.ip>` 防刷，归属按 `client:<id>` 让未登录用户找回历史，见 `lib/owner.ts`。`GET /api/packs` 只返回请求者自己的包 —— 无归属的旧包不出现在任何人列表里，避免列出别人的包。`owner` **只进清单，不进 ZIP 的 `metadata.json`**（那个会随表情包分发出去）。删包/还原要求 owner 匹配或管理员。
+- **保留期不追溯既往**（`maintenance/retention.ts`）：策略生效起点记在 `data/maintenance.json`，过期时间 = `max(包创建时间, 生效起点) + 保留天数`。所以「今天才把 `packRetentionDays` 从 0 改成 30」不会立刻清空历史数据。
+- **GC 只做可证明安全的回收**（`maintenance/gc.ts`）：压缩旧包（缺 `files[]` 或素材不全则跳过）、清孤儿素材（须过安全期）、清 `.orig` 备份、按保留期删包。服务端每 6 小时巡检（`server.maintenance`），CLI 入口 `npm run gc`，后台「存储」面板同源调用。
+- **静态资源豁免鉴权与限流**：`isPublicRoute` 放行 `/api/assets/:id` 与 `/api/packs/:id/download`（前缀匹配）。`<img>` / `<a>` 带不了 `Authorization`，且结果页并发加载几十张图会撞 429。
+- **限流按路由豁免而非按方法判断**，避免把静态资源计入 API 频率（`test/rateLimit.test.ts` 覆盖）。
+
+### 3.2 缓存（三档策略，互相锁死）
+
+| 资源 | 策略 | 理由 |
+|------|------|------|
+| `/api/assets/:id` | `public, max-age=31536000, immutable` | assetId 是内容不可变的 nanoid，写入即定、永不覆盖。这条头直接决定预览区会不会每次导航都重传几十张图（修复前 24 张贴纸每次约 1MB，修复后预热即 0 请求） |
+| HTML / JSON | `no-cache` | **整套方案的地基**：只有它总在重新校验，新资源哈希才会被发现 |
+| 带 `?v=<哈希>` 的 JS/CSS/图标 | `immutable` 缓存一年 | 内容变则 URL 变，旧 URL 本来就该命中旧内容 |
+| **没带版本号**的静态资源 | 退回 `no-cache` | 可能是被外链或遗漏的引用，长缓存会变成「永久持有旧文件」的陷阱 |
+
+哈希由 `scripts/version-assets.mjs`（`npm run web:build` 自动跑）写入 `public/**/*.html`，取 sha256 前 8 位。
+`test/httpCaching.test.ts` 有一条测试扫描**所有** HTML，确保没有遗漏的未版本化引用 —— 这条纪律一旦被破坏，immutable 就从优化变成事故。
+
+> 踩过的坑：`@fastify/static` 的 `maxAge: "3600"` 会被 `send` 按**毫秒**解析（= 3.6 秒），要写 `"1h"`；
+> 它的 `setHeaders` 会被随后的 `reply.headers()` 覆盖，改 cache-control 必须用 `onSend` 钩子。
+
+### 3.3 前端
+
+- **按功能垂直切片，构建为 IIFE**：七个入口构建成 `public/js/{auth,preview,generator-api,ui,app,admin,theme}.js`，分别由对应 HTML 加载。旧的单体 `public/app.js` / `public/admin.js` 已删除。
+- **IIFE 之间用 `window._xxx` 桥接**：`window._ui` / `window._preview` / `window._auth` / `window._generatorApi`，依赖经 `configure()` 注入而不是模块 import —— 因为独立 IIFE 之间没有共享模块作用域。
+- **管理后台用 `data-action` 事件委托**，不使用内联 `onclick`（CSP `script-src 'self'`）。
+- **`currentStickers` 是预览的唯一渲染来源**，任何写入都必须带全字段（尤其 `url`），渲染层同时兜底。
+- **单资源改动走定点更新**：`renderPreview` 只能追加卡片，所以早期更新一张图只能 `innerHTML=""` + 整组重绘 —— 24 张贴纸会销毁重建 24 个 `<img>`，实测多出 26 次图片请求与 136ms 长任务。现在 `updatePreviewCard(index)` / `updateExtraAsset(key)` 只替换受影响的那个节点（重测：0 次图片请求、0 长任务）。
+- **弹窗不做背景模糊**：`backdrop-filter` 会强制浏览器对弹窗背后的整个视口重新做模糊合成，首次打开多出约 30ms 长任务；换纯色遮罩视觉几乎一致。另外挂载后空闲时空跑一次弹窗，把首次绘制的样式/合成开销前移。
+- **编辑后的状态必须回写本地**：`applyResourceResult` 同步更新 `lastPackResult.stickers[index]`，编辑完调 `persistLastPackPayload()` 并就地更新历史记录。否则刷新会退回编辑前的图，**再编辑会以旧图为源、把上一次编辑悄悄丢掉**。
+- **前端资源用内容哈希**：见 §3.2。
+
+### 3.4 实时通信（SSE，两处）
+
+两处都用 `reply.hijack()` + `raw.write()` 手写 SSE，并配 15 秒心跳注释防中间层掐连接。
+
+| 端点 | 用途 | 要点 |
+|------|------|------|
+| `POST /api/generate/start` → `GET /api/generate/stream` | 生成进度逐张推送 | 带 `id:` 支持 `Last-Event-ID` 断线续传（有 backlog） |
+| `GET /api/admin/monitoring/stream` | 后台仪表盘实时指标 | 每 5 秒推快照、**连上立即推一帧**、告警只在内容变化时推 |
+
+后台仪表盘原本是 `setInterval(loadDashboard, 15000)`：每个开着的页面每 15 秒发 2 个请求，数据却永远滞后。改成一条长连接后实测 20 秒内 `/api/admin/monitoring` 请求数 **2 → 0**。前端用 `fetch` + `SseParser` 而不是原生 `EventSource` —— 后者不能带 `Authorization` 头，把 JWT 放进 URL 会漏进访问日志。切到别的标签页或页面隐藏时主动 `close()`，断线按 1s→30s 指数退避重连，重连期间退回拉一次 REST 兜底。
+
+### 3.5 监控与告警
+
+- **指标采集**（`lib/monitorStore.ts`）：请求级每次 API 请求（`/api/assets/*` 已排除，否则一次页面加载几十张图会淹没真实调用）、系统级每 10 秒、磁盘每 60 秒，按天写 JSONL 到 `data/monitoring/`。
+- **告警引擎**（`lib/alertEngine.ts`）：阈值 + 持续时长 + 10% 回滞解决 + 静默期防重复。默认规则见 [configuration-reference.md](configuration-reference.md)。历史存 `data/alerts-history.json`。
+- **通知**：Webhook（飞书机器人格式）+ 本地日志。
 
 ---
 
 ## 4. 待迁移（按优先级）
 
-### P1 契约（进行中）
-- [ ] 所有路由统一从 `shared/contracts` 引用 schema（auth 仍用 Fastify JSON schema，需迁移到 zod）。
+### P1 契约
+- [ ] 所有路由统一从 `shared/contracts` 引用 schema（auth 仍用 Fastify JSON schema）。
 - [ ] API 加 `/v1` 前缀，旧 `/api/*` 保留为兼容别名（标记 deprecated）。
-- [ ] 引入 OpenAPI 类型生成（`openapi-typescript`），前端 TS 化后共享类型。
+- [ ] 引入 `openapi-typescript`，前端共享生成类型。
 
-### P2 组合根（消灭服务定位器）
-- [x] `server.ts` 建容器，构造注入 `userStore`/`usageStore`/`monitorStore` 等（`lib/deps.ts` 定义 `AppDeps`）。
-- [x] 去掉 `app.decorate("xxx")` 与 `app.xxx` 的隐式依赖（已移除 `declare module "fastify"` 的 `FastifyInstance` 增强）。
-- [ ] `app.ts` 拆为多个 plugin（security、monitoring、static、routes）。
+### P2 组合根
+- [x] `server.ts` 建容器，构造注入 store（`lib/deps.ts` 定义 `AppDeps`）。
+- [x] 去掉 `app.decorate()` 与 `declare module "fastify"` 增强。
+- [ ] `app.ts` 拆为多个 plugin（security / monitoring / static / routes）。
 
 ### P3 模块化后端
 - [ ] 按 `modules/` 重排目录（见 §5）。
 - [ ] `flow.ts` 拆为 pipeline 步骤。
-- [x] 平台规则策略化（`PlatformPreset.supportsExtras` 取代散落的 `isWeChat`；扩展资源生成抽到 `generate/extras.ts`）。
+- [x] 平台规则策略化（`PlatformPreset` 取代散落的 `isWeChat`；扩展资源抽到 `generate/extras.ts`）。
 
-### P4 存储仓储化（进行中）
+### P4 存储仓储化
 - [x] `AssetStore` 接口 + 文件实现（`lib/assets.ts`）。
-- [ ] `UserRepository` / `UsageRepository` / `MonitorRepository` 命名接口（当前用工厂返回类型，已够用）。
-- [ ] Pack 存储仓储化。
+- [ ] `UserRepository` / `UsageRepository` / `MonitorRepository` 命名接口（当前用工厂返回类型，够用）。
+- [x] Pack 存储收敛到 `pack/service.ts`（读/写清单、打包、删除、列举）。
 
-### P5 前端模块化（已完成）
-- [x] Vite + TypeScript 工具链（`vite.config.ts`、`web/vite.*.config.ts`），构建产物落在 `public/js/`。
-- [x] 类型化 API 客户端（`web/src/api/`，消费 `src/shared/contracts`）与 auth 单一状态源（`web/src/store/auth.ts`）。
-- [x] 旧单体 `public/app.js`（约 3300 行）/ `public/admin.js`（约 775 行）已删除，拆为六个 IIFE 切片：
-  - `auth` —— `api/auth` + `store/auth` + `features/auth`（→ `public/js/auth.js`）
-  - `preview` —— 贴图/额外资源/下载/导出确认卡（→ `public/js/preview.js`，依赖经 `configure` 注入）
-  - `generator-api` —— SSE 客户端（`api/sse.ts` 纯解析器 + `api/generate-stream.ts`，→ `public/js/generator-api.js`）
-  - `ui` —— 状态/通知/进度（→ `public/js/ui.js`，暴露 `window._ui`）
-  - `app` —— 主站 controller：platform/config 同步、校验、持久化、history、生成编排、单资源重生成、UX（→ `public/js/app.js`）
-  - `admin` —— 管理后台（内联 onclick 改为 `data-action` 事件委托以过 CSP，→ `public/js/admin.js`）
-- [ ] 迁移完成后用 `dist-web` 替换 `public` 静态目录（可选收尾）。
+### P5 前端模块化
+- [x] Vite + TypeScript 工具链，产物落 `public/js/`。
+- [x] 类型化 API 客户端（`web/src/api/`）+ auth 单一状态源（`web/src/store/auth.ts`）。
+- [x] 旧单体删除，拆为七个 IIFE 切片。
+- [ ] 用 `dist-web` 替换 `public` 静态目录（可选收尾）。
 
 ### P6 护栏
 - [ ] dependency-cruiser / ESLint import 边界，CI 强制依赖方向。
 - [ ] 契约测试（基于 `shared/contracts`）。
 - [ ] changesets 发版与 changelog。
+- [ ] CI workflow（当前靠本地 `npm test`）。
+
+### 已知小项
+- usage 成功率恒 100%（没有把失败计入）。
+- `usageStore` / `monitorStore` 用 `appendFileSync`（实测 0.117ms/次，异步化会引入崩溃丢数据的风险，暂不改）。
+- 智能提示词是空壳（`getPromptTemplate` 未真正分析参考图）。
+- `ai.referenceMode = "assetId"` 已无 provider 消费（仅 base64 / url / multipart 有效）。
 
 ---
 
-## 5. 目标目录结构（后端）
+## 5. 目标目录结构
 
 ```
 src/
   server.ts                 # 组合根：装配并启动
   app.ts                    # 只做插件编排
-  shared/
-    contracts.ts            # zod schema + 类型
-    errors.ts
-    config-schema.ts
-  modules/
-    auth/
-    generation/
-      generation.routes.ts
-      generation.service.ts
-      pipeline/
-    ai/
-      provider.ts           # 接口
-      registry.ts
-      providers/
-    platform/
-    pack/
-      exporters/
-    assets/
-    usage/
-    monitoring/
-    config/
+  cli/gc.ts                 # GC CLI
+  shared/contracts.ts       # zod schema + 类型
+  routes/                   # auth / admin / assets / packs / uploads / generate / config
+  lib/                      # assets / zip / owner / security / userStore / usageStore
+                            # monitorStore / alertEngine / alertNotifier / envFile / deps
+  services/
+    ai/{provider,registry,providers/*}
+    generate/{flow,single,extras,import,restore,convert,promptConfig}
+    pack/service.ts
+    platform/presets.ts
+    maintenance/{gc,scheduler,retention}
 ```
 
 前端：
 
 ```
 web/src/
-  main.ts
-  auth-entry.ts          # auth 独立入口（构建为 public/js/auth.js）
-  preview-entry.ts       # preview 独立入口（构建为 public/js/preview.js）
-  generator-api-entry.ts # 生成网络/SSE 客户端入口（构建为 public/js/generator-api.js）
-  ui-entry.ts            # UI 工具入口（构建为 public/js/ui.js）
-  app-entry.ts           # 主站 controller 入口（构建为 public/js/app.js）
-  api/                   # 类型化 client（由契约生成）：client / auth / generate / sse / generate-stream
-  store/                 # 单一状态源：auth.ts
-  components/
-  features/              # auth.ts、preview.ts、ui.ts + app.ts（剩余 controller）
+  *-entry.ts               # 七个入口（auth/preview/generator-api/ui/app/admin/main）
+  app.ts                   # 主站 controller
+  api/                     # client / auth / generate / generate-stream / sse / request
+                           # clientId / admin-stream
+  store/auth.ts            # 单一状态源
+  features/                # auth / preview / ui / admin
 ```
 
 ---
 
 ## 6. 验证「互不影响」的护栏
 
-1. **依赖方向**：`infrastructure → application`、`routes → domain 实现` 等反向依赖在 CI 直接报红。
+1. **依赖方向**：`infrastructure → application`、`routes → domain 实现` 等反向依赖在 CI 直接报红（P6 待做）。
 2. **契约测试**：改 schema 时前后端同时感知，不靠口头约定。
 3. **三层测试**：单元（domain/pipeline 单步）→ 集成（provider/repo/exporter）→ E2E（关键用户旅程）。
 4. **单一组合根**：模块只通过 `index.ts` 导出 public API，禁止深路径 import。
