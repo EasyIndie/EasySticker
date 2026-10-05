@@ -58,7 +58,7 @@ export type ResourceTarget = z.infer<typeof resourceTargetSchema>;
 /**
  * POST /api/generate/resource — 只重生成一张资源。
  * mode="regenerate" 按原始上下文重生成；mode="edit" 以 sourceAssetId 为参考图、
- * instruction 为指令做二次编辑/优化（为后续编辑能力预留）。
+ * instruction 为指令做编辑/优化（为后续编辑能力预留）。
  */
 export const resourceSchema = z.object({
   presetId: z.string().min(1).default("wechat_stickers"),
@@ -102,7 +102,7 @@ export const packExtraDetailSchema = z.object({
   editReferenceAssetId: z.string().optional()
 });
 
-/** 生成上下文：随 pack 一起写入 metadata.json，便于 ZIP 再导入后二次编辑。 */
+/** 生成上下文：随 pack 一起写入 metadata.json，便于 ZIP 再导入后编辑图片。 */
 export const packGenerationSchema = z.object({
   source: z.enum(["ai-generate", "import"]).optional(),
   providerId: z.string().optional(),
@@ -142,7 +142,7 @@ export const packSchema = z.object({
         style: z.string().optional(),
         emotion: z.string().optional(),
         sourceAssetId: z.string().optional(),
-        /** 二次编辑时额外提供的那张参考图，记录下来便于复现且不会被 GC 回收。 */
+        /** 编辑图片时额外提供的那张参考图，记录下来便于复现且不会被 GC 回收。 */
         editReferenceAssetId: z.string().optional()
       })
     )

@@ -28,7 +28,7 @@ export type ResourceGenerateRequest = {
   styles?: string[];
   target: ResourceTarget;
   metadata?: { rewardMessage?: string };
-  /** regenerate：按原始上下文重生成；edit：以 sourceAssetId 为参考图做二次编辑。 */
+  /** regenerate：按原始上下文重生成；edit：以 sourceAssetId 为参考图做编辑图片。 */
   mode?: "regenerate" | "edit";
   sourceAssetId?: string;
   instruction?: string;
@@ -110,7 +110,7 @@ function mimeFromFilename(filename: string): string {
 /**
  * 只重生成一张资源（贴纸或扩展资源），复用与整包生成相同的提示词模板、
  * 输出尺寸与平台校验。`mode="edit"` 时以 sourceAssetId 作为参考图，
- * instruction 追加到提示词中，用于后续的二次编辑/优化能力。
+ * instruction 追加到提示词中，用于后续的编辑/优化能力。
  */
 export async function generateSingleResource(
   assetStore: AssetStore,

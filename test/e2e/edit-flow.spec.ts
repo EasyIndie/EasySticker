@@ -6,7 +6,7 @@ const TINY_PNG = Buffer.from(
   "base64"
 );
 
-test.describe("单图二次编辑", () => {
+test.describe("单图编辑", () => {
   test.beforeEach(async ({ page }) => {
     await clearStorage(page);
     await waitForApp(page);
@@ -38,7 +38,7 @@ test.describe("单图二次编辑", () => {
           prompt: `第 ${i + 1} 张`,
           style: "贴纸"
         })),
-        metadata: { title: "二次编辑测试" },
+        metadata: { title: "图片编辑测试" },
         generation: { source: "ai-generate", providerId: "mock", prompt: "Q版人物", styles: ["贴纸"] }
       }
     });
@@ -52,7 +52,7 @@ test.describe("单图二次编辑", () => {
         uploadId: ref.uploadId,
         prompt: "Q版人物",
         provider: "mock",
-        title: "二次编辑测试",
+        title: "图片编辑测试",
         author: "tester",
         versionText: "",
         copyrightText: "",
@@ -71,7 +71,7 @@ test.describe("单图二次编辑", () => {
             assetId: a.uploadId,
             prompt: `第 ${i + 1} 张`
           })),
-          meta: { count, styles: ["贴纸"], title: "二次编辑测试", presetId: "wechat_stickers" },
+          meta: { count, styles: ["贴纸"], title: "图片编辑测试", presetId: "wechat_stickers" },
           extras: {}
         }
       }
@@ -83,7 +83,7 @@ test.describe("单图二次编辑", () => {
     return { packId: pack.packId as string, uploadId: ref.uploadId as string };
   }
 
-  test("卡片上有二次编辑入口，弹窗能打开并带出当前图与常用修改", async ({ page }) => {
+  test("卡片上有编辑图片入口，弹窗能打开并带出当前图与常用修改", async ({ page }) => {
     test.setTimeout(90000);
     const { packId } = await seedGeneratedPack(page);
 
@@ -91,7 +91,7 @@ test.describe("单图二次编辑", () => {
     await expect(card).toBeAttached();
     const editBtn = card.locator('[data-action="edit-resource"]');
     await expect(editBtn).toBeVisible();
-    await expect(editBtn).toContainText("二次编辑");
+    await expect(editBtn).toContainText("编辑图片");
 
     await editBtn.click();
     await expect(page.locator("#editDialog")).toBeVisible();

@@ -50,7 +50,7 @@ export type ExtrasResult = {
   rewardThanksAssetId?: string;
   /** 单张资源生成失败时记录原因，其余资源继续生成，不再中断整包。 */
   failures: Partial<Record<ExtraAssetKey, string>>;
-  /** 每张扩展资源实际使用的提示词/风格，写入 metadata.json 供二次编辑。 */
+  /** 每张扩展资源实际使用的提示词/风格，写入 metadata.json 供编辑图片。 */
   details: Partial<Record<ExtraAssetKey, { prompt: string; style: string }>>;
   currentGenerated: number;
 };

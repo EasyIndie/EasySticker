@@ -196,7 +196,7 @@ describe("数据目录 GC", () => {
     expect(store.find(sticker)).toBeNull();
   }, 60000);
 
-  it("二次编辑用过的附加参考图算「被引用」，不会被当孤儿回收", async () => {
+  it("编辑图片用过的附加参考图算「被引用」，不会被当孤儿回收", async () => {
     const sticker = await mkAsset(240, 240, 80);
     const editRef = await mkAsset(512, 512, 85);
     await createPack(store, dataDir, {

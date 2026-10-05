@@ -2755,7 +2755,7 @@ textarea:focus-visible {
   vertical-align: middle;
 }
 
-/* ── 二次编辑弹窗 ─────────────────────────────────────────────── */
+/* ── 编辑图片弹窗 ─────────────────────────────────────────────── */
 .edit-dialog {
   position: fixed;
   inset: 0;
@@ -2900,7 +2900,7 @@ textarea:focus-visible {
   gap: 10px;
 }
 
-/* 卡片上的「二次编辑」入口 */
+/* 卡片上的「编辑图片」入口 */
 .preview-actions {
   display: flex;
   gap: 8px;
@@ -2953,7 +2953,7 @@ textarea:focus-visible {
   }
 }
 
-/* 二次编辑：附加参考图 */
+/* 编辑图片：附加参考图 */
 .edit-ref {
   display: grid;
   gap: 10px;
