@@ -4,7 +4,7 @@ import { nanoid } from "nanoid";
 import type { AssetStore } from "../../lib/assets";
 import { validateAssetList } from "../platform/validate";
 import { getPlatformPreset, resolveTargetSize } from "../platform/presets";
-import { buildZipPack, EXTRA_ASSET_KEY_TO_ROLE, type PackFileRole } from "../pack/service";
+import { createPack, EXTRA_ASSET_KEY_TO_ROLE, type PackFileRole } from "../pack/service";
 import { getAiProvider } from "../ai";
 import { buildMinimalClient } from "../ai/client";
 import { loadPromptConfig, compilePrompt } from "./promptConfig";
@@ -229,7 +229,7 @@ export async function generateAssetsAndPack(
     }
   };
 
-  const { packId, downloadFilename, metadataJson } = await buildZipPack(assetStore, dataDir, {
+  const { packId, downloadFilename, metadataJson } = await createPack(assetStore, dataDir, {
     presetId,
     assets,
     coverAssetId,

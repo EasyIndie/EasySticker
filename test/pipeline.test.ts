@@ -6,8 +6,9 @@ import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import * as promptConfigModule from "../src/services/generate/promptConfig";
 import sharp from "sharp";
 import { buildApp } from "../src/app";
-import { buildZipPack } from "../src/services/pack/service";
+import { createPack } from "../src/services/pack/service";
 import { createFileAssetStore } from "../src/lib/assets";
+import { readZipEntries } from "../src/lib/zip";
 
 function multipartPayload(field: string, filename: string, contentType: string, buf: Buffer) {
   const boundary = `----easysticker-${Math.random().toString(16).slice(2)}`;
@@ -649,7 +650,7 @@ describe("pipeline", () => {
     expect(routeRes.statusCode).toBe(200);
 
     // 内容层：metadata.json 写入生成上下文与每个文件的尺寸/提示词/风格
-    const { metadataJson } = await buildZipPack(store, dataDir, payload);
+    const { metadataJson } = await createPack(store, dataDir, payload);
     const meta = JSON.parse(metadataJson);
     expect(meta.schema).toBe("easysticker-pack@0.3");
     expect(meta.generation).toMatchObject({
@@ -698,5 +699,13 @@ describe("pipeline", () => {
 
     // 兼容旧格式
     expect(meta.assets).toHaveLength(2);
+
+    // 不再落地 ZIP：只写清单（几 KB），下载时按需现打
+    const packDir = path.join(dataDir, "packs");
+    expect(fs.existsSync(path.join(packDir, `${meta.packId}.json`))).toBe(true);
+    expect(fs.existsSync(path.join(packDir, `${meta.packId}.zip`))).toBe(false);
+    const manifest = JSON.parse(fs.readFileSync(path.join(packDir, `${meta.packId}.json`), "utf8"));
+    expect(manifest.packId).toBe(meta.packId);
+    expect(manifest.metadata.files).toHaveLength(meta.files.length);
   });
 });

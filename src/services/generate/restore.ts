@@ -7,18 +7,32 @@ import type { AssetStore } from "../../lib/assets";
 import { readZipEntries, type ZipEntry } from "../../lib/zip";
 import { getPlatformPreset } from "../platform/presets";
 import { validateAssetList } from "../platform/validate";
-import { buildZipPack, getPackInfo, getPackZipPath, type PackFileRole, type PackGenerationInfo } from "../pack/service";
+import {
+  createPack,
+  findPackZipPath,
+  getPackInfo,
+  packExists,
+  readPackManifest,
+  type PackFileMetadata,
+  type PackFileRole,
+  type PackGenerationInfo
+} from "../pack/service";
 
 /**
- * 从「下载按钮导出的 ZIP」还原生成现场。
+ * 从「下载按钮导出的 ZIP」或「服务端已存的包」还原生成现场。
  *
  * 与 `importStickerPack`（导入零散图片、统一重编码为平台规格）不同，这里**不改动
- * 任何像素**：把包内图片按原字节重新入库，并读回 `metadata.json` 里的
- * 逐张提示词 / 风格 / 情绪 / 参考图，于是可以：
+ * 任何像素**：素材按原字节入库，并读回 `metadata.json` 里的逐张提示词 / 风格 /
+ * 情绪 / 参考图，于是可以：
  *
  *   - 预览之前生成的结果；
  *   - 单张重新生成或二次编辑（沿用原始提示词）；
  *   - 再次导出，metadata 不丢信息。
+ *
+ * 三条入口：
+ *   1. `restorePackFromZip`  —— 用户上传一个 ZIP 文件；
+ *   2. `restorePackById`     —— 历史记录一键还原；包已有清单时直接复用，零拷贝；
+ *   3. 旧包（只有 ZIP、没有清单）走「解 ZIP + 素材入库」的慢路径。
  */
 
 const IMAGE_EXTENSIONS = new Set([".png", ".jpg", ".jpeg", ".webp", ".gif"]);
@@ -33,7 +47,9 @@ const ROLE_BY_BASENAME: Record<string, PackFileRole> = {
   reference: "reference"
 };
 
-const EXTRA_KEYS: Array<[PackFileRole, "coverAssetId" | "iconAssetId" | "bannerAssetId" | "rewardGuideAssetId" | "rewardThanksAssetId"]> = [
+const EXTRA_KEYS: Array<
+  [PackFileRole, "coverAssetId" | "iconAssetId" | "bannerAssetId" | "rewardGuideAssetId" | "rewardThanksAssetId"]
+> = [
   ["cover", "coverAssetId"],
   ["icon", "iconAssetId"],
   ["banner", "bannerAssetId"],
@@ -41,17 +57,22 @@ const EXTRA_KEYS: Array<[PackFileRole, "coverAssetId" | "iconAssetId" | "bannerA
   ["reward-thanks", "rewardThanksAssetId"]
 ];
 
+/** packId 由 nanoid 生成；限字符集同时挡住路径穿越。 */
+const PACK_ID_PATTERN = /^[A-Za-z0-9_-]{6,64}$/;
+
+type PackMetadataLike = {
+  title?: string;
+  author?: string;
+  copyright?: string;
+  version?: string;
+  rewardMessage?: string;
+};
+
 type ParsedPack = {
   schema?: string;
   packId?: string;
   presetId?: string;
-  metadata?: {
-    title?: string;
-    author?: string;
-    copyright?: string;
-    version?: string;
-    rewardMessage?: string;
-  };
+  metadata?: PackMetadataLike;
   generation?: PackGenerationInfo;
   files?: Array<Record<string, unknown>>;
   assets?: Array<Record<string, unknown>>;
@@ -68,11 +89,9 @@ type DeclaredFile = {
   sourceAssetId?: unknown;
 };
 
-type RestoredFile = {
-  role: PackFileRole;
-  label?: string;
-  filename: string;
-  zipPath: string;
+type RestoredFile = PackFileMetadata & { role: PackFileRole };
+type StickerPayload = {
+  label: string;
   assetId: string;
   prompt?: string;
   style?: string;
@@ -129,6 +148,104 @@ function findEntry(entries: ZipEntry[], zipPath: string, filename?: string): Zip
   return undefined;
 }
 
+/** 从 ZIP 条目里取出并解析 metadata.json。 */
+function parsePackEntries(entries: ZipEntry[]): ParsedPack {
+  const metaEntry = entries.find((e) => e.name === "metadata.json");
+  if (!metaEntry) {
+    throw createHttpError(400, "这个 ZIP 里没有 metadata.json，无法还原生成现场（请使用本站下载的 ZIP 包）");
+  }
+  try {
+    return JSON.parse(metaEntry.content.toString("utf8")) as ParsedPack;
+  } catch {
+    throw createHttpError(400, "metadata.json 解析失败，无法还原生成现场");
+  }
+}
+
+/** 把 `files[]` 拆成「贴纸序列 / 扩展资源 / 参考图」。素材已在库里，不再复制。 */
+function splitFiles(files: PackFileMetadata[]) {
+  const stickers: StickerPayload[] = files
+    .filter((f) => f.role === "sticker")
+    .sort((a, b) =>
+      String(a.label ?? "").localeCompare(String(b.label ?? ""), undefined, { numeric: true })
+    )
+    .map((f, i) => ({
+      label: f.label ?? String(i + 1).padStart(3, "0"),
+      assetId: f.assetId,
+      ...(f.prompt ? { prompt: f.prompt } : {}),
+      ...(f.style ? { style: f.style } : {}),
+      ...(f.emotion ? { emotion: f.emotion } : {}),
+      ...(f.sourceAssetId ? { sourceAssetId: f.sourceAssetId } : {})
+    }));
+
+  const extraIds: Record<string, string> = {};
+  const extraDetails: Partial<Record<PackFileRole, { prompt?: string; style?: string }>> = {};
+  for (const [role, key] of EXTRA_KEYS) {
+    const file = files.find((f) => f.role === role);
+    if (!file) continue;
+    extraIds[key] = file.assetId;
+    const detail = {
+      ...(file.prompt ? { prompt: file.prompt } : {}),
+      ...(file.style ? { style: file.style } : {})
+    };
+    if (Object.keys(detail).length) extraDetails[role] = detail;
+  }
+
+  const reference = files.find((f) => f.role === "reference");
+  return { stickers, extraIds, extraDetails, referenceAssetId: reference?.assetId ?? null };
+}
+
+/** 三个入口共用的响应组装：与 AI 生成结果同构，前端可直接套用。 */
+function buildRestoreResponse(input: {
+  packId: string;
+  downloadUrl: string;
+  downloadFilename: string;
+  metadataJson: string;
+  presetId: string;
+  metadata: PackMetadataLike;
+  generation: PackGenerationInfo;
+  files: PackFileMetadata[];
+  stickers: StickerPayload[];
+  extraIds: Record<string, string>;
+  extraDetails: Partial<Record<PackFileRole, { prompt?: string; style?: string }>>;
+  referenceAssetId: string | null;
+  warnings: string[];
+  restoredFrom: string | null;
+  schema: string | null;
+}) {
+  const includeReward = Boolean(input.extraIds.rewardGuideAssetId || input.extraIds.rewardThanksAssetId);
+  return {
+    packId: input.packId,
+    downloadUrl: input.downloadUrl,
+    downloadFilename: input.downloadFilename,
+    metadataJson: input.metadataJson,
+    stickers: input.stickers.map((s) => ({ ...s, role: "sticker" as const, url: `/api/assets/${s.assetId}` })),
+    extras: input.extraIds,
+    extraDetails: input.extraDetails,
+    generation: input.generation,
+    meta: {
+      count: input.stickers.length,
+      styles: input.generation.styles ?? ["导入 ZIP"],
+      title: input.metadata.title ?? null,
+      author: input.metadata.author ?? null,
+      version: input.metadata.version ?? null,
+      copyright: input.metadata.copyright ?? null,
+      rewardMessage: input.metadata.rewardMessage ?? null,
+      rewardEnabled: includeReward,
+      referenceAssetId: input.referenceAssetId,
+      referenceMode: input.generation.referenceMode ?? (input.referenceAssetId ? "restored" : "none"),
+      presetId: input.presetId,
+      files: input.files.length
+    },
+    restored: {
+      fromPackId: input.restoredFrom,
+      schema: input.schema,
+      warnings: input.warnings
+    }
+  };
+}
+
+/* ── 入口 1：用户上传一个 ZIP 文件 ─────────────────────────────────────── */
+
 export async function restorePackFromZip(
   assetStore: AssetStore,
   dataDir: string,
@@ -161,41 +278,65 @@ export async function restorePackFromZip(
   }
 
   const parsed = parsePackEntries(entries);
-
   const presetId = cleanText(fields.presetId) ?? cleanText(parsed.presetId) ?? fallbackPresetId;
   return restoreFromEntries(assetStore, dataDir, presetId, entries, parsed);
 }
 
-/** 从 ZIP 条目里取出并解析 metadata.json。 */
-function parsePackEntries(entries: ZipEntry[]): ParsedPack {
-  const metaEntry = entries.find((e) => e.name === "metadata.json");
-  if (!metaEntry) {
-    throw createHttpError(400, "这个 ZIP 里没有 metadata.json，无法还原生成现场（请使用本站下载的 ZIP 包）");
-  }
-  try {
-    return JSON.parse(metaEntry.content.toString("utf8")) as ParsedPack;
-  } catch {
-    throw createHttpError(400, "metadata.json 解析失败，无法还原生成现场");
-  }
-}
+/* ── 入口 2 / 3：按 packId 还原服务端已存的包 ──────────────────────────── */
 
-/**
- * 按 packId 还原服务端已保存的包（历史记录「一键还原」用，不需要用户再找文件）。
- * 包本身已存在且下载链接有效，直接复用，不再复制一份。
- */
 export async function restorePackById(
   assetStore: AssetStore,
   dataDir: string,
   fallbackPresetId: string,
   packId: string
 ) {
-  if (!/^[A-Za-z0-9_-]{6,64}$/.test(packId)) throw createHttpError(400, "invalid packId");
-  let zipPath: string;
-  try {
-    zipPath = getPackZipPath(dataDir, packId);
-  } catch {
+  if (!PACK_ID_PATTERN.test(packId)) throw createHttpError(400, "invalid packId");
+  if (!packExists(dataDir, packId)) {
     throw createHttpError(404, "找不到这个表情包的原始文件，可能已被清理");
   }
+
+  const info = getPackInfo(dataDir, packId);
+  const manifest = readPackManifest(dataDir, packId);
+
+  // 新包：清单里就有完整 metadata，素材也都在 uploads 里 —— 零拷贝、不解 ZIP
+  if (manifest) {
+    const { stickers, extraIds, extraDetails, referenceAssetId } = splitFiles(manifest.metadata.files);
+    if (!stickers.length) throw createHttpError(400, "这个包里没有找到贴纸图片，无法还原");
+
+    const generation: PackGenerationInfo = {
+      ...(manifest.metadata.generation ?? {}),
+      restoredFrom: packId
+    };
+    const warnings = await collectValidationWarnings(
+      assetStore,
+      manifest.metadata.presetId ?? fallbackPresetId,
+      stickers.map((s) => s.assetId)
+    );
+    const missing = manifest.metadata.files.filter((f) => !assetStore.find(f.assetId)).length;
+    if (missing) warnings.push(`有 ${missing} 个素材文件已被清理，重新导出时会被跳过`);
+
+    return buildRestoreResponse({
+      packId,
+      downloadUrl: `/api/packs/${packId}/download`,
+      downloadFilename: info.downloadFilename,
+      metadataJson: JSON.stringify(manifest.metadata, null, 2),
+      presetId: manifest.metadata.presetId ?? fallbackPresetId,
+      metadata: manifest.metadata.metadata ?? {},
+      generation,
+      files: manifest.metadata.files,
+      stickers,
+      extraIds,
+      extraDetails,
+      referenceAssetId,
+      warnings,
+      restoredFrom: packId,
+      schema: manifest.metadata.schema ?? null
+    });
+  }
+
+  // 旧包：只有 ZIP，需要解开并把素材重新入库
+  const zipPath = findPackZipPath(dataDir, packId);
+  if (!zipPath) throw createHttpError(404, "找不到这个表情包的原始文件，可能已被清理");
 
   let entries: ZipEntry[];
   try {
@@ -206,27 +347,38 @@ export async function restorePackById(
 
   const parsed = parsePackEntries(entries);
   const presetId = cleanText(parsed.presetId) ?? fallbackPresetId;
-  const info = getPackInfo(dataDir, packId);
   return restoreFromEntries(assetStore, dataDir, presetId, entries, parsed, {
     packId,
     downloadUrl: `/api/packs/${packId}/download`,
-    downloadFilename: info.downloadFilename || `easysticker-pack-${packId}.zip`,
-    // 包没变，metadata 直接沿用磁盘上的那份
-    metadataJson: JSON.stringify(parsed, null, 2)
+    downloadFilename: info.downloadFilename
   });
 }
 
-/**
- * 还原核心：把 ZIP 条目按原字节入库，重建可继续编辑的结果。
- * `reusePack` 用于「按 packId 还原」——包已在服务端且下载链接有效，不必再复制一份。
- */
+async function collectValidationWarnings(
+  assetStore: AssetStore,
+  presetId: string,
+  assetIds: string[]
+): Promise<string[]> {
+  try {
+    const validation = await validateAssetList(assetStore, presetId, assetIds);
+    if (!validation.ok) {
+      return ["还原的贴纸与当前平台规格不完全一致，导出前建议先单张重新生成或核对尺寸"];
+    }
+  } catch {
+    // 校验失败不应阻断还原
+  }
+  return [];
+}
+
+/* ── 核心：把 ZIP 条目按原字节入库，重建可继续编辑的结果 ───────────────── */
+
 async function restoreFromEntries(
   assetStore: AssetStore,
   dataDir: string,
   presetId: string,
   entries: ZipEntry[],
   parsed: ParsedPack,
-  reusePack?: { packId: string; downloadUrl: string; downloadFilename: string; metadataJson: string }
+  reusePack?: { packId: string; downloadUrl: string; downloadFilename: string }
 ) {
   const preset = getPlatformPreset(presetId);
   if (!preset) throw createHttpError(400, `unknown presetId: ${presetId}`);
@@ -254,10 +406,16 @@ async function restoreFromEntries(
     assetStore.save(entry.content, assetId, ext);
     restored.push({
       role,
-      ...(file.label ? { label: String(file.label) } : {}),
+      assetId,
       filename: path.basename(entry.name),
       zipPath: entry.name,
-      assetId,
+      // 尺寸/体积由 createPack 用 sharp 实测后写进清单，这里不重复测
+      width: null,
+      height: null,
+      format: null,
+      mimeType: null,
+      bytes: null,
+      ...(file.label ? { label: String(file.label) } : {}),
       ...(cleanText(file.prompt) ? { prompt: String(file.prompt) } : {}),
       ...(cleanText(file.style) ? { style: String(file.style) } : {}),
       ...(cleanText(file.emotion) ? { emotion: String(file.emotion) } : {}),
@@ -291,7 +449,7 @@ async function restoreFromEntries(
   const sourceGeneration = parsed.generation ?? {};
   const generation: PackGenerationInfo = {
     ...sourceGeneration,
-    // 参考图导入后拿到新的 assetId，下次重建 ZIP 仍要带上它
+    // 参考图导入后拿到新的 assetId，下次重建仍要带上它
     ...(reference ? { referenceAssetId: reference.assetId } : {}),
     restoredFrom: cleanText(parsed.packId) ?? sourceGeneration.restoredFrom,
     targetSize: sourceGeneration.targetSize ?? { width: preset.maxWidth, height: preset.maxHeight },
@@ -309,7 +467,7 @@ async function restoreFromEntries(
     role: "sticker" as const
   }));
 
-  const metadata = {
+  const metadata: PackMetadataLike = {
     title: cleanText(parsed.metadata?.title),
     author: cleanText(parsed.metadata?.author),
     version: cleanText(parsed.metadata?.version),
@@ -318,13 +476,17 @@ async function restoreFromEntries(
   };
 
   let packId: string;
+  let downloadUrl: string;
   let downloadFilename: string;
   let metadataJson: string;
-  let downloadUrl: string;
+  let files: PackFileMetadata[];
+
   if (reusePack) {
-    ({ packId, downloadFilename, metadataJson, downloadUrl } = reusePack);
+    ({ packId, downloadUrl, downloadFilename } = reusePack);
+    metadataJson = JSON.stringify(parsed, null, 2);
+    files = restored;
   } else {
-    const built = await buildZipPack(assetStore, dataDir, {
+    const built = await createPack(assetStore, dataDir, {
       presetId,
       assets: assetsPayload,
       coverAssetId: extraIds.coverAssetId,
@@ -338,55 +500,40 @@ async function restoreFromEntries(
       extraDetails
     });
     packId = built.packId;
+    downloadUrl = built.downloadUrl;
     downloadFilename = built.downloadFilename;
     metadataJson = built.metadataJson;
-    downloadUrl = `/api/packs/${packId}/download`;
+    const rebuilt = readPackManifest(dataDir, packId);
+    files = rebuilt?.metadata.files ?? restored;
   }
 
-  const validation = await validateAssetList(
-    assetStore,
-    presetId,
-    assetsPayload.map((a) => a.assetId)
-  );
-  if (!validation.ok) {
-    warnings.push("还原的贴纸与当前平台规格不完全一致，导出前建议先单张重新生成或核对尺寸");
-  }
+  const stickerIds = assetsPayload.map((a) => a.assetId);
+  const validationWarnings = reusePack
+    ? []
+    : await collectValidationWarnings(assetStore, presetId, stickerIds);
 
-  const includeReward = Boolean(extraIds.rewardGuideAssetId || extraIds.rewardThanksAssetId);
-
-  return {
+  return buildRestoreResponse({
     packId,
     downloadUrl,
     downloadFilename,
     metadataJson,
-    stickers: assetsPayload.map((a, i) => ({
-      ...a,
-      url: `/api/assets/${a.assetId}`,
-      ...(stickerFiles[i].prompt ? { prompt: stickerFiles[i].prompt } : {}),
-      ...(stickerFiles[i].style ? { style: stickerFiles[i].style } : {}),
-      ...(stickerFiles[i].emotion ? { emotion: stickerFiles[i].emotion } : {}),
-      ...(stickerFiles[i].sourceAssetId ? { sourceAssetId: stickerFiles[i].sourceAssetId } : {})
-    })),
-    extras: extraIds,
-    extraDetails,
+    presetId,
+    metadata,
     generation,
-    meta: {
-      count: assetsPayload.length,
-      styles: generation.styles ?? ["导入 ZIP"],
-      title: metadata.title ?? null,
-      author: metadata.author ?? null,
-      version: metadata.version ?? null,
-      copyright: metadata.copyright ?? null,
-      rewardMessage: metadata.rewardMessage ?? null,
-      rewardEnabled: includeReward,
-      referenceAssetId: reference?.assetId ?? null,
-      referenceMode: generation.referenceMode ?? (reference ? "restored" : "none"),
-      presetId
-    },
-    restored: {
-      fromPackId: cleanText(parsed.packId) ?? null,
-      schema: cleanText(parsed.schema) ?? null,
-      warnings
-    }
-  };
+    files,
+    stickers: assetsPayload.map((a, i) => ({
+      label: a.label,
+      assetId: a.assetId,
+      ...(stickerFiles[i]?.prompt ? { prompt: stickerFiles[i].prompt } : {}),
+      ...(stickerFiles[i]?.style ? { style: stickerFiles[i].style } : {}),
+      ...(stickerFiles[i]?.emotion ? { emotion: stickerFiles[i].emotion } : {}),
+      ...(stickerFiles[i]?.sourceAssetId ? { sourceAssetId: stickerFiles[i].sourceAssetId } : {})
+    })),
+    extraIds,
+    extraDetails,
+    referenceAssetId: reference?.assetId ?? null,
+    warnings: [...warnings, ...validationWarnings],
+    restoredFrom: cleanText(parsed.packId) ?? null,
+    schema: cleanText(parsed.schema) ?? null
+  });
 }
