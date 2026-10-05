@@ -467,7 +467,12 @@ function sanitizePersistedPackResult(raw: any): any {
           label: item.label,
           url: item.url,
           assetId: typeof item.assetId === "string" ? item.assetId : undefined,
-          prompt: typeof item.prompt === "string" ? item.prompt : undefined
+          prompt: typeof item.prompt === "string" ? item.prompt : undefined,
+          style: typeof item.style === "string" ? item.style : undefined,
+          emotion: typeof item.emotion === "string" ? item.emotion : undefined,
+          sourceAssetId: typeof item.sourceAssetId === "string" ? item.sourceAssetId : undefined,
+          editReferenceAssetId:
+            typeof item.editReferenceAssetId === "string" ? item.editReferenceAssetId : undefined
         }))
     : [];
 
@@ -513,7 +518,12 @@ function sanitizePersistedPackResult(raw: any): any {
     }
   };
 }
-function persistLastGeneratedResult(result: any): void {
+/**
+ * 把结果写进 localStorage（不碰历史记录）。
+ * 编辑图片后也要调它：否则刷新会把编辑前的图当成「上次结果」，
+ * 不仅预览退回旧图，再编辑还会以旧图为源、把上一次编辑悄悄丢掉。
+ */
+function persistLastPackPayload(result: any): void {
   const storage = getStorage();
   if (!storage || !result?.packId || !result?.downloadUrl) return;
 
@@ -540,11 +550,18 @@ function persistLastGeneratedResult(result: any): void {
       stickers: Array.isArray(result.stickers)
         ? result.stickers
             .filter((item: any) => item && typeof item.label === "string" && typeof item.url === "string")
+            // 逐张的 style / emotion / sourceAssetId / editReferenceAssetId 都要留住：
+            // 丢了它们，刷新后「已编辑」标记会消失，再次编辑也不再记录来源与参考图。
             .map((item: any) => ({
               label: item.label,
               url: item.url,
               assetId: typeof item.assetId === "string" ? item.assetId : undefined,
-              prompt: typeof item.prompt === "string" ? item.prompt : undefined
+              prompt: typeof item.prompt === "string" ? item.prompt : undefined,
+              style: typeof item.style === "string" ? item.style : undefined,
+              emotion: typeof item.emotion === "string" ? item.emotion : undefined,
+              sourceAssetId: typeof item.sourceAssetId === "string" ? item.sourceAssetId : undefined,
+              editReferenceAssetId:
+                typeof item.editReferenceAssetId === "string" ? item.editReferenceAssetId : undefined
             }))
         : [],
       metadataJson: typeof result.metadataJson === "string" ? result.metadataJson : undefined,
@@ -553,6 +570,10 @@ function persistLastGeneratedResult(result: any): void {
     }
   };
   try { storage.setItem(STORAGE_LAST_PACK, JSON.stringify(payload)); } catch { /* ignore */ }
+}
+
+function persistLastGeneratedResult(result: any): void {
+  persistLastPackPayload(result);
   addToPackHistory(result);
 }
 function restorePersistedPackResult(): boolean {
@@ -723,9 +744,17 @@ function savePackHistory(history: any[]): void {
   if (!storage) return;
   try { storage.setItem(STORAGE_PACK_HISTORY, JSON.stringify(history.slice(0, MAX_HISTORY))); } catch { /* ignore */ }
 }
-function addToPackHistory(result: any): void {
+/**
+ * 写入/更新历史记录。
+ * `replacePackId` 用于单资源重生成与编辑图片：那是同一个作品的下一版，
+ * 包 ID 会变（每次重建都会新建包），但历史记录只该留最新那条。
+ */
+function addToPackHistory(result: any, replacePackId?: string): void {
   if (!result?.packId || !result?.downloadUrl) return;
-  const history = getPackHistory();
+  let history = getPackHistory();
+  if (replacePackId && replacePackId !== result.packId) {
+    history = history.filter((h) => h.packId !== replacePackId);
+  }
   const filtered = history.filter((h) => h.packId !== result.packId);
   const spec = PLATFORM_SPECS[currentPlatform];
   const entry = {
@@ -1114,6 +1143,20 @@ function applyResourceResult(target: ResourceTarget, res: any): void {
       ...(res.sourceAssetId ? { sourceAssetId: res.sourceAssetId } : {}),
       ...(res.editReferenceAssetId ? { editReferenceAssetId: res.editReferenceAssetId } : {})
     };
+    // lastPackResult 也要同步，否则「刷新后恢复」与「重建 ZIP」读到的还是旧图
+    if (lastPackResult?.stickers && lastPackResult.stickers[index]) {
+      lastPackResult.stickers[index] = {
+        ...lastPackResult.stickers[index],
+        label: currentStickers[index].label,
+        assetId: currentStickers[index].assetId,
+        url: currentStickers[index].url,
+        prompt: currentStickers[index].prompt,
+        style: currentStickers[index].style,
+        emotion: currentStickers[index].emotion,
+        sourceAssetId: currentStickers[index].sourceAssetId,
+        editReferenceAssetId: currentStickers[index].editReferenceAssetId
+      };
+    }
     // 定点替换这一张。整组重建会让 20+ 张图重新请求与解码，
     // 实测多出一次网络往返并产生 100ms+ 长任务，这里只换一个节点。
     if (!window._preview!.updatePreviewCard(index, currentStickers[index], "success")) {
@@ -1130,6 +1173,9 @@ function applyResourceResult(target: ResourceTarget, res: any): void {
     if (res.sourceAssetId) currentExtras[`${target.key}_sourceAssetId`] = res.sourceAssetId;
     if (res.editReferenceAssetId) currentExtras[`${target.key}_editReferenceAssetId`] = res.editReferenceAssetId;
     delete currentExtras[`${target.key}_error`];
+    if (lastPackResult?.extras) {
+      lastPackResult.extras = { ...lastPackResult.extras, [target.key]: res.assetId };
+    }
     if (!window._preview!.updateExtraAsset(target.key, currentExtras, "success")) {
       window._preview!.renderExtraAssets(currentExtras, "success");
     }
@@ -1165,7 +1211,13 @@ async function runSingleResource(
     })
   });
   applyResourceResult(target, res);
+  const previousPackId = lastPackResult?.packId;
   if (lastPackResult) await rebuildPackFromState();
+  // 同步本地持久化：刷新后预览要是编辑后的图，历史记录也要指向最新那个包
+  if (lastPackResult) {
+    persistLastPackPayload(lastPackResult);
+    addToPackHistory(lastPackResult, previousPackId);
+  }
 }
 
 /** 把一张本地图片上传成 asset，用作附加参考图。 */
