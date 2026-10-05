@@ -11,7 +11,7 @@
     <title>EasySticker</title>
     <meta name="theme-color" id="themeMeta" content="#07c160" data-dark="#111827" />
     <script src="/js/theme.js?v=2"></script>
-    <link rel="stylesheet" href="/styles.css?v=19" />
+    <link rel="stylesheet" href="/styles.css?v=20" />
   </head>
   <body>
     <a href="#mainContent" class="skip-link">跳到主要内容</a>
@@ -499,6 +499,39 @@
     <div id="toastNotice" class="toast-notice" data-tone="info" data-visible="false" aria-live="assertive"></div>
 
     <!-- moved inside main.page above -->
+
+
+    <!-- 二次编辑弹窗 -->
+    <div id="editDialog" class="edit-dialog" hidden aria-modal="true" role="dialog" aria-labelledby="editDialogTitle">
+      <div class="edit-dialog-backdrop" id="editDialogBackdrop"></div>
+      <div class="edit-dialog-panel">
+        <div class="edit-dialog-head">
+          <h2 id="editDialogTitle">二次编辑</h2>
+          <button type="button" class="edit-dialog-close" id="editDialogClose" aria-label="关闭"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+        </div>
+        <div class="edit-dialog-body">
+          <div class="edit-dialog-preview">
+            <img id="editDialogImage" alt="当前图片" />
+            <p class="edit-dialog-target" id="editDialogTarget"></p>
+          </div>
+          <div class="edit-dialog-form">
+            <label class="field" for="editInstruction">
+              <span class="section-title"><span class="required-mark">*</span>修改要求</span>
+              <textarea id="editInstruction" rows="4" placeholder="例如：把背景换成浅蓝色，人物笑得更夸张一点"></textarea>
+              <div class="field-hint">只改这一张，其他图片不受影响。描述越具体效果越稳定。</div>
+            </label>
+            <div class="edit-chips" id="editChips" aria-label="常用修改"></div>
+          </div>
+        </div>
+        <div class="edit-dialog-foot">
+          <span class="field-hint" id="editDialogStatus"></span>
+          <div class="edit-dialog-actions">
+            <button type="button" class="secondary" id="editDialogCancel">取消</button>
+            <button type="button" id="editDialogSubmit">生成新版本</button>
+          </div>
+        </div>
+      </div>
+    </div>
 
     <!-- Lightbox -->
     <div id="lightbox" class="lightbox" hidden aria-modal="true" role="dialog">

@@ -84,6 +84,16 @@ const importBanner = byId<HTMLInputElement>("importBanner");
 const importRewardGuide = byId<HTMLInputElement>("importRewardGuide");
 const importRewardThanks = byId<HTMLInputElement>("importRewardThanks");
 const importZip = byId<HTMLInputElement>("importZip");
+const editDialog = req("editDialog");
+const editDialogBackdrop = req("editDialogBackdrop");
+const editDialogClose = req("editDialogClose");
+const editDialogCancel = req<HTMLButtonElement>("editDialogCancel");
+const editDialogSubmit = req<HTMLButtonElement>("editDialogSubmit");
+const editDialogImage = req<HTMLImageElement>("editDialogImage");
+const editDialogTarget = req("editDialogTarget");
+const editDialogStatus = req("editDialogStatus");
+const editInstruction = req<HTMLTextAreaElement>("editInstruction");
+const editChips = req("editChips");
 const importState = req("importState");
 const originalPreview = req<HTMLImageElement>("originalPreview");
 const creationModeAi = byId<HTMLInputElement>("creationModeAi");
@@ -560,6 +570,9 @@ function restorePersistedPackResult(): boolean {
     currentRewardEnabled = Boolean(restored.rewardEnabled || restored.result?.meta?.rewardEnabled);
     hasGenerationAttempted = Boolean(restored.uploadId && restored.prompt && restored.hasGenerationAttempted);
     lastPackResult = restored.result;
+    // 必须把资源写回模块状态，否则恢复出来的预览只是「看得见」：
+    // 单资源重生成、二次编辑都会因为 currentStickers 为空而静默失效。
+    syncStateFromResult(restored.result);
 
     wechatAiPrompt.value = restored.prompt;
     if (wechatAiProvider) wechatAiProvider.value = currentAiProvider;
@@ -968,9 +981,17 @@ const EXTRA_ROLE_BY_KEY: Record<string, string> = {
 
 /** 汇总当前预览中已有的资源（含生成上下文），用于重新打包。 */
 function collectPackAssets(): {
-  assets: Array<{ label: string; assetId: string; role: string; prompt?: string; style?: string; emotion?: string }>;
+  assets: Array<{
+    label: string;
+    assetId: string;
+    role: string;
+    prompt?: string;
+    style?: string;
+    emotion?: string;
+    sourceAssetId?: string;
+  }>;
   extras: Record<string, string>;
-  extraDetails: Record<string, { prompt?: string; style?: string }>;
+  extraDetails: Record<string, { prompt?: string; style?: string; sourceAssetId?: string }>;
 } {
   const assets = currentStickers
     .filter((s) => s && s.assetId)
@@ -980,16 +1001,18 @@ function collectPackAssets(): {
       role: "sticker",
       ...(s.prompt ? { prompt: s.prompt } : {}),
       ...(s.style ? { style: s.style } : {}),
-      ...(s.emotion ? { emotion: s.emotion } : {})
+      ...(s.emotion ? { emotion: s.emotion } : {}),
+      ...(s.sourceAssetId ? { sourceAssetId: s.sourceAssetId } : {})
     }));
   const extras: Record<string, string> = {};
-  const extraDetails: Record<string, { prompt?: string; style?: string }> = {};
+  const extraDetails: Record<string, { prompt?: string; style?: string; sourceAssetId?: string }> = {};
   for (const key of EXTRA_ASSET_KEYS) {
     const id = currentExtras[key];
     if (typeof id === "string" && id) extras[key] = id;
-    const detail: { prompt?: string; style?: string } = {};
+    const detail: { prompt?: string; style?: string; sourceAssetId?: string } = {};
     if (currentExtras[`${key}_prompt`]) detail.prompt = currentExtras[`${key}_prompt`];
     if (currentExtras[`${key}_style`]) detail.style = currentExtras[`${key}_style`];
+    if (currentExtras[`${key}_sourceAssetId`]) detail.sourceAssetId = currentExtras[`${key}_sourceAssetId`];
     if (Object.keys(detail).length) extraDetails[EXTRA_ROLE_BY_KEY[key]!] = detail;
   }
   return { assets, extras, extraDetails };
@@ -1028,69 +1051,237 @@ async function rebuildPackFromState(): Promise<void> {
   }
 }
 
+type ResourceTarget = { kind: string; index?: number; key?: string };
+
+const EXTRA_TITLE_BY_KEY: Record<string, string> = {
+  coverAssetId: "封面图",
+  iconAssetId: "图标",
+  bannerAssetId: "横幅",
+  rewardGuideAssetId: "赞赏引导图",
+  rewardThanksAssetId: "赞赏答谢图"
+};
+
+/** 编辑时用的基础提示词：优先用表单里的，其次回退到包里记录的原始提示词。 */
+function resolveBasePrompt(): string {
+  const typed = wechatAiPrompt.value.trim();
+  if (typed) return typed;
+  const stored = lastPackResult?.generation?.prompt;
+  return typeof stored === "string" && stored.trim() ? stored.trim() : "";
+}
+
+function resourceLabel(target: ResourceTarget): string {
+  if (target.kind === "sticker") return `第 ${(target.index ?? 0) + 1} 张表情`;
+  return (target.key && EXTRA_TITLE_BY_KEY[target.key]) || "该资源";
+}
+
+/** 该资源当前的 assetId —— 二次编辑要拿它当参考图。 */
+function resourceAssetId(target: ResourceTarget): string | null {
+  if (target.kind === "sticker" && typeof target.index === "number") {
+    return currentStickers[target.index]?.assetId ?? null;
+  }
+  if (target.key) return currentExtras[target.key] ?? null;
+  return null;
+}
+
+/** 把单资源生成的结果写回预览状态。 */
+function applyResourceResult(target: ResourceTarget, res: any): void {
+  const url = res.url || `/api/assets/${res.assetId}`;
+  if (target.kind === "sticker" && typeof target.index === "number") {
+    const index = target.index;
+    const existing = currentStickers[index];
+    if (!existing) return;
+    currentStickers[index] = {
+      ...existing,
+      label: res.label ?? existing.label,
+      assetId: res.assetId,
+      url,
+      prompt: res.prompt,
+      style: res.style ?? existing.style,
+      emotion: res.emotion ?? existing.emotion,
+      ...(res.sourceAssetId ? { sourceAssetId: res.sourceAssetId } : {})
+    };
+    // renderPreview 带增量渲染，已存在的卡片不会重绘；先清空以强制整组重建。
+    wechatAiPreview.innerHTML = "";
+    window._preview!.renderPreview(currentStickers, "success");
+    return;
+  }
+  if (target.key) {
+    currentExtras[target.key] = res.assetId;
+    currentExtras[`${target.key}_prompt`] = res.prompt;
+    if (res.style) currentExtras[`${target.key}_style`] = res.style;
+    if (res.sourceAssetId) currentExtras[`${target.key}_sourceAssetId`] = res.sourceAssetId;
+    delete currentExtras[`${target.key}_error`];
+    window._preview!.renderExtraAssets(currentExtras, "success");
+  }
+}
+
+/** 单资源生成的公共部分：请求 → 写回状态 → 重建 ZIP。 */
+async function runSingleResource(
+  target: ResourceTarget,
+  options: { mode: "regenerate" | "edit"; instruction?: string; sourceAssetId?: string }
+): Promise<void> {
+  const res = await requestJson("/api/generate/resource", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      presetId: currentPlatform,
+      referenceAssetId: currentUploadId,
+      prompt: resolveBasePrompt(),
+      provider: wechatAiProvider ? wechatAiProvider.value : undefined,
+      styles: currentStyles.length ? currentStyles : undefined,
+      stickerCount: Number(wechatAiCount.value || DEFAULT_STICKER_COUNT),
+      metadata: getMetadataPayload(),
+      target,
+      mode: options.mode,
+      ...(options.sourceAssetId ? { sourceAssetId: options.sourceAssetId } : {}),
+      ...(options.instruction ? { instruction: options.instruction } : {})
+    })
+  });
+  applyResourceResult(target, res);
+  if (lastPackResult) await rebuildPackFromState();
+}
+
 /** 只重生成失败的那一张资源（贴纸或扩展图），不重跑整包。 */
-async function regenerateResource(target: { kind: string; index?: number; key?: string }): Promise<void> {
+async function regenerateResource(target: ResourceTarget): Promise<void> {
   if (resourceRegenerating) return;
   if (!currentUploadId) {
     window._ui!.setNotice("请先上传参考图。", "error");
     return;
   }
-  const prompt = wechatAiPrompt.value.trim();
-  if (!prompt) {
-    window._ui!.setNotice("请先补充提示词。", "error");
+  if (!resolveBasePrompt()) {
+    window._ui!.setNotice("请先补充提示词，再重新生成。", "error");
     return;
   }
-  const targetLabel = target.kind === "sticker" ? `第 ${(target.index ?? 0) + 1} 张表情` : "该资源";
+  const label = resourceLabel(target);
   resourceRegenerating = true;
-  window._ui!.setNotice(`正在重新生成${targetLabel}...`, "info");
+  window._ui!.setNotice(`正在重新生成${label}...`, "info");
   try {
-    const res = await requestJson("/api/generate/resource", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        presetId: currentPlatform,
-        referenceAssetId: currentUploadId,
-        prompt,
-        provider: wechatAiProvider ? wechatAiProvider.value : undefined,
-        styles: currentStyles.length ? currentStyles : undefined,
-        stickerCount: Number(wechatAiCount.value || DEFAULT_STICKER_COUNT),
-        metadata: getMetadataPayload(),
-        target,
-        mode: "regenerate"
-      })
-    });
-    const url = res.url || `/api/assets/${res.assetId}`;
-    if (target.kind === "sticker" && typeof target.index === "number") {
-      const index = target.index;
-      const existing = currentStickers[index];
-      if (existing) {
-        currentStickers[index] = {
-          ...existing,
-          label: res.label ?? existing.label,
-          assetId: res.assetId,
-          url,
-          prompt: res.prompt,
-          style: res.style ?? existing.style,
-          emotion: res.emotion ?? existing.emotion
-        };
-        // renderPreview 带增量渲染，已存在的卡片不会重绘；先清空以强制整组重建。
-        wechatAiPreview.innerHTML = "";
-        window._preview!.renderPreview(currentStickers, "success");
-      }
-    } else if (target.key) {
-      currentExtras[target.key] = res.assetId;
-      currentExtras[`${target.key}_prompt`] = res.prompt;
-      if (res.style) currentExtras[`${target.key}_style`] = res.style;
-      delete currentExtras[`${target.key}_error`];
-      window._preview!.renderExtraAssets(currentExtras, "success");
-    }
-    if (lastPackResult) await rebuildPackFromState();
-    window._ui!.setNotice(`${targetLabel}已重新生成。`, "success");
+    await runSingleResource(target, { mode: "regenerate" });
+    window._ui!.setNotice(`${label}已重新生成。`, "success");
   } catch (error) {
     window._ui!.setNotice(error instanceof Error ? error.message : "重新生成失败，请稍后重试。", "error");
   } finally {
     resourceRegenerating = false;
   }
+}
+
+// ── 二次编辑：在某一张图的基础上继续改 ──────────────────────────────────
+let editTarget: ResourceTarget | null = null;
+let editSourceAssetId: string | null = null;
+
+const EDIT_INSTRUCTION_CHIPS = [
+  "背景换成纯色",
+  "表情更夸张一点",
+  "线条加粗",
+  "加一顶帽子",
+  "换成冬季服装",
+  "加上节日元素"
+];
+
+function renderEditChips(): void {
+  if (!editChips) return;
+  editChips.innerHTML = "";
+  for (const text of EDIT_INSTRUCTION_CHIPS) {
+    const chip = document.createElement("button");
+    chip.type = "button";
+    chip.className = "edit-chip";
+    chip.textContent = text;
+    chip.addEventListener("click", () => {
+      // 追加而不是覆盖，方便组合多条要求
+      const current = editInstruction.value.trim();
+      editInstruction.value = current ? `${current}，${text}` : text;
+      editInstruction.focus();
+    });
+    editChips.appendChild(chip);
+  }
+}
+
+function openEditDialog(target: ResourceTarget): void {
+  if (resourceRegenerating) return;
+  if (!currentUploadId) {
+    window._ui!.setNotice("请先上传参考图，再使用二次编辑。", "error");
+    return;
+  }
+  const assetId = resourceAssetId(target);
+  if (!assetId) return;
+
+  editTarget = target;
+  editSourceAssetId = assetId;
+  if (editDialogImage) editDialogImage.src = window._preview!.buildAssetUrl(assetId);
+  if (editDialogTarget) editDialogTarget.textContent = `${resourceLabel(target)} · 当前版本`;
+  editInstruction.value = "";
+  if (editDialogStatus) editDialogStatus.textContent = "";
+  renderEditChips();
+  editDialog.hidden = false;
+  editInstruction.focus();
+}
+
+function closeEditDialog(): void {
+  editDialog.hidden = true;
+  editTarget = null;
+  editSourceAssetId = null;
+  if (editDialogStatus) editDialogStatus.textContent = "";
+}
+
+async function submitEditDialog(): Promise<void> {
+  if (!editTarget || !editSourceAssetId) return;
+  const instruction = editInstruction.value.trim();
+  if (!instruction) {
+    if (editDialogStatus) editDialogStatus.textContent = "请先填写修改要求。";
+    editInstruction.focus();
+    return;
+  }
+  if (!resolveBasePrompt()) {
+    if (editDialogStatus) editDialogStatus.textContent = "请先在「提示词」里描述主体，再使用二次编辑。";
+    return;
+  }
+
+  const target = editTarget;
+  const sourceAssetId = editSourceAssetId;
+  const label = resourceLabel(target);
+  editDialogSubmit.disabled = true;
+  if (editDialogStatus) editDialogStatus.textContent = "正在生成新版本…";
+  resourceRegenerating = true;
+  try {
+    await runSingleResource(target, { mode: "edit", instruction, sourceAssetId });
+    closeEditDialog();
+    window._ui!.setNotice(`${label}已更新为编辑后的新版本。`, "success");
+  } catch (error) {
+    if (editDialogStatus) {
+      editDialogStatus.textContent = error instanceof Error ? error.message : "生成失败，请稍后重试。";
+    }
+  } finally {
+    editDialogSubmit.disabled = false;
+    resourceRegenerating = false;
+  }
+}
+
+/** 从卡片上的 data-target 解析出资源目标。 */
+function targetFromCard(el: HTMLElement | null): ResourceTarget | null {
+  const card = el?.closest?.(".preview-item") as HTMLElement | null;
+  const raw = card?.dataset.target;
+  if (!raw) return null;
+  try {
+    return JSON.parse(raw) as ResourceTarget;
+  } catch {
+    return null;
+  }
+}
+
+function mountEditDialog(): void {
+  editDialogBackdrop?.addEventListener("click", closeEditDialog);
+  editDialogClose?.addEventListener("click", closeEditDialog);
+  editDialogCancel?.addEventListener("click", closeEditDialog);
+  editDialogSubmit?.addEventListener("click", () => void submitEditDialog());
+  editInstruction?.addEventListener("keydown", (event) => {
+    if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) {
+      event.preventDefault();
+      void submitEditDialog();
+    }
+  });
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape" && editDialog && !editDialog.hidden) closeEditDialog();
+  });
 }
 
 function setGenerateButtonsBusy(busy: boolean): void {
@@ -1270,6 +1461,7 @@ function syncStateFromResult(json: any): void {
     if (!detail) continue;
     if (detail.prompt) currentExtras[`${key}_prompt`] = detail.prompt;
     if (detail.style) currentExtras[`${key}_style`] = detail.style;
+    if (detail.sourceAssetId) currentExtras[`${key}_sourceAssetId`] = detail.sourceAssetId;
   }
 
   // 还原 ZIP 时把包里的风格 / 标题 / 作者写回表单，后续重建 ZIP 才能保持一致
@@ -2016,10 +2208,19 @@ function bindEvents(): void {
   resetSubmit.addEventListener("click", () => resetAllState());
   // 阻止冒泡：清空按钮位于 #historyToggle 内，避免同时触发折叠/展开
   clearHistoryBtn?.addEventListener("click", (event) => { event.stopPropagation(); void clearPackHistory(); });
+  mountEditDialog();
 
   document.addEventListener("click", (e) => {
     const target = (e.target as HTMLElement | null)?.closest?.("#historyToggle, .collapse-btn");
     if (target) toggleHistory();
+  });
+  // 卡片上的「二次编辑」：在这一张的基础上继续改，不影响其它图片
+  document.addEventListener("click", (e) => {
+    const editBtn = (e.target as HTMLElement | null)?.closest?.('[data-action="edit-resource"]') as HTMLElement | null;
+    if (!editBtn) return;
+    e.preventDefault();
+    const target = targetFromCard(editBtn);
+    if (target) openEditDialog(target);
   });
   // 失败卡片（贴纸 + 封面/图标/横幅/赞赏图）点击重试，兑现代占位符文案「可点击重新生成」。
   // 有明确 target 时只重生成该资源；否则（整体失败）回退为整包重生成。

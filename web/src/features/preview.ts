@@ -149,6 +149,35 @@ const PLACEHOLDER_STATE_TEXT: Record<Tone, string> = {
   success: "本次结果未返回该资源"
 };
 
+const EDIT_ICON_SVG =
+  '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>';
+
+/** 标记「这一张是在原图基础上二次编辑过的」。 */
+function markEdited(card: HTMLElement): void {
+  const title = card.querySelector(".preview-title");
+  if (!title || title.querySelector(".preview-edited-tag")) return;
+  const tag = document.createElement("span");
+  tag.className = "preview-edited-tag";
+  tag.textContent = "已编辑";
+  title.appendChild(tag);
+}
+
+/** 给成功生成的卡片挂上「二次编辑」入口（失败卡片走点击重新生成，不需要它）。 */
+function appendEditAction(card: HTMLElement): void {
+  const actions = document.createElement("div");
+  actions.className = "preview-actions";
+
+  const edit = document.createElement("button");
+  edit.type = "button";
+  edit.className = "preview-action-btn";
+  edit.dataset.action = "edit-resource";
+  edit.title = "在这一张的基础上继续修改，不影响其它图片";
+  edit.innerHTML = `${EDIT_ICON_SVG}<span>二次编辑</span>`;
+
+  actions.appendChild(edit);
+  card.appendChild(actions);
+}
+
 const COPY_ICON_SVG =
   '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>';
 
@@ -340,6 +369,10 @@ function createPreviewCard(sticker: StickerPreview | null, tone: Tone, index?: n
 
   card.appendChild(head);
   card.appendChild(media);
+  if (hasImage) {
+    if (sticker?.sourceAssetId) markEdited(card);
+    appendEditAction(card);
+  }
   return card;
 }
 
@@ -446,6 +479,10 @@ export function renderExtraAssets(extras: Record<string, any> = {}, tone: Tone =
 
     card.appendChild(head);
     card.appendChild(media);
+    if (assetId && effectiveTone === "success") {
+      if (extras?.[`${item.key}_sourceAssetId`]) markEdited(card);
+      appendEditAction(card);
+    }
 
     // 有资源，或本次生成失败（显示失败卡片供点击重试），都要让分组可见。
     const revealSection = Boolean(assetId) || effectiveTone === "error";

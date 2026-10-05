@@ -593,7 +593,17 @@ describe("pipeline", () => {
       expect(editRes.statusCode).toBe(200);
       const edited = editRes.json();
       expect(edited.assetId).not.toBe(sticker.assetId);
-      expect(edited.prompt).toContain("把背景改成浅蓝色");
+      // instruction 以「编辑要求：」追加到提示词，并带上来源资源便于追溯
+      expect(edited.prompt).toContain("编辑要求：把背景改成浅蓝色");
+      expect(edited.sourceAssetId).toBe(sticker.assetId);
+      expect(edited.label).toBe("003");
+      expect(edited.style).toBe("贴纸");
+      expect(edited.targetSize).toEqual({ width: 240, height: 240 });
+      const editedAsset = await app.inject({ method: "GET", url: `/api/assets/${edited.assetId}` });
+      expect(editedAsset.statusCode).toBe(200);
+      const editedMeta = await sharp(editedAsset.rawPayload).metadata();
+      expect(editedMeta.width).toBe(240);
+      expect(editedMeta.height).toBe(240);
 
       // 4) 非法 target → 400
       const badRes = await app.inject({
