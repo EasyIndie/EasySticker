@@ -1114,9 +1114,13 @@ function applyResourceResult(target: ResourceTarget, res: any): void {
       ...(res.sourceAssetId ? { sourceAssetId: res.sourceAssetId } : {}),
       ...(res.editReferenceAssetId ? { editReferenceAssetId: res.editReferenceAssetId } : {})
     };
-    // renderPreview 带增量渲染，已存在的卡片不会重绘；先清空以强制整组重建。
-    wechatAiPreview.innerHTML = "";
-    window._preview!.renderPreview(currentStickers, "success");
+    // 定点替换这一张。整组重建会让 20+ 张图重新请求与解码，
+    // 实测多出一次网络往返并产生 100ms+ 长任务，这里只换一个节点。
+    if (!window._preview!.updatePreviewCard(index, currentStickers[index], "success")) {
+      // 兜底：卡片已经被重建过（比如换平台），退化为整组渲染
+      wechatAiPreview.innerHTML = "";
+      window._preview!.renderPreview(currentStickers, "success");
+    }
     return;
   }
   if (target.key) {
@@ -1126,7 +1130,9 @@ function applyResourceResult(target: ResourceTarget, res: any): void {
     if (res.sourceAssetId) currentExtras[`${target.key}_sourceAssetId`] = res.sourceAssetId;
     if (res.editReferenceAssetId) currentExtras[`${target.key}_editReferenceAssetId`] = res.editReferenceAssetId;
     delete currentExtras[`${target.key}_error`];
-    window._preview!.renderExtraAssets(currentExtras, "success");
+    if (!window._preview!.updateExtraAsset(target.key, currentExtras, "success")) {
+      window._preview!.renderExtraAssets(currentExtras, "success");
+    }
   }
 }
 
@@ -1273,7 +1279,9 @@ async function submitEditDialog(): Promise<void> {
   const target = editTarget;
   const sourceAssetId = editSourceAssetId;
   const label = resourceLabel(target);
+  const submitLabel = editDialogSubmit.textContent || "生成新版本";
   editDialogSubmit.disabled = true;
+  editDialogSubmit.textContent = "生成中…";
   resourceRegenerating = true;
   try {
     // 可选：再给模型一张参考图（优先用用户新选的图，否则用本包的原始参考图）
@@ -1287,7 +1295,11 @@ async function submitEditDialog(): Promise<void> {
     }
 
     if (editDialogStatus) {
-      editDialogStatus.textContent = editReferenceAssetId ? "正在生成新版本（含附加参考图）…" : "正在生成新版本…";
+      // 生图本身要几秒到十几秒，明确告诉用户可以关掉窗口去忙别的：
+      // 请求不会被中断，这一张会在完成后自动更新。
+      editDialogStatus.textContent = editReferenceAssetId
+        ? "正在生成新版本（含附加参考图）… 可以关掉本窗口，完成后会自动更新这一张。"
+        : "正在生成新版本… 可以关掉本窗口，完成后会自动更新这一张。";
     }
     await runSingleResource(target, { mode: "edit", instruction, sourceAssetId, editReferenceAssetId });
     closeEditDialog();
@@ -1298,8 +1310,27 @@ async function submitEditDialog(): Promise<void> {
     }
   } finally {
     editDialogSubmit.disabled = false;
+    editDialogSubmit.textContent = submitLabel;
     resourceRegenerating = false;
   }
+}
+
+/**
+ * 首次打开弹窗会有一次性的样式/合成开销（实测 80~120ms 的长任务，
+ * 之后每次打开都是 0）。挂载后在空闲时「空跑」一次，把这份开销挪到用户点击之前。
+ */
+function warmUpEditDialog(): void {
+  const run = () => {
+    if (!editDialog.hidden) return; // 用户已经打开了，别打扰
+    editDialog.style.visibility = "hidden";
+    editDialog.hidden = false;
+    void editDialog.offsetHeight; // 逼浏览器完成一次样式 + 布局 + 合成
+    editDialog.hidden = true;
+    editDialog.style.visibility = "";
+  };
+  const idle = (window as any).requestIdleCallback;
+  if (typeof idle === "function") idle(run, { timeout: 2000 });
+  else window.setTimeout(run, 1000);
 }
 
 /** 从卡片上的 data-target 解析出资源目标。 */
@@ -2392,6 +2423,7 @@ async function initApp(): Promise<void> {
   initFilePickers();
   initLightbox();
   initKeyboardShortcuts();
+  warmUpEditDialog();
 }
 
 export function mountApp(): void {
