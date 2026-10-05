@@ -49,6 +49,9 @@ infrastructure（适配器）  providers 实现、exporters、repositories、mai
 - **导入 ZIP 还原生成现场**：`generate/restore.ts` + `POST /api/generate/import-pack`。读回下载包里 `metadata.json` 记录的逐张提示词 / 风格 / 情绪与 `source/reference.*`，图片按原字节重新入库（不重编码）。还原后的结果与 AI 生成结果同构，可直接单张重生成或重建 ZIP。ZIP 读取由 `src/lib/zip.ts` 完成（仅依赖 Node 内置 `zlib`，不引第三方库）。
 - **历史记录一键还原**：同一还原核心的第二个入口 `POST /api/packs/:packId/restore`（`restorePackById`）。包已在服务端且下载链接有效，直接复用不再复制；`packId` 走白名单正则校验，防路径穿越。
 - **资产仓储 seam**：`AssetStore` 接口 + `createFileAssetStore(dataDir)` 默认实现，注入到服务；未来可换对象存储。
+- **资源查找 O(1)**：`findAssetFile` 按已知扩展名 `statSync` 探测，而不是 `readdirSync` 扫目录。后者是 O(目录大小) 的同步 I/O，挂在 `GET /api/assets/:id`（结果页每张图一个请求）与打包（每包约 30 次）的热路径上；实测 333 文件时单次 0.699ms → 0.023ms，且不随规模退化。同时用字符集白名单挡住 assetId 路径穿越。
+- **包只存清单，ZIP 按需现打**：`packs/<packId>.json` 保存 `metadata.json`（逐张提示词/尺寸/角色），下载时由 `createPackArchive` 现场打包并边打边发。避免了「uploads 一份 + zip 一份」的双倍占用，也让「单资源重生成 → 重建整包」从搬几 MB 变成写几 KB。旧包（仅 `.zip`）仍可直接流式下载，无需迁移。
+- **数据目录 GC**：`services/maintenance/gc.ts` + `scheduler.ts`，服务端每 6 小时巡检（`server.maintenance` 配置）。只做可证明安全的回收：压缩旧包、清孤儿素材（需过 6 小时安全期）、清 `.orig` 备份；按保留期删包默认关闭。CLI 入口 `src/cli/gc.ts`（`npm run gc`），后台「存储」面板同源调用。
 - **静态资源豁免**：`isPublicRoute` 放行 `/api/assets/:id` 与 `/api/packs/:id/download`（前缀匹配）。它们既豁免鉴权（`<img>`/`<a>` 无法携带 `Authorization`），也不计入 API 频率限制，避免结果页并发加载几十张图触发 429。
 - **typecheck 门禁**：`npm run typecheck`（`tsc --noEmit`）已接入 `npm test`，当前 0 错误。
 

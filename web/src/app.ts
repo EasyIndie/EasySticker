@@ -657,7 +657,12 @@ function formatTimeAgo(iso: string): string {
 function renderPackHistory(): void {
   const history = getPackHistory();
   if (!historySection || !historyList) return;
-  if (history.length === 0) { historySection.style.display = "none"; return; }
+  if (history.length === 0) {
+    // 先清空节点再隐藏：否则删掉最后一条后，DOM 里会残留（不可见的）陈旧记录
+    historyList.innerHTML = "";
+    historySection.style.display = "none";
+    return;
+  }
   historySection.style.display = "block";
 
   if (historySummary) {
@@ -676,6 +681,7 @@ function renderPackHistory(): void {
         <div class="history-item-actions">
           <button type="button" class="secondary history-dl-btn" data-pack-id="${window._preview!.escapeAttr(entry.packId)}" data-dl-url="${window._preview!.escapeAttr(entry.downloadUrl)}" data-filename="${window._preview!.escapeAttr(entry.downloadFilename)}">下载</button>
           <button type="button" class="secondary history-restore-btn" data-pack-id="${window._preview!.escapeAttr(entry.packId)}"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l3 2"/></svg> 还原现场</button>
+          <button type="button" class="secondary history-delete-btn" data-pack-id="${window._preview!.escapeAttr(entry.packId)}" title="删除这条记录（同时删掉服务端的包）" aria-label="删除这条记录"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></button>
         </div>
       </div>
     `).join("");
@@ -698,6 +704,11 @@ function renderPackHistory(): void {
       void restoreFromHistory((btn as HTMLButtonElement).dataset.packId || "");
     });
   });
+  historyList.querySelectorAll(".history-delete-btn").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      void deletePackFromHistory((btn as HTMLButtonElement).dataset.packId || "");
+    });
+  });
 }
 function clearPackHistory(): void {
   savePackHistory([]);
@@ -711,6 +722,24 @@ function switchPlatform(platform: string | undefined): void {
     setSelectedPlatform(currentPlatform);
     syncPlatformUI();
   }
+}
+
+/**
+ * 删除一条历史记录：服务端的包一并删掉，释放磁盘。
+ * 服务端删失败（比如包早已被清理）也要清掉本地记录，否则这条会永远删不掉。
+ */
+async function deletePackFromHistory(packId: string): Promise<void> {
+  const history = getPackHistory();
+  const entry = history.find((h) => h.packId === packId);
+  try {
+    await requestJson(`/api/packs/${encodeURIComponent(packId)}`, { method: "DELETE" });
+  } catch {
+    // 包可能已经不在了，继续清本地记录
+  }
+  savePackHistory(history.filter((h) => h.packId !== packId));
+  renderPackHistory();
+  if (lastPackResult?.packId === packId) resetGenerationResult({ clearPersisted: true });
+  window._ui!.setNotice(`已删除「${entry?.title || packId}」`, "info");
 }
 
 /**

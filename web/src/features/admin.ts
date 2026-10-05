@@ -195,6 +195,7 @@ function switchTab(tab: string): void {
     case "dashboard": void loadDashboard(); break;
     case "users": void loadUsers(); break;
     case "stats": void loadStats(); break;
+    case "storage": void loadStorage(); break;
     case "settings": void loadSettings(); void loadAlertRules(); void loadAiProviders(); break;
   }
 }
@@ -696,6 +697,92 @@ function formatTime(isoStr: string): string {
   } catch { return isoStr; }
 }
 
+// ── 存储 ────────────────────────────────────────────────────────────────────
+const MB = 1024 * 1024;
+const mbText = (bytes: number) => `${(Number(bytes || 0) / MB).toFixed(2)} MB`;
+
+async function loadStorage(): Promise<void> {
+  const data = await apiCall<any>("GET", "/admin/storage");
+  if (!data?.report) return;
+  renderStorage(data.report, data.packs || []);
+}
+
+function renderStorage(report: any, packs: any[]): void {
+  const grid = byId("storage-metrics");
+  if (grid) {
+    const cards: Array<[string, string, string]> = [
+      ["包数量", String(report.packs?.total ?? 0), `${report.packs?.legacyZips ?? 0} 个仍是整包 ZIP`],
+      ["包占用", mbText(report.packs?.bytes), "清单 + 残留的旧 ZIP"],
+      ["素材数量", String(report.uploads?.total ?? 0), "data/uploads"],
+      ["素材占用", mbText(report.uploads?.bytes), "所有生成/上传的图片"],
+      ["待压缩旧包", `${report.compacted?.count ?? 0} 个`, mbText(report.compacted?.bytes)],
+      ["可回收孤儿素材", `${report.orphanAssets?.count ?? 0} 个`, mbText(report.orphanAssets?.bytes)],
+      ["可回收备份", `${report.origBackups?.count ?? 0} 个`, mbText(report.origBackups?.bytes)],
+      ["合计可回收", mbText(report.reclaimedBytes), "下次自动巡检会清理"]
+    ];
+    grid.innerHTML = cards
+      .map(
+        ([label, value, hint]) => `
+      <div class="storage-card">
+        <div class="storage-card-label">${escHtml(label)}</div>
+        <div class="storage-card-value">${escHtml(value)}</div>
+        <div class="storage-card-hint">${escHtml(hint)}</div>
+      </div>`
+      )
+      .join("");
+  }
+
+  const countEl = byId("storage-pack-count");
+  if (countEl) countEl.textContent = packs.length ? `共 ${packs.length} 个` : "";
+
+  const list = byId("storage-packs");
+  if (!list) return;
+  if (!packs.length) {
+    list.innerHTML = '<p class="empty-text">还没有任何包</p>';
+    return;
+  }
+  list.innerHTML = `
+    <table class="data-table">
+      <thead><tr><th>标题</th><th>贴纸</th><th>占用</th><th>创建时间</th><th>保存方式</th><th></th></tr></thead>
+      <tbody>
+        ${packs
+          .map(
+            (p) => `<tr>
+          <td>${escHtml(p.title || p.packId)}</td>
+          <td>${p.stickerCount || "-"}</td>
+          <td>${mbText(p.bytes)}</td>
+          <td>${escHtml(formatTime(p.createdAt))}</td>
+          <td>${p.hasZip ? "旧 ZIP" : "清单"}</td>
+          <td><button class="btn btn-outline btn-sm" data-action="delete-pack" data-pack-id="${escHtml(p.packId)}">删除</button></td>
+        </tr>`
+          )
+          .join("")}
+      </tbody>
+    </table>`;
+}
+
+async function runStorageGc(): Promise<void> {
+  const status = byId("storage-status");
+  if (status) status.textContent = "正在清理…";
+  const res = await apiCall<any>("POST", "/admin/storage/gc", { dryRun: false });
+  if (!res?.report) {
+    if (status) status.textContent = "清理失败";
+    return;
+  }
+  const r = res.report;
+  if (status) {
+    status.textContent = `已清理：压缩旧包 ${r.compacted.count} 个、孤儿素材 ${r.orphanAssets.count} 个、备份 ${r.origBackups.count} 个，回收 ${mbText(r.reclaimedBytes)}`;
+  }
+  await loadStorage();
+}
+
+async function deletePack(packId: string): Promise<void> {
+  const status = byId("storage-status");
+  const res = await apiCall<any>("DELETE", `/admin/packs/${encodeURIComponent(packId)}`);
+  if (status) status.textContent = res ? `已删除 ${packId}` : "删除失败";
+  await loadStorage();
+}
+
 // ── Mount / event binding ───────────────────────────────────────────────────
 export function mountAdmin(): void {
   initTheme();
@@ -708,6 +795,12 @@ export function mountAdmin(): void {
   req("save-settings-btn").addEventListener("click", () => void saveSettings());
   req("save-rules-btn").addEventListener("click", () => void saveAlertRules());
   req("save-ai-btn").addEventListener("click", () => void saveAiProviders());
+  byId("storage-refresh-btn")?.addEventListener("click", () => void loadStorage());
+  byId("storage-gc-btn")?.addEventListener("click", () => void runStorageGc());
+  byId("storage-packs")?.addEventListener("click", (e) => {
+    const btn = (e.target as HTMLElement | null)?.closest?.("[data-action='delete-pack']") as HTMLElement | null;
+    if (btn?.dataset.packId) void deletePack(btn.dataset.packId);
+  });
   req("ai-providers-container").addEventListener("click", (e) => {
     const target = (e.target as HTMLElement | null)?.closest?.("[data-action]") as HTMLElement | null;
     if (!target) return;

@@ -4,6 +4,7 @@ import createHttpError from "http-errors";
 import {
   createPack,
   createPackArchive,
+  deletePack,
   findPackZipPath,
   getPackInfo,
   missingPackFiles,
@@ -75,6 +76,18 @@ export function registerPackRoutes(deps: AppDeps) {
       const presetId =
         (req.body as { presetId?: string } | undefined)?.presetId || "wechat_stickers";
       return restorePackById(deps.assetStore, deps.dataDir, presetId, req.params.packId);
+    });
+
+    // 包的生命周期收尾：删掉清单（与旧 ZIP），素材留给 GC 回收。
+    // 访问级别与 download / restore 一致（凭 packId），不额外开权限口子。
+    app.delete<{
+      Params: { packId: string };
+    }>("/packs/:packId", async (req, reply) => {
+      if (!deletePack(deps.dataDir, req.params.packId)) {
+        reply.status(404);
+        return { error: "NotFound", message: "pack not found" };
+      }
+      return { ok: true, packId: req.params.packId };
     });
 
     app.get<{

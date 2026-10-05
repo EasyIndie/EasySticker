@@ -19,7 +19,8 @@
     "mock-ai": "node scripts/mock-ai-server.mjs",
     "repair-pack": "node scripts/repair-pack.mjs",
     "test": "npm run typecheck && npm run web:typecheck && npm run build && node ./node_modules/.bin/vitest run",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "gc": "npm run build && node dist/cli/gc.js"
   },
   "dependencies": {
     "@fastify/jwt": "^10.1.0",
