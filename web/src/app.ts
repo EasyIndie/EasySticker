@@ -675,7 +675,7 @@ function renderPackHistory(): void {
         </div>
         <div class="history-item-actions">
           <button type="button" class="secondary history-dl-btn" data-pack-id="${window._preview!.escapeAttr(entry.packId)}" data-dl-url="${window._preview!.escapeAttr(entry.downloadUrl)}" data-filename="${window._preview!.escapeAttr(entry.downloadFilename)}">下载</button>
-          <button type="button" class="secondary history-restore-btn" data-pack-id="${window._preview!.escapeAttr(entry.packId)}"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg> 恢复编辑</button>
+          <button type="button" class="secondary history-restore-btn" data-pack-id="${window._preview!.escapeAttr(entry.packId)}"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l3 2"/></svg> 还原现场</button>
         </div>
       </div>
     `).join("");
@@ -695,7 +695,7 @@ function renderPackHistory(): void {
   });
   historyList.querySelectorAll(".history-restore-btn").forEach((btn) => {
     btn.addEventListener("click", () => {
-      restoreFromHistory((btn as HTMLButtonElement).dataset.packId || "");
+      void restoreFromHistory((btn as HTMLButtonElement).dataset.packId || "");
     });
   });
 }
@@ -704,7 +704,20 @@ function clearPackHistory(): void {
   renderPackHistory();
   window._ui!.setNotice("历史记录已清空", "info");
 }
-function restoreFromHistory(packId: string): void {
+/** 把当前平台切到指定值（含单选按钮与 UI 同步）。 */
+function switchPlatform(platform: string | undefined): void {
+  if (platform && PLATFORM_SPECS[platform]) {
+    currentPlatform = platform;
+    setSelectedPlatform(currentPlatform);
+    syncPlatformUI();
+  }
+}
+
+/**
+ * 历史记录「还原现场」：包还在服务端，直接按 packId 还原生成现场，
+ * 不用用户再去翻本地文件。包已被清理时退回「只恢复表单配置」。
+ */
+async function restoreFromHistory(packId: string): Promise<void> {
   const history = getPackHistory();
   if (!Array.isArray(history)) return;
   const entry = history.find((h) => h.packId === packId);
@@ -712,20 +725,48 @@ function restoreFromHistory(packId: string): void {
     window._ui!.showToast("未找到该记录", "error");
     return;
   }
-  if (entry.platform && PLATFORM_SPECS[entry.platform]) {
-    currentPlatform = entry.platform;
-    setSelectedPlatform(currentPlatform);
-    syncPlatformUI();
-  }
-  resetAllState();
-  if (entry.title) wechatAiTitle.value = entry.title;
-  if (entry.author) wechatAiAuthor.value = entry.author;
-  if (entry.stickerCount) wechatAiCount.value = String(entry.stickerCount);
-  if (creationModeAi) creationModeAi.checked = true;
-  syncCreationMode();
   const titleText = entry.title || "未命名";
-  window._ui!.setNotice("已恢复「" + titleText + "」的配置，如需生成请补充参考图。", "info");
-  scrollToElement(document.querySelector(".flow"), { block: "start" });
+  switchPlatform(entry.platform);
+
+  window._ui!.setStatus(generateState, "正在还原", "loading");
+  window._ui!.setNotice(`正在还原「${titleText}」的生成现场。`, "info");
+  try {
+    const json = await requestJson(`/api/packs/${encodeURIComponent(packId)}/restore`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ presetId: currentPlatform })
+    });
+
+    resetGenerationResult({ clearPersisted: true });
+    currentUploadId = null;
+    originalPreview.removeAttribute("src");
+    syncOriginalPreviewSlot();
+    // 清空元数据表单，让包里的标题 / 作者 / 版权写回来
+    wechatAiTitle.value = "";
+    wechatAiAuthor.value = "";
+    wechatAiVersion.value = "";
+    wechatAiCopyright.value = "";
+    switchPlatform(json?.meta?.presetId);
+    if (creationModeImport) creationModeImport.checked = true;
+    syncCreationMode();
+
+    renderCompletedPackResult(
+      json,
+      `已还原「${titleText}」的生成现场，可继续单张重新生成或下载。`,
+      "提示词、风格、情绪与参考图已还原，可直接下载或继续编辑。"
+    );
+    scrollToElement(document.querySelector(".flow"), { block: "start" });
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : "还原失败";
+    resetAllState();
+    switchPlatform(entry.platform);
+    if (entry.title) wechatAiTitle.value = entry.title;
+    if (entry.author) wechatAiAuthor.value = entry.author;
+    if (entry.stickerCount) wechatAiCount.value = String(entry.stickerCount);
+    if (creationModeAi) creationModeAi.checked = true;
+    syncCreationMode();
+    window._ui!.setNotice(`${reason}，已只恢复配置，如需重新生成请补充参考图。`, "error");
+  }
 }
 function toggleHistory(expand?: boolean): void {
   historyExpanded = expand !== undefined ? expand : !historyExpanded;

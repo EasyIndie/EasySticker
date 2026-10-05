@@ -42,7 +42,7 @@ export async function expectActiveStep(page: Page, stepIndex: number) {
 
 /** 等待生成完成 */
 export async function waitForGenerationComplete(page: Page) {
-  await expect(page.locator(".sticker-preview-card")).toBeAttached({
+  await expect(page.locator("#wechatAiPreview .preview-item")).toBeAttached({
     timeout: 60_000,
   });
 }

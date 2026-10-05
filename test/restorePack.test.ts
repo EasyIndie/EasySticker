@@ -148,6 +148,67 @@ describe("导入 ZIP 还原生成现场", () => {
     expect(download.rawPayload.length).toBeGreaterThan(1000);
   }, 120000);
 
+  it("按 packId 还原（历史记录一键还原）复用服务端已有的包", async () => {
+    const store = createFileAssetStore(dataDir);
+    const stamp = Date.now();
+    const stickerId = `byid-sticker-${stamp}`;
+    store.save(
+      await sharp({ create: { width: 240, height: 240, channels: 4, background: { r: 1, g: 2, b: 3, alpha: 1 } } })
+        .png()
+        .toBuffer(),
+      stickerId,
+      "png"
+    );
+    const refId = `byid-reference-${stamp}`;
+    store.save(
+      await sharp({ create: { width: 200, height: 200, channels: 4, background: { r: 9, g: 9, b: 9, alpha: 1 } } })
+        .png()
+        .toBuffer(),
+      refId,
+      "png"
+    );
+
+    const { packId, downloadFilename } = await buildZipPack(store, dataDir, {
+      presetId: "wechat_stickers",
+      assets: [
+        { label: "001", assetId: stickerId, role: "sticker", prompt: "按 packId 还原的提示词", style: "贴纸", emotion: "开心" }
+      ],
+      referenceAssetId: refId,
+      metadata: { title: "按 id 还原" },
+      generation: { source: "ai-generate", providerId: "mock", prompt: "原始提示词", styles: ["贴纸"] }
+    });
+
+    const res = await app.inject({
+      method: "POST",
+      url: `/api/packs/${packId}/restore`,
+      payload: { presetId: "wechat_stickers" }
+    });
+    expect(res.statusCode).toBe(200);
+    const json = res.json();
+
+    // 包已存在且下载链接有效 → 直接复用，不再复制一份
+    expect(json.packId).toBe(packId);
+    expect(json.downloadUrl).toBe(`/api/packs/${packId}/download`);
+    expect(json.downloadFilename).toBe(downloadFilename);
+    expect(json.restored.fromPackId).toBe(packId);
+
+    // 生成现场同样完整
+    expect(json.stickers[0]).toMatchObject({
+      prompt: "按 packId 还原的提示词",
+      style: "贴纸",
+      emotion: "开心"
+    });
+    expect(json.generation.prompt).toBe("原始提示词");
+    expect(json.meta.referenceAssetId).toBeTruthy();
+    expect(json.meta.referenceAssetId).not.toBe(refId);
+
+    // 不存在的 packId → 404；非法 packId → 400（防路径穿越）
+    const missing = await app.inject({ method: "POST", url: "/api/packs/doesnotexist0000000000/restore", payload: {} });
+    expect(missing.statusCode).toBe(404);
+    const bad = await app.inject({ method: "POST", url: "/api/packs/abc/restore", payload: {} });
+    expect(bad.statusCode).toBe(400);
+  }, 60000);
+
   it("不是本站导出的 ZIP 会被拒绝", async () => {
     const boundary = `----easysticker-bad-${Date.now()}`;
     const body = Buffer.concat([
