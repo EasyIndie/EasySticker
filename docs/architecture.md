@@ -45,7 +45,10 @@ infrastructure（适配器）  providers 实现、exporters、repositories、mai
 - **组合根 + 依赖注入**：`server.ts` 装配全部依赖，`src/lib/deps.ts` 定义 `AppDeps`；路由/服务不再 `app.decorate("xxx")`，彻底移除 `declare module "fastify"` 的 `FastifyInstance` 增强。
 - **领域层去 Fastify 化**：`findAssetFile`/`buildZipPack`/`generateAssetsAndPack` 等不再接收 `FastifyInstance`。
 - **平台策略化**：`PlatformPreset.supportsExtras` 取代散落的 `isWeChat` 判断；微信额外资源生成抽到 `generate/extras.ts`。
-- **单资源重生成**：`generate/single.ts` + `POST /api/generate/resource`。按 `target`（`sticker.index` 或 `extra.key`）只重生成一张，复用统一提示词模板、尺寸与平台校验；`mode="edit"` + `sourceAssetId` + `instruction` 已落到前端：卡片上的「二次编辑」会以**当前这张图**为参考图、把 `instruction` 以「编辑要求：…」追加到提示词，只重做这一张，并把 `sourceAssetId` 写回 metadata 供追溯。扩展资源改为「单张失败不中断整包」：`extras.ts` 记录 `failures` 并发出发带 `error` 的 `extra` 事件，前端将该卡片渲染为可点击重试的错误态。
+- **单资源重生成**：`generate/single.ts` + `POST /api/generate/resource`。按 `target`（`sticker.index` 或 `extra.key`）只重生成一张，复用统一提示词模板、尺寸与平台校验；`mode="edit"` + `sourceAssetId` + `instruction` 已落到前端：卡片上的「二次编辑」会以**当前这张图**为参考图、把 `instruction` 以「编辑要求：…」追加到提示词，只重做这一张，并把 `sourceAssetId` 写回 metadata 供追溯；还可再附一张参考图（`editReferenceAssetId`），
+它会被记进 metadata，因此不会被 GC 当作孤儿素材回收。多图通过 `AiGenerateInput.additionalReferenceImages`
+往下传 —— generic 变体把 `image` 传成数组（实测豆包 Seedream 接受），gpt-image 变体用 `image[]` 字段；
+**只有一张时不走数组**，既有单图路径行为不变。扩展资源改为「单张失败不中断整包」：`extras.ts` 记录 `failures` 并发出发带 `error` 的 `extra` 事件，前端将该卡片渲染为可点击重试的错误态。
 - **导入 ZIP 还原生成现场**：`generate/restore.ts` + `POST /api/generate/import-pack`。读回下载包里 `metadata.json` 记录的逐张提示词 / 风格 / 情绪与 `source/reference.*`，图片按原字节重新入库（不重编码）。还原后的结果与 AI 生成结果同构，可直接单张重生成或重建 ZIP。ZIP 读取由 `src/lib/zip.ts` 完成（仅依赖 Node 内置 `zlib`，不引第三方库）。
 - **历史记录一键还原**：同一还原核心的第二个入口 `POST /api/packs/:packId/restore`（`restorePackById`）。包已在服务端且下载链接有效，直接复用不再复制；`packId` 走白名单正则校验，防路径穿越。
 - **资产仓储 seam**：`AssetStore` 接口 + `createFileAssetStore(dataDir)` 默认实现，注入到服务；未来可换对象存储。

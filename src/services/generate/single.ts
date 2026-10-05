@@ -6,6 +6,7 @@ import { validateAsset } from "../platform/validate";
 import { getPlatformPreset, resolveTargetSize } from "../platform/presets";
 import { getAiProvider } from "../ai";
 import { buildMinimalClient } from "../ai/client";
+import type { AiReferenceImage } from "../ai/provider";
 import { loadPromptConfig, compilePrompt } from "./promptConfig";
 import { convertToPlatformFormat, toBannerPng, toRewardPng } from "./convert";
 
@@ -31,6 +32,8 @@ export type ResourceGenerateRequest = {
   mode?: "regenerate" | "edit";
   sourceAssetId?: string;
   instruction?: string;
+  /** 编辑时额外提供的一张参考图（与待修改的图一起送给模型）。 */
+  editReferenceAssetId?: string;
 };
 
 export type ResourceGenerateResult = {
@@ -146,11 +149,33 @@ export async function generateSingleResource(
     referenceMime = mimeFromFilename(source.filename);
   }
 
+  // 附加参考图（可选）：编辑时除「待修改的这张」外，再给模型一张参考图，
+  // 例如「把这个人换成另一张图里的角色」。多图只有部分模型支持，单图路径不变。
+  const additionalReferenceImages: AiReferenceImage[] = [];
+  if (req.editReferenceAssetId && req.editReferenceAssetId !== referenceAssetId) {
+    const extra = assetStore.find(req.editReferenceAssetId);
+    if (!extra) throw createHttpError(404, "edit reference asset not found");
+    const extraMime = mimeFromFilename(extra.filename);
+    const extraUrl = assetUrl(req.editReferenceAssetId);
+    if (referenceMode === "url" && extraUrl) {
+      additionalReferenceImages.push({ url: extraUrl, mime: extraMime });
+    } else {
+      additionalReferenceImages.push({
+        base64: fs.readFileSync(extra.filePath).toString("base64"),
+        mime: extraMime
+      });
+    }
+  }
+
   const imageWidth = promptConfig.ai?.imageSize?.width ?? 1024;
   const imageHeight = promptConfig.ai?.imageSize?.height ?? 1024;
 
   const editSuffix = isEdit && req.instruction ? `\n编辑要求：${req.instruction}` : "";
-  const basePrompt = `${req.prompt}${editSuffix}`;
+  // 第 1 张是待修改的图，附加参考图排在后面 —— 得让模型知道顺序，否则容易改错对象
+  const extraRefHint = additionalReferenceImages.length
+    ? "\n参考图说明：除第 1 张待修改的图片外，另附一张参考图，请参考其中的主体形象与风格进行修改。"
+    : "";
+  const basePrompt = `${req.prompt}${editSuffix}${extraRefHint}`;
 
   let compiledPrompt: string;
   let convert: (buf: Buffer) => Promise<Buffer>;
@@ -208,7 +233,8 @@ export async function generateSingleResource(
       referenceMode === "base64" || referenceMode === "multipart" ? referenceBase64 : undefined,
     referenceImageUrl: referenceMode === "url" ? referenceUrl : undefined,
     referenceImageMime: referenceMime,
-    referenceImageAssetId: referenceMode === "assetId" ? referenceAssetId : undefined
+    referenceImageAssetId: referenceMode === "assetId" ? referenceAssetId : undefined,
+    ...(additionalReferenceImages.length ? { additionalReferenceImages } : {})
   });
 
   const converted = await convert(out.bytes);
@@ -227,8 +253,9 @@ export async function generateSingleResource(
     prompt: compiledPrompt,
     label,
     key: targetKey,
-    // 编辑模式：记录这次是从哪一张改过来的，便于追溯与继续编辑
+    // 编辑模式：记录这次是从哪一张改过来的、用了哪张附加参考图
     ...(isEdit && req.sourceAssetId ? { sourceAssetId: req.sourceAssetId } : {}),
+    ...(isEdit && req.editReferenceAssetId ? { editReferenceAssetId: req.editReferenceAssetId } : {}),
     ...(usedStyle ? { style: usedStyle } : {}),
     ...(usedEmotion ? { emotion: usedEmotion } : {}),
     ...(targetSize ? { targetSize } : {})

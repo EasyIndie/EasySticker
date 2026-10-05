@@ -605,6 +605,29 @@ describe("pipeline", () => {
       expect(editedMeta.width).toBe(240);
       expect(editedMeta.height).toBe(240);
 
+      // 3b) 编辑时再给一张附加参考图：提示词里要说明「哪张是待改的」
+      const extraRefRes = await app.inject({
+        method: "POST",
+        url: "/api/generate/resource",
+        payload: {
+          presetId: "wechat_stickers",
+          referenceAssetId: upload.uploadId,
+          prompt: "Q版大头",
+          styles: ["贴纸"],
+          target: { kind: "sticker", index: 2 },
+          mode: "edit",
+          sourceAssetId: sticker.assetId,
+          editReferenceAssetId: upload.uploadId,
+          instruction: "换成参考图里的角色"
+        },
+        headers: { "content-type": "application/json" }
+      });
+      // 附加图与主图相同（都是 upload），后端会去重跳过，但请求本身必须成功
+      expect(extraRefRes.statusCode).toBe(200);
+      const extraRef = extraRefRes.json();
+      expect(extraRef.prompt).toContain("编辑要求：换成参考图里的角色");
+      expect(extraRef.sourceAssetId).toBe(sticker.assetId);
+
       // 4) 非法 target → 400
       const badRes = await app.inject({
         method: "POST",
@@ -696,6 +719,34 @@ describe("pipeline", () => {
       prompt: "封面提示词",
       style: "贴纸"
     });
+    // 二次编辑用过的附加参考图要记录在案（既便于追溯，也避免被 GC 当孤儿回收）
+    const editRefAsset = await mkAsset(512, 512, { r: 5, g: 5, b: 5 });
+    const withEditRef = await app.inject({
+      method: "POST",
+      url: "/api/packs",
+      payload: {
+        presetId: "wechat_stickers",
+        assets: [
+          {
+            label: "001",
+            assetId: sticker1,
+            role: "sticker",
+            sourceAssetId: sticker2,
+            editReferenceAssetId: editRefAsset
+          }
+        ]
+      },
+      headers: { "content-type": "application/json" }
+    });
+    expect(withEditRef.statusCode).toBe(200);
+    const editRefMeta = JSON.parse(
+      fs.readFileSync(path.join(dataDir, "packs", `${withEditRef.json().packId}.json`), "utf8")
+    );
+    expect(editRefMeta.metadata.files[0]).toMatchObject({
+      sourceAssetId: sticker2,
+      editReferenceAssetId: editRefAsset
+    });
+
     // 参考图也会被打进 source/（重建 ZIP 时由前端传入 referenceAssetId）
     const referenceFile = meta.files.find((f: any) => f.role === "reference");
     expect(referenceFile).toMatchObject({

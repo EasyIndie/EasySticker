@@ -133,6 +133,72 @@ describe("openai image provider", () => {
     expect(body.image).toBe(`data:image/png;base64,${Buffer.from("fake-image").toString("base64")}`);
   });
 
+  it("generic variant 支持多张参考图：image 传数组，主图在前", async () => {
+    requests.length = 0;
+    const provider = new OpenAiImageProvider(baseUrl, "test-key", "doubao-seedream-5-0-260128", {
+      variant: "generic"
+    });
+
+    await provider.generateImage({
+      prompt: "make a sticker",
+      width: 1024,
+      height: 1024,
+      referenceImageBase64: Buffer.from("source-image").toString("base64"),
+      referenceImageMime: "image/png",
+      additionalReferenceImages: [
+        { base64: Buffer.from("extra-image").toString("base64"), mime: "image/jpeg" }
+      ]
+    });
+
+    const body = JSON.parse(requests[0].body.toString("utf8"));
+    expect(Array.isArray(body.image)).toBe(true);
+    expect(body.image).toEqual([
+      `data:image/png;base64,${Buffer.from("source-image").toString("base64")}`,
+      `data:image/jpeg;base64,${Buffer.from("extra-image").toString("base64")}`
+    ]);
+  });
+
+  it("多张附加参考图可以给 URL（url 传输模式）", async () => {
+    requests.length = 0;
+    const provider = new OpenAiImageProvider(baseUrl, "test-key", "doubao-seedream-5-0-260128", {
+      variant: "generic"
+    });
+
+    await provider.generateImage({
+      prompt: "make a sticker",
+      width: 1024,
+      height: 1024,
+      referenceImageUrl: "https://cdn.example.com/source.png",
+      additionalReferenceImages: [{ url: "https://cdn.example.com/extra.png" }]
+    });
+
+    const body = JSON.parse(requests[0].body.toString("utf8"));
+    expect(body.image).toEqual([
+      "https://cdn.example.com/source.png",
+      "https://cdn.example.com/extra.png"
+    ]);
+  });
+
+  it("gpt-image 多图走 multipart，附加图用 image[] 字段", async () => {
+    requests.length = 0;
+    const provider = new OpenAiImageProvider(baseUrl, "test-key", "gpt-image-1.5");
+
+    await provider.generateImage({
+      prompt: "make a sticker",
+      width: 1024,
+      height: 1024,
+      referenceImageBase64: Buffer.from("source-image").toString("base64"),
+      referenceImageMime: "image/png",
+      additionalReferenceImages: [{ base64: Buffer.from("extra-image").toString("base64"), mime: "image/png" }]
+    });
+
+    expect(requests[0].url).toBe("/v1/images/edits");
+    const bodyText = requests[0].body.toString("utf8");
+    expect(bodyText).toContain("reference.png");
+    expect(bodyText).toContain("image[]");
+    expect(bodyText).toContain("reference-2.png");
+  });
+
   it("preserves non-retryable OpenAI 4xx errors", async () => {
     requests.length = 0;
     nextStatus = 400;

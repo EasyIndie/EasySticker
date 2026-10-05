@@ -73,12 +73,12 @@ test.describe("单图二次编辑", () => {
     await waitForApp(page);
     // 预览来自 AI 生成结果，切到 AI 模式才能看到提示词 / 提供商这些配置
     await selectCreationMode(page, "ai");
-    return pack.packId as string;
+    return { packId: pack.packId as string, uploadId: ref.uploadId as string };
   }
 
   test("卡片上有二次编辑入口，弹窗能打开并带出当前图与常用修改", async ({ page }) => {
     test.setTimeout(90000);
-    const packId = await seedGeneratedPack(page);
+    const { packId } = await seedGeneratedPack(page);
 
     const card = page.locator("#wechatAiPreview .preview-item").first();
     await expect(card).toBeAttached();
@@ -104,7 +104,7 @@ test.describe("单图二次编辑", () => {
 
   test("提交修改要求只会重做这一张，并标记为「已编辑」", async ({ page }) => {
     test.setTimeout(120000);
-    const packId = await seedGeneratedPack(page);
+    const { packId } = await seedGeneratedPack(page);
 
     // 用 mock 提供商，测的是链路而不是真去调生图 API
     await page.selectOption("#wechatAiProvider", "mock");
@@ -134,6 +134,58 @@ test.describe("单图二次编辑", () => {
     await expect(card.locator("img")).not.toHaveAttribute("src", beforeSrc ?? "");
     await expect(card.locator(".preview-edited-tag")).toHaveText("已编辑");
 
+    await apiRequest(page.request, "delete", `/api/packs/${packId}`);
+  });
+
+  test("勾选「同时参考原始参考图」会把本包参考图作为附加参考图发出去", async ({ page }) => {
+    test.setTimeout(120000);
+    const { packId, uploadId } = await seedGeneratedPack(page);
+    await page.selectOption("#wechatAiProvider", "mock");
+
+    const card = page.locator("#wechatAiPreview .preview-item").first();
+    await card.locator('[data-action="edit-resource"]').click();
+    await expect(page.locator("#editDialog")).toBeVisible();
+    await page.fill("#editInstruction", "让角色更贴近原始参考图");
+    await page.check("#editUseOriginalRef");
+
+    const [request] = await Promise.all([
+      page.waitForRequest((r) => r.url().includes("/api/generate/resource") && r.method() === "POST"),
+      page.locator("#editDialogSubmit").click()
+    ]);
+    const body = JSON.parse(request.postData() || "{}");
+    expect(body.editReferenceAssetId).toBe(uploadId);
+
+    await expect(page.locator("#editDialog")).toBeHidden({ timeout: 60_000 });
+    await apiRequest(page.request, "delete", `/api/packs/${packId}`);
+  });
+
+  test("上传一张附加参考图会先入库再作为 editReferenceAssetId 发出", async ({ page }) => {
+    test.setTimeout(120000);
+    const { packId } = await seedGeneratedPack(page);
+    await page.selectOption("#wechatAiProvider", "mock");
+
+    const card = page.locator("#wechatAiPreview .preview-item").first();
+    await card.locator('[data-action="edit-resource"]').click();
+    await expect(page.locator("#editDialog")).toBeVisible();
+    await page.fill("#editInstruction", "换成这张图里的角色");
+    await page.locator("#editReference").setInputFiles({
+      name: "another-character.png",
+      mimeType: "image/png",
+      buffer: TINY_PNG
+    });
+
+    // 选了图之后，「用原始参考图」会被禁用（两者是同一个参数，避免歧义）
+    await expect(page.locator("#editUseOriginalRef")).toBeDisabled();
+
+    const [request] = await Promise.all([
+      page.waitForRequest((r) => r.url().includes("/api/generate/resource") && r.method() === "POST"),
+      page.locator("#editDialogSubmit").click()
+    ]);
+    const body = JSON.parse(request.postData() || "{}");
+    expect(typeof body.editReferenceAssetId).toBe("string");
+    expect(body.editReferenceAssetId).not.toBe("");
+
+    await expect(page.locator("#editDialog")).toBeHidden({ timeout: 60_000 });
     await apiRequest(page.request, "delete", `/api/packs/${packId}`);
   });
 });
