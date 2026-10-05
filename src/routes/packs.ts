@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import { type FastifyInstance } from "fastify";
 import { buildZipPack, getPackInfo, getPackZipPath } from "../services/pack/service";
+import { restorePackById } from "../services/generate/restore";
 import { packSchema } from "../shared/contracts";
 import type { AppDeps } from "../lib/deps";
 
@@ -31,6 +32,15 @@ export function registerPackRoutes(deps: AppDeps) {
       reply.header("content-type", "application/zip");
       reply.header("content-disposition", buildDownloadDisposition(info.downloadFilename));
       return reply.send(fs.createReadStream(zipPath));
+    });
+
+    // 历史记录「一键还原」：直接拿服务端存的包还原生成现场，不需要用户再找文件。
+    app.post<{
+      Params: { packId: string };
+    }>("/packs/:packId/restore", async (req) => {
+      const presetId =
+        (req.body as { presetId?: string } | undefined)?.presetId || "wechat_stickers";
+      return restorePackById(deps.assetStore, deps.dataDir, presetId, req.params.packId);
     });
 
     app.get<{

@@ -47,6 +47,7 @@ infrastructure（适配器）  providers 实现、exporters、repositories、mai
 - **平台策略化**：`PlatformPreset.supportsExtras` 取代散落的 `isWeChat` 判断；微信额外资源生成抽到 `generate/extras.ts`。
 - **单资源重生成**：`generate/single.ts` + `POST /api/generate/resource`。按 `target`（`sticker.index` 或 `extra.key`）只重生成一张，复用统一提示词模板、尺寸与平台校验；契约预留 `mode="edit"` + `sourceAssetId` + `instruction`，为二次编辑/优化打底。扩展资源改为「单张失败不中断整包」：`extras.ts` 记录 `failures` 并发出发带 `error` 的 `extra` 事件，前端将该卡片渲染为可点击重试的错误态。
 - **导入 ZIP 还原生成现场**：`generate/restore.ts` + `POST /api/generate/import-pack`。读回下载包里 `metadata.json` 记录的逐张提示词 / 风格 / 情绪与 `source/reference.*`，图片按原字节重新入库（不重编码）。还原后的结果与 AI 生成结果同构，可直接单张重生成或重建 ZIP。ZIP 读取由 `src/lib/zip.ts` 完成（仅依赖 Node 内置 `zlib`，不引第三方库）。
+- **历史记录一键还原**：同一还原核心的第二个入口 `POST /api/packs/:packId/restore`（`restorePackById`）。包已在服务端且下载链接有效，直接复用不再复制；`packId` 走白名单正则校验，防路径穿越。
 - **资产仓储 seam**：`AssetStore` 接口 + `createFileAssetStore(dataDir)` 默认实现，注入到服务；未来可换对象存储。
 - **静态资源豁免**：`isPublicRoute` 放行 `/api/assets/:id` 与 `/api/packs/:id/download`（前缀匹配）。它们既豁免鉴权（`<img>`/`<a>` 无法携带 `Authorization`），也不计入 API 频率限制，避免结果页并发加载几十张图触发 429。
 - **typecheck 门禁**：`npm run typecheck`（`tsc --noEmit`）已接入 `npm test`，当前 0 错误。

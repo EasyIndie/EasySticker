@@ -1,3 +1,4 @@
+import fs from "node:fs";
 import path from "node:path";
 import type { FastifyRequest } from "fastify";
 import createHttpError from "http-errors";
@@ -6,7 +7,7 @@ import type { AssetStore } from "../../lib/assets";
 import { readZipEntries, type ZipEntry } from "../../lib/zip";
 import { getPlatformPreset } from "../platform/presets";
 import { validateAssetList } from "../platform/validate";
-import { buildZipPack, type PackFileRole, type PackGenerationInfo } from "../pack/service";
+import { buildZipPack, getPackInfo, getPackZipPath, type PackFileRole, type PackGenerationInfo } from "../pack/service";
 
 /**
  * 从「下载按钮导出的 ZIP」还原生成现场。
@@ -159,18 +160,74 @@ export async function restorePackFromZip(
     throw createHttpError(400, "无法解析这个 ZIP，请确认它是从本站下载的表情包");
   }
 
+  const parsed = parsePackEntries(entries);
+
+  const presetId = cleanText(fields.presetId) ?? cleanText(parsed.presetId) ?? fallbackPresetId;
+  return restoreFromEntries(assetStore, dataDir, presetId, entries, parsed);
+}
+
+/** 从 ZIP 条目里取出并解析 metadata.json。 */
+function parsePackEntries(entries: ZipEntry[]): ParsedPack {
   const metaEntry = entries.find((e) => e.name === "metadata.json");
   if (!metaEntry) {
     throw createHttpError(400, "这个 ZIP 里没有 metadata.json，无法还原生成现场（请使用本站下载的 ZIP 包）");
   }
-  let parsed: ParsedPack;
   try {
-    parsed = JSON.parse(metaEntry.content.toString("utf8")) as ParsedPack;
+    return JSON.parse(metaEntry.content.toString("utf8")) as ParsedPack;
   } catch {
     throw createHttpError(400, "metadata.json 解析失败，无法还原生成现场");
   }
+}
 
-  const presetId = cleanText(fields.presetId) ?? cleanText(parsed.presetId) ?? fallbackPresetId;
+/**
+ * 按 packId 还原服务端已保存的包（历史记录「一键还原」用，不需要用户再找文件）。
+ * 包本身已存在且下载链接有效，直接复用，不再复制一份。
+ */
+export async function restorePackById(
+  assetStore: AssetStore,
+  dataDir: string,
+  fallbackPresetId: string,
+  packId: string
+) {
+  if (!/^[A-Za-z0-9_-]{6,64}$/.test(packId)) throw createHttpError(400, "invalid packId");
+  let zipPath: string;
+  try {
+    zipPath = getPackZipPath(dataDir, packId);
+  } catch {
+    throw createHttpError(404, "找不到这个表情包的原始文件，可能已被清理");
+  }
+
+  let entries: ZipEntry[];
+  try {
+    entries = readZipEntries(fs.readFileSync(zipPath));
+  } catch {
+    throw createHttpError(400, "原始包已损坏，无法还原");
+  }
+
+  const parsed = parsePackEntries(entries);
+  const presetId = cleanText(parsed.presetId) ?? fallbackPresetId;
+  const info = getPackInfo(dataDir, packId);
+  return restoreFromEntries(assetStore, dataDir, presetId, entries, parsed, {
+    packId,
+    downloadUrl: `/api/packs/${packId}/download`,
+    downloadFilename: info.downloadFilename || `easysticker-pack-${packId}.zip`,
+    // 包没变，metadata 直接沿用磁盘上的那份
+    metadataJson: JSON.stringify(parsed, null, 2)
+  });
+}
+
+/**
+ * 还原核心：把 ZIP 条目按原字节入库，重建可继续编辑的结果。
+ * `reusePack` 用于「按 packId 还原」——包已在服务端且下载链接有效，不必再复制一份。
+ */
+async function restoreFromEntries(
+  assetStore: AssetStore,
+  dataDir: string,
+  presetId: string,
+  entries: ZipEntry[],
+  parsed: ParsedPack,
+  reusePack?: { packId: string; downloadUrl: string; downloadFilename: string; metadataJson: string }
+) {
   const preset = getPlatformPreset(presetId);
   if (!preset) throw createHttpError(400, `unknown presetId: ${presetId}`);
 
@@ -260,19 +317,31 @@ export async function restorePackFromZip(
     rewardMessage: cleanText(parsed.metadata?.rewardMessage)
   };
 
-  const { packId, downloadFilename, metadataJson } = await buildZipPack(assetStore, dataDir, {
-    presetId,
-    assets: assetsPayload,
-    coverAssetId: extraIds.coverAssetId,
-    iconAssetId: extraIds.iconAssetId,
-    bannerAssetId: extraIds.bannerAssetId,
-    rewardGuideAssetId: extraIds.rewardGuideAssetId,
-    rewardThanksAssetId: extraIds.rewardThanksAssetId,
-    referenceAssetId: reference?.assetId,
-    metadata,
-    generation,
-    extraDetails
-  });
+  let packId: string;
+  let downloadFilename: string;
+  let metadataJson: string;
+  let downloadUrl: string;
+  if (reusePack) {
+    ({ packId, downloadFilename, metadataJson, downloadUrl } = reusePack);
+  } else {
+    const built = await buildZipPack(assetStore, dataDir, {
+      presetId,
+      assets: assetsPayload,
+      coverAssetId: extraIds.coverAssetId,
+      iconAssetId: extraIds.iconAssetId,
+      bannerAssetId: extraIds.bannerAssetId,
+      rewardGuideAssetId: extraIds.rewardGuideAssetId,
+      rewardThanksAssetId: extraIds.rewardThanksAssetId,
+      referenceAssetId: reference?.assetId,
+      metadata,
+      generation,
+      extraDetails
+    });
+    packId = built.packId;
+    downloadFilename = built.downloadFilename;
+    metadataJson = built.metadataJson;
+    downloadUrl = `/api/packs/${packId}/download`;
+  }
 
   const validation = await validateAssetList(
     assetStore,
@@ -287,7 +356,7 @@ export async function restorePackFromZip(
 
   return {
     packId,
-    downloadUrl: `/api/packs/${packId}/download`,
+    downloadUrl,
     downloadFilename,
     metadataJson,
     stickers: assetsPayload.map((a, i) => ({
