@@ -116,20 +116,31 @@ function parseCompiledPrompt(prompt) {
   return { style, emotion };
 }
 
-function toArrayContext(raw) {
+function toArrayContext(raw, packId) {
   if (!raw || typeof raw !== "object") return null;
+  // 既接受 localStorage 里 last-wechat-pack 的原始 payload，也接受 { last, history } 包装
+  const src = raw.last && typeof raw.last === "object" ? raw.last : raw;
+  const history = Array.isArray(raw.history) ? raw.history : [];
+  const historyEntry = history.find((h) => h?.packId === packId);
+  const historyStyles =
+    typeof historyEntry?.styles === "string" && historyEntry.styles.trim()
+      ? historyEntry.styles.split(/[\u3001,\s]+/).filter(Boolean)
+      : undefined;
+
   return {
-    provider: raw.provider ?? raw.providerId,
-    prompt: raw.prompt,
-    styles: Array.isArray(raw.styles) ? raw.styles.filter(Boolean) : undefined,
-    stickerCount: raw.stickerCount,
-    referenceAssetId: raw.referenceAssetId ?? raw.uploadId ?? undefined,
-    referenceMode: raw.referenceMode,
+    // 用于校验：这份 context 是不是目标那个包的
+    contextPackId: src.result?.packId ?? src.packId ?? historyEntry?.packId,
+    provider: src.provider ?? src.providerId,
+    prompt: src.prompt,
+    styles: Array.isArray(src.styles) && src.styles.length ? src.styles.filter(Boolean) : historyStyles,
+    stickerCount: src.stickerCount,
+    referenceAssetId: src.referenceAssetId ?? src.uploadId ?? undefined,
+    referenceMode: src.referenceMode,
     // localStorage 的 result.stickers[].prompt
-    stickers: Array.isArray(raw.stickers)
-      ? raw.stickers
-      : Array.isArray(raw.result?.stickers)
-        ? raw.result.stickers
+    stickers: Array.isArray(src.stickers)
+      ? src.stickers
+      : Array.isArray(src.result?.stickers)
+        ? src.result.stickers
         : undefined
   };
 }
@@ -143,7 +154,13 @@ export async function repairPack(packId, options = {}) {
   if (!metaEntry) throw new Error("ZIP 里没有 metadata.json");
   const oldMeta = JSON.parse(metaEntry.content.toString("utf8"));
 
-  const context = toArrayContext(options.context);
+  const context = toArrayContext(options.context, packId);
+  if (context?.contextPackId && context.contextPackId !== packId && !options.force) {
+    throw new Error(
+      `context.json 属于另一个包（${context.contextPackId}），与目标 ${packId} 不一致。` +
+        `若确认就是这个包的上下文，加 --force 可继续。`
+    );
+  }
 
   const assetIdByZip = new Map((oldMeta.assets ?? []).map((a) => [a.zipPath, a.assetId]));
   const extraIdByRole = new Map(
@@ -294,6 +311,7 @@ async function runCli() {
   const context = contextPath ? JSON.parse(fs.readFileSync(contextPath, "utf8")) : null;
   const dryRun = args.includes("--dry-run");
   const all = args.includes("--all");
+  const force = args.includes("--force");
   const packId = args.find((a) => !a.startsWith("--") && a !== contextPath);
 
   if (!all && !packId) {
@@ -308,7 +326,7 @@ async function runCli() {
 
   for (const id of packIds) {
     try {
-      const { summary } = await repairPack(id, { context, dryRun });
+      const { summary } = await repairPack(id, { context, dryRun, force });
       console.log(JSON.stringify(summary));
     } catch (error) {
       console.error(`${id}: ${String(error?.message ?? error)}`);
