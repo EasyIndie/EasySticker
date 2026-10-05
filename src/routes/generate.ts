@@ -2,6 +2,7 @@ import { type FastifyInstance, type FastifyRequest } from "fastify";
 import { generateAssetsAndPack, getPromptTemplate } from "../services/generate/flow";
 import { generateSingleResource } from "../services/generate/single";
 import { importStickerPack } from "../services/generate/import";
+import { restorePackFromZip } from "../services/generate/restore";
 import { promptSchema, generateSchema, cancelSchema, resourceSchema } from "../shared/contracts";
 import {
   createTask,
@@ -38,6 +39,12 @@ export function registerGenerateRoutes(deps: AppDeps) {
     const presetId = (req.body as any)?.presetId || "wechat_stickers";
     const result = await importStickerPack(deps.assetStore, deps.dataDir, presetId, req);
     return result;
+  });
+
+  // 导入从本站下载的 ZIP 包，还原生成现场（可继续单张重生成 / 二次编辑）。
+  app.post("/generate/import-pack", async (req, reply) => {
+    const presetId = (req.body as any)?.presetId || "wechat_stickers";
+    return restorePackFromZip(deps.assetStore, deps.dataDir, presetId, req);
   });
 
   // Daily quota: registered users capped per account, anonymous users capped per IP.

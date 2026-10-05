@@ -40,4 +40,29 @@ test.describe("导入模式流程", () => {
     const accept = await input.getAttribute("accept");
     expect(accept).toContain("image");
   });
+
+  test("还原 ZIP 的 file input 存在且 accept 包含 zip", async ({ page }) => {
+    const input = page.locator("#importZip");
+    await expect(input).toBeAttached();
+    const accept = await input.getAttribute("accept");
+    expect(accept).toContain("zip");
+  });
+
+  test("还原 ZIP 面板说明可读回提示词与参考图", async ({ page }) => {
+    const panel = page.locator(".restore-panel");
+    await expect(panel).toBeVisible();
+    await expect(panel).toContainText("还原之前的生成现场");
+    await expect(panel).toContainText("参考图");
+  });
+
+  test("上传非本站 ZIP 时提示还原失败", async ({ page }) => {
+    await selectCreationMode(page, "import");
+    await page.locator("#importZip").setInputFiles({
+      name: "bad.zip",
+      mimeType: "application/zip",
+      buffer: Buffer.from("this is definitely not a zip file")
+    });
+    await page.locator("#generateSubmit").click();
+    await expect(page.locator("#importState")).toHaveText(/还原失败/, { timeout: 15_000 });
+  });
 });

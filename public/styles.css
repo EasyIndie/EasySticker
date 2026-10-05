@@ -931,6 +931,33 @@ input[type="file"].file-native:focus-visible + .file-picker {
   font-style: italic;
 }
 
+/* 导入区里的「还原 ZIP」子块 */
+.restore-panel {
+  display: grid;
+  gap: 12px;
+  margin-top: 4px;
+  padding-top: 16px;
+  border-top: 1px dashed var(--color-border-default);
+}
+
+.restore-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.restore-head .icon {
+  flex-shrink: 0;
+  width: 18px;
+  height: 18px;
+  margin-top: 2px;
+  color: var(--color-text-secondary);
+}
+
+.restore-head .field-hint {
+  margin-top: 4px;
+}
+
 .upload-title {
   font-weight: 700;
 }
