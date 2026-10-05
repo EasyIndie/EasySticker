@@ -227,6 +227,8 @@ export async function generateSingleResource(
     prompt: compiledPrompt,
     label,
     key: targetKey,
+    // 编辑模式：记录这次是从哪一张改过来的，便于追溯与继续编辑
+    ...(isEdit && req.sourceAssetId ? { sourceAssetId: req.sourceAssetId } : {}),
     ...(usedStyle ? { style: usedStyle } : {}),
     ...(usedEmotion ? { emotion: usedEmotion } : {}),
     ...(targetSize ? { targetSize } : {})

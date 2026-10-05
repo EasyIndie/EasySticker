@@ -39,6 +39,7 @@ export default defineConfig({
         url: "http://localhost:3000",
         reuseExistingServer: true,
         timeout: 120_000,
-        env: { RATE_LIMIT_MAX: "600" },
+        // 每日生成配额也放宽：e2e 反复跑会把匿名配额（默认 10/天）用光
+        env: { RATE_LIMIT_MAX: "600", DAILY_QUOTA_ANONYMOUS_MAX: "500" },
       },
 });

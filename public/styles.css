@@ -2754,3 +2754,200 @@ textarea:focus-visible {
   text-decoration: none;
   vertical-align: middle;
 }
+
+/* ── 二次编辑弹窗 ─────────────────────────────────────────────── */
+.edit-dialog {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+
+.edit-dialog:not([hidden]) {
+  display: flex;
+}
+
+.edit-dialog-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(2px);
+}
+
+.edit-dialog-panel {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  width: min(720px, 100%);
+  max-height: min(86vh, 720px);
+  overflow: hidden;
+  border: 1px solid var(--color-border-default);
+  border-radius: var(--radius-lg, var(--radius-md));
+  background: var(--color-surface-primary, var(--color-surface));
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.35);
+}
+
+.edit-dialog-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--color-border-default);
+}
+
+.edit-dialog-head h2 {
+  margin: 0;
+  font-size: var(--font-16, 16px);
+}
+
+.edit-dialog-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: none;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+}
+
+.edit-dialog-close:hover {
+  background: var(--color-surface-hover);
+  color: var(--color-text-primary);
+}
+
+.edit-dialog-body {
+  display: grid;
+  grid-template-columns: 200px 1fr;
+  gap: 20px;
+  padding: 20px;
+  overflow-y: auto;
+}
+
+.edit-dialog-preview {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: center;
+}
+
+.edit-dialog-preview img {
+  width: 100%;
+  border: 1px solid var(--color-border-default);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-secondary);
+  object-fit: contain;
+}
+
+.edit-dialog-target {
+  margin: 0;
+  font-size: var(--font-12, 12px);
+  color: var(--color-text-secondary);
+  text-align: center;
+}
+
+.edit-dialog-form {
+  display: grid;
+  gap: 12px;
+  align-content: start;
+}
+
+.edit-dialog-form textarea {
+  width: 100%;
+  min-height: 96px;
+  resize: vertical;
+}
+
+.edit-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.edit-chip {
+  padding: 5px 10px;
+  border: 1px solid var(--color-border-default);
+  border-radius: var(--radius-pill);
+  background: var(--color-surface-secondary);
+  color: var(--color-text-secondary);
+  font-size: var(--font-12, 12px);
+  cursor: pointer;
+}
+
+.edit-chip:hover {
+  border-color: var(--color-primary-border);
+  color: var(--success-ink);
+}
+
+.edit-dialog-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 20px;
+  border-top: 1px solid var(--color-border-default);
+  background: var(--color-surface-secondary);
+}
+
+.edit-dialog-actions {
+  display: flex;
+  gap: 10px;
+}
+
+/* 卡片上的「二次编辑」入口 */
+.preview-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.preview-action-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px;
+  border: 1px solid var(--color-border-default);
+  border-radius: var(--radius-pill);
+  background: var(--color-surface-secondary);
+  color: var(--color-text-secondary);
+  font-size: var(--font-12, 12px);
+  cursor: pointer;
+}
+
+.preview-action-btn:hover {
+  border-color: var(--color-primary-border);
+  background: var(--color-surface-hover);
+  color: var(--success-ink);
+}
+
+.preview-action-btn .icon {
+  width: 14px;
+  height: 14px;
+}
+
+/* 「已编辑」标记 */
+.preview-edited-tag {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 1px 7px;
+  border-radius: var(--radius-pill);
+  background: var(--color-surface-accent, var(--color-surface-secondary));
+  color: var(--success-ink);
+  font-size: var(--font-11, 11px);
+  font-weight: 600;
+  vertical-align: middle;
+}
+
+@media (max-width: 640px) {
+  .edit-dialog-body {
+    grid-template-columns: 1fr;
+  }
+  .edit-dialog-preview img {
+    max-width: 180px;
+  }
+}
