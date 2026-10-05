@@ -314,7 +314,10 @@ function createPreviewCard(sticker: StickerPreview | null, tone: Tone, index?: n
     card.dataset.target = JSON.stringify({ kind: "sticker", index });
   }
 
-  const isRealSticker = Boolean(sticker?.url);
+  // 状态里可能只带了 assetId（比如从历史记录 / 导入结果恢复出来的），
+  // 这里统一兜底出 URL —— 否则未编辑的那些图会被渲染成占位符。
+  const mediaUrl = sticker?.url || (sticker?.assetId ? buildAssetUrl(sticker.assetId) : "");
+  const isRealSticker = Boolean(mediaUrl);
   const cardTone: Tone = isRealSticker ? "success" : tone;
   card.dataset.tone = cardTone;
 
@@ -351,7 +354,7 @@ function createPreviewCard(sticker: StickerPreview | null, tone: Tone, index?: n
   media.className = "preview-media";
 
   if (hasImage) {
-    (media as HTMLImageElement).src = sticker?.url ?? "";
+    (media as HTMLImageElement).src = mediaUrl;
     (media as HTMLImageElement).alt = `聊天场景贴纸 ${sticker?.label ?? ""} 预览`;
     (media as HTMLImageElement).loading = "lazy";
     (media as HTMLImageElement).decoding = "async";

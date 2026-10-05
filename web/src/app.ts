@@ -1496,6 +1496,8 @@ function syncStateFromResult(json: any): void {
   currentStickers = stickers.map((s: any, i: number) => ({
     label: s?.label ?? String(i + 1).padStart(3, "0"),
     assetId: s?.assetId,
+    // url 必须带上：后续任何一次 renderPreview 都靠它，漏了就会渲染成占位符
+    url: typeof s?.url === "string" && s.url ? s.url : s?.assetId ? `/api/assets/${s.assetId}` : "",
     ...(s?.prompt ? { prompt: s.prompt } : {}),
     ...(s?.style ? { style: s.style } : {}),
     ...(s?.emotion ? { emotion: s.emotion } : {}),
