@@ -83,6 +83,7 @@ const importIcon = byId<HTMLInputElement>("importIcon");
 const importBanner = byId<HTMLInputElement>("importBanner");
 const importRewardGuide = byId<HTMLInputElement>("importRewardGuide");
 const importRewardThanks = byId<HTMLInputElement>("importRewardThanks");
+const importZip = byId<HTMLInputElement>("importZip");
 const importState = req("importState");
 const originalPreview = req<HTMLImageElement>("originalPreview");
 const creationModeAi = byId<HTMLInputElement>("creationModeAi");
@@ -1053,6 +1054,57 @@ function getMetadataPayload(): Record<string, string> | undefined {
 }
 
 // ── Result rendering (orchestration) ────────────────────────────────────────
+/**
+ * 把结果里的资源与生成上下文写回模块状态，供「单资源重生成」与「重新打包」使用。
+ * 导入图片（`/api/generate/import`）与导入 ZIP 还原（`/api/generate/import-pack`）也走这里，
+ * 于是导入后的包同样能单张重生成、二次编辑并重建 ZIP。
+ */
+function syncStateFromResult(json: any): void {
+  const stickers = Array.isArray(json?.stickers) ? json.stickers : [];
+  currentStickers = stickers.map((s: any, i: number) => ({
+    label: s?.label ?? String(i + 1).padStart(3, "0"),
+    assetId: s?.assetId,
+    ...(s?.prompt ? { prompt: s.prompt } : {}),
+    ...(s?.style ? { style: s.style } : {}),
+    ...(s?.emotion ? { emotion: s.emotion } : {}),
+    ...(s?.sourceAssetId ? { sourceAssetId: s.sourceAssetId } : {})
+  }));
+
+  currentExtras = {};
+  for (const key of EXTRA_ASSET_KEYS) {
+    const id = json?.extras?.[key];
+    if (typeof id === "string" && id) currentExtras[key] = id;
+  }
+  const extraDetails = json?.extraDetails ?? {};
+  for (const [key, role] of Object.entries(EXTRA_ROLE_BY_KEY)) {
+    const detail = extraDetails[role];
+    if (!detail) continue;
+    if (detail.prompt) currentExtras[`${key}_prompt`] = detail.prompt;
+    if (detail.style) currentExtras[`${key}_style`] = detail.style;
+  }
+
+  // 还原 ZIP 时把包里的风格 / 标题 / 作者写回表单，后续重建 ZIP 才能保持一致
+  const styles = Array.isArray(json?.generation?.styles) ? json.generation.styles.filter(Boolean) : [];
+  if (styles.length) {
+    currentStyles = styles;
+    renderStyleOptions(availableStyles);
+    setPromptHint(currentStyles);
+  }
+  if (json?.meta?.title && !wechatAiTitle.value.trim()) wechatAiTitle.value = json.meta.title;
+  if (json?.meta?.author && !wechatAiAuthor.value.trim()) wechatAiAuthor.value = json.meta.author;
+  if (json?.meta?.version && !wechatAiVersion.value.trim()) wechatAiVersion.value = json.meta.version;
+  if (json?.meta?.copyright && !wechatAiCopyright.value.trim()) wechatAiCopyright.value = json.meta.copyright;
+
+  // 包内带着参考图时把它接上，单张重新生成才有素材可用
+  const referenceAssetId = json?.meta?.referenceAssetId;
+  if (!currentUploadId && typeof referenceAssetId === "string" && referenceAssetId) {
+    currentUploadId = referenceAssetId;
+    originalPreview.src = window._preview!.buildAssetUrl(referenceAssetId);
+    syncOriginalPreviewSlot();
+    window._ui!.setStatus(uploadState, "已还原参考图", "success");
+  }
+}
+
 function renderCompletedPackResult(json: any, successMessage: string, feedbackMessage: string): void {
   currentRewardEnabled = Boolean(json?.meta?.rewardEnabled ?? false);
   currentRewardMessage = json?.meta?.rewardMessage ?? "";
@@ -1060,6 +1112,7 @@ function renderCompletedPackResult(json: any, successMessage: string, feedbackMe
   wechatAiRewardMessage.value = currentRewardMessage;
   syncRewardFields();
   lastPackResult = json;
+  syncStateFromResult(json);
   window._preview!.renderPreview(json?.stickers ?? [], "success");
   window._preview!.renderExtraAssets(json?.extras ?? {}, "success");
 
@@ -1077,6 +1130,12 @@ function renderCompletedPackResult(json: any, successMessage: string, feedbackMe
 }
 
 async function importPlatformPack(): Promise<void> {
+  // ZIP 包走「还原生成现场」，零散图片走「标准化导入」
+  const zipFile = importZip?.files?.[0];
+  if (zipFile) {
+    await restorePackZip(zipFile);
+    return;
+  }
   const files = importFiles?.files;
   const count = Number(files?.length || 0);
   if (count < MIN_STICKER_COUNT || count > MAX_STICKER_COUNT) {
@@ -1124,6 +1183,62 @@ async function importPlatformPack(): Promise<void> {
     window._preview!.renderPreview([], "error");
     window._preview!.renderExtraAssets({}, "error");
     window._preview!.setFeedback("导入失败，请检查图片格式和数量后重试。", "error");
+    window._preview!.renderMetadataPreview(null, "error");
+  } finally {
+    setGenerateButtonsBusy(false);
+  }
+}
+
+/** 导入从本站下载的 ZIP 包，还原之前的生成现场（不重编码任何图片）。 */
+async function restorePackZip(file: File): Promise<void> {
+  window._ui!.setStatus(importState, "还原中...", "loading");
+  window._ui!.setStatus(generateState, "正在还原", "loading");
+  window._ui!.setNotice("正在读取 ZIP 包并还原生成现场。", "info");
+  resetGenerationResult({ clearPersisted: true });
+  // 包里的参考图才是这次生成的素材，避免沿用上一轮上传的参考图
+  currentUploadId = null;
+  originalPreview.removeAttribute("src");
+  syncOriginalPreviewSlot();
+  window._preview!.renderPreview([], "loading");
+  window._preview!.renderExtraAssets({}, "idle");
+  window._preview!.setFeedback("正在从 ZIP 包中读回提示词、风格与参考图。", "loading");
+  window._preview!.renderMetadataPreview(null, "loading");
+  setGenerateButtonsBusy(true);
+
+  try {
+    const formData = new FormData();
+    formData.append("presetId", currentPlatform);
+    formData.append("file", file, file.name || "pack.zip");
+    const json = await requestJson("/api/generate/import-pack", { method: "POST", body: formData });
+
+    const restoredPlatform = json?.meta?.presetId;
+    if (restoredPlatform && PLATFORM_SPECS[restoredPlatform] && restoredPlatform !== currentPlatform) {
+      currentPlatform = restoredPlatform;
+      setSelectedPlatform(currentPlatform);
+      syncPlatformUI();
+    }
+    window._ui!.setStatus(importState, "已还原", "success");
+    renderCompletedPackResult(
+      json,
+      "已还原之前的生成现场，可继续单张重新生成或二次编辑。",
+      "提示词、风格、情绪与参考图已从 ZIP 包中读回，可直接下载或继续编辑。"
+    );
+
+    const warnings: string[] = Array.isArray(json?.restored?.warnings) ? json.restored.warnings : [];
+    if (warnings.length) window._ui!.setNotice(warnings.join("；"), "info");
+    if (!json?.meta?.referenceAssetId) window._ui!.setStatus(uploadState, "该包未包含参考图", "idle");
+    // 清空选择，避免下次切回图片导入时误触再次还原
+    if (importZip) {
+      importZip.value = "";
+      importZip.dispatchEvent(new Event("change"));
+    }
+  } catch (error) {
+    window._ui!.setStatus(importState, "还原失败", "error");
+    window._ui!.setStatus(generateState, "还原失败", "error");
+    window._ui!.setNotice(error instanceof Error ? error.message : "还原失败，请确认这是本站下载的 ZIP 包。", "error");
+    window._preview!.renderPreview([], "error");
+    window._preview!.renderExtraAssets({}, "error");
+    window._preview!.setFeedback("还原失败，请确认 ZIP 包完整且包含 metadata.json。", "error");
     window._preview!.renderMetadataPreview(null, "error");
   } finally {
     setGenerateButtonsBusy(false);

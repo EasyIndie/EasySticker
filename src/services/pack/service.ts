@@ -51,6 +51,8 @@ export type PackGenerationInfo = {
   targetSize?: { width: number; height: number };
   referenceAssetId?: string | null;
   referenceMode?: string;
+  /** 若这一包是导入旧 ZIP 还原而来，记录原始 packId。 */
+  restoredFrom?: string | null;
   /** 本次实际包含的扩展资源。 */
   include?: { cover?: boolean; icon?: boolean; banner?: boolean; reward?: boolean };
   createdAt?: string;
