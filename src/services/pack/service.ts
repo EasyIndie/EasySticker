@@ -29,15 +29,15 @@ export type PackAssetInput = {
   style?: string;
   /** 该张图使用的情绪。 */
   emotion?: string;
-  /** 二次编辑时这张图的来源资源。 */
+  /** 编辑图片时这张图的来源资源。 */
   sourceAssetId?: string;
-  /** 二次编辑时额外提供的那张参考图。 */
+  /** 编辑图片时额外提供的那张参考图。 */
   editReferenceAssetId?: string;
 };
 
 /**
  * 生成上下文：记录「这套图是怎么生成的」，让 ZIP 重新导入后可以还原提示词、
- * 风格、尺寸与参考图，从而继续做二次编辑/优化。
+ * 风格、尺寸与参考图，从而继续做编辑/优化。
  */
 export type PackGenerationInfo = {
   source?: "ai-generate" | "import";

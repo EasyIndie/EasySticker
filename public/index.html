@@ -11,7 +11,7 @@
     <title>EasySticker</title>
     <meta name="theme-color" id="themeMeta" content="#07c160" data-dark="#111827" />
     <script src="/js/theme.js?v=2"></script>
-    <link rel="stylesheet" href="/styles.css?v=23" />
+    <link rel="stylesheet" href="/styles.css?v=24" />
   </head>
   <body>
     <a href="#mainContent" class="skip-link">跳到主要内容</a>
@@ -231,7 +231,7 @@
                 <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 8v13H3V8"/><path d="M1 3h22v5H1z"/><path d="M10 12h4"/></svg>
                 <div>
                   <span class="section-title">还原之前的生成现场<span class="optional-mark">可选</span></span>
-                  <p class="field-hint">选择之前从本站下载的 ZIP 包，会自动读回提示词、风格、情绪与参考图，可继续单张重新生成或二次编辑。</p>
+                  <p class="field-hint">选择之前从本站下载的 ZIP 包，会自动读回提示词、风格、情绪与参考图，可继续单张重新生成或编辑图片。</p>
                 </div>
               </div>
               <label class="field" for="importZip">
@@ -501,12 +501,12 @@
     <!-- moved inside main.page above -->
 
 
-    <!-- 二次编辑弹窗 -->
+    <!-- 编辑图片弹窗 -->
     <div id="editDialog" class="edit-dialog" hidden aria-modal="true" role="dialog" aria-labelledby="editDialogTitle">
       <div class="edit-dialog-backdrop" id="editDialogBackdrop"></div>
       <div class="edit-dialog-panel">
         <div class="edit-dialog-head">
-          <h2 id="editDialogTitle">二次编辑</h2>
+          <h2 id="editDialogTitle">编辑图片</h2>
           <button type="button" class="edit-dialog-close" id="editDialogClose" aria-label="关闭"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
         </div>
         <div class="edit-dialog-body">

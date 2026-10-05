@@ -42,7 +42,7 @@ export function registerGenerateRoutes(deps: AppDeps) {
     return importStickerPack(deps.assetStore, deps.dataDir, presetId, req, owner);
   });
 
-  // 导入从本站下载的 ZIP 包，还原生成现场（可继续单张重生成 / 二次编辑）。
+  // 导入从本站下载的 ZIP 包，还原生成现场（可继续单张重生成 / 编辑图片）。
   app.post("/generate/import-pack", async (req, reply) => {
     const presetId = (req.body as any)?.presetId || "wechat_stickers";
     const { owner } = await resolveRequester(req);

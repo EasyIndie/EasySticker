@@ -23,6 +23,10 @@ export function registerAssetRoutes(deps: AppDeps) {
 
       const ext = path.extname(file.filename).toLowerCase();
       reply.type(mimeFromExt(ext));
+      // assetId 是内容不可变的 nanoid（写入即定，永不覆盖），同一 id 的字节永远相同，
+      // 所以可以放心长缓存。这条头直接决定预览区会不会每次导航都重新下载几十张图：
+      // 之前没有这个头，实测 24 张贴纸每次加载都完整重传约 1MB。
+      reply.header("cache-control", "public, max-age=31536000, immutable");
       return reply.send(fs.createReadStream(file.filePath));
     });
   };

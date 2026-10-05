@@ -12,7 +12,7 @@ Fastify + TypeScript 后端，Vite + TypeScript 前端（构建为 `public/js/*`
 - **密钥只放 `.env`**（`AI_<PROVIDER_ID>_API_KEY`），环境变量优先于 `prompt-config.json`，`/api/config` 与后台均不回显。
 - **配置精简**：`prompt-config.default.json` 为必需基线（缺失/非法即启动报错）；`prompt-config.json` 只写与默认不同的字段。
 - **启动自动读 `.env`**：`src/server.ts` 的 `loadEnvFile()`（不覆盖已有环境变量）。优先级：真实环境变量 > `.env` > `prompt-config.json` 的 `server.*` > 代码默认值。
-- **单资源重生成**：`POST /api/generate/resource`（`src/services/generate/single.ts`），按 `target`（贴纸索引 / 扩展资源 key）只重生成一张；扩展资源「单张失败不中断整包」；`mode="edit"` + `sourceAssetId` + `instruction` 已预留二次编辑能力。
+- **单资源重生成**：`POST /api/generate/resource`（`src/services/generate/single.ts`），按 `target`（贴纸索引 / 扩展资源 key）只重生成一张；扩展资源「单张失败不中断整包」；`mode="edit"` + `sourceAssetId` + `instruction` 已落到前端（卡片上的「编辑图片」）。
 - **静态资源豁免限流**：`/api/assets/:id` 与 `/api/packs/:id/download` 既豁免鉴权（`<img>`/`<a>` 带不了头），也不计入 API 频率限制（否则一次结果几十张图并发加载会触发 429）。
 - `npm test` 全绿：typecheck + web:typecheck + build + vitest（当前 **92** 条，11 个文件）
 - `BASE_URL=http://localhost:3000 npm run test:e2e` **37/37** 通过

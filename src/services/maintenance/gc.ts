@@ -233,7 +233,7 @@ export async function runGc(options: GcOptions): Promise<GcReport> {
     if (!metadata) continue;
     for (const file of metadata.files) {
       referencedAssetIds.add(file.assetId);
-      // 二次编辑用过的附加参考图也要算「被引用」，否则会被当孤儿素材回收掉
+      // 编辑图片用过的附加参考图也要算「被引用」，否则会被当孤儿素材回收掉
       if (file.editReferenceAssetId) referencedAssetIds.add(file.editReferenceAssetId);
     }
   }
