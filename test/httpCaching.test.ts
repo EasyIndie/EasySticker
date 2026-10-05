@@ -46,18 +46,56 @@ describe("HTTP 缓存策略", () => {
     expect(cc).toMatch(/max-age=(\d{7,})/); // 至少 100 天
   });
 
-  it("HTML / CSS / JS 每次校验（改完前端不用记得 bump 版本号）", async () => {
-    for (const url of ["/", "/index.html", "/styles.css", "/js/app.js"]) {
+  it("HTML 每次校验（新资源哈希靠它被发现）", async () => {
+    for (const url of ["/", "/index.html"]) {
       const res = await app.inject({ method: "GET", url });
       expect(res.statusCode, url).toBe(200);
       expect(res.headers["cache-control"], url).toBe("no-cache");
     }
   });
 
-  it("图标类静态资源用插件给的 1 小时缓存", async () => {
-    const res = await app.inject({ method: "GET", url: "/logo.svg" });
-    expect(res.statusCode).toBe(200);
-    expect(res.headers["cache-control"]).toContain("max-age=3600");
+  it("带内容哈希的 JS / CSS 可以长缓存", async () => {
+    // 从真实 HTML 里取版本号，避免测试写死哈希后跟着构建一起烂掉
+    const html = fs.readFileSync(path.join(process.cwd(), "public/index.html"), "utf-8");
+    const app1 = /<script[^>]+src="(\/js\/app\.js\?v=[^"]+)"/.exec(html)?.[1];
+    const css = /<link[^>]+href="(\/styles\.css\?v=[^"]+)"/.exec(html)?.[1];
+    expect(app1, "index.html 里的 /js/app.js 应带有 ?v= 内容哈希").toBeTruthy();
+    expect(css, "index.html 里的 /styles.css 应带有 ?v= 内容哈希").toBeTruthy();
+
+    for (const url of [app1!, css!]) {
+      const res = await app.inject({ method: "GET", url });
+      expect(res.statusCode, url).toBe(200);
+      expect(res.headers["cache-control"], url).toContain("immutable");
+    }
+  });
+
+  it("没带版本号的 JS / CSS 退回 no-cache（不能永久缓存旧文件）", async () => {
+    for (const url of ["/styles.css", "/js/app.js", "/logo.svg"]) {
+      const res = await app.inject({ method: "GET", url });
+      expect(res.statusCode, url).toBe(200);
+      expect(res.headers["cache-control"], url).toBe("no-cache");
+    }
+  });
+
+  it("所有 HTML 里的本地 js/css/svg/ico 引用都必须带 ?v=（否则 immutable 会锁死旧文件）", () => {
+    const publicDir = path.join(process.cwd(), "public");
+    const htmlFiles = fs
+      .readdirSync(publicDir)
+      .filter((name) => name.endsWith(".html"))
+      .map((name) => path.join(publicDir, name));
+    expect(htmlFiles.length).toBeGreaterThan(0);
+
+    const offenders: string[] = [];
+    for (const file of htmlFiles) {
+      const html = fs.readFileSync(file, "utf-8");
+      for (const m of html.matchAll(/\b(?:src|href)="(\/[^"]+\.(?:js|css|svg|ico|png|webp|woff2))"/g)) {
+        offenders.push(`${path.basename(file)} → ${m[1]}`);
+      }
+    }
+    expect(
+      offenders,
+      "跑一下 `npm run web:version`（web:build 已内置）给这些引用补上内容哈希"
+    ).toEqual([]);
   });
 
   it("AI 接口不带长缓存", async () => {

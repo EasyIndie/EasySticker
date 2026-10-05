@@ -70,6 +70,63 @@ export function registerAdminRoutes(deps: AppDeps) {
       };
     });
 
+    // GET /api/admin/monitoring/stream — SSE 实时推送（替代前端 15 秒轮询）
+    //
+    // 系统指标本来就由 server.ts 每 10 秒采样一次，所以这里只是把已有快照
+    // 推给浏览器：一次长连接换掉「每个后台标签页每 15 秒一个请求」，
+    // 数据还更实时（5 秒一帧），且切到别的标签页时前端会主动断开。
+    app.get("/admin/monitoring/stream", { preHandler: [requireAdmin] }, async (req, reply) => {
+      reply.hijack();
+      const raw = reply.raw;
+      raw.setHeader("content-type", "text/event-stream; charset=utf-8");
+      raw.setHeader("cache-control", "no-cache, no-transform");
+      raw.setHeader("connection", "keep-alive");
+      raw.setHeader("x-accel-buffering", "no");
+      raw.flushHeaders?.();
+
+      let closed = false;
+      let alertSignature = "";
+
+      const send = (event: string, data: unknown) => {
+        if (closed) return;
+        raw.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
+      };
+
+      const push = () => {
+        if (closed) return;
+        send("snapshot", {
+          snapshot: monitorStore.getCurrentSnapshot(),
+          trends: { minutes: 10, ...monitorStore.getTrends(10) },
+        });
+
+        // 告警只在内容变化时推，避免每帧重传同一份列表
+        const alerts = (alertEngine.getAlertHistory() as AlertRecord[]).filter(
+          (a) => a.resolvedAt === null
+        );
+        const signature = JSON.stringify(alerts);
+        if (signature !== alertSignature) {
+          alertSignature = signature;
+          send("alerts", { alerts });
+        }
+      };
+
+      const snapshotTimer = setInterval(push, 5000);
+      const pingTimer = setInterval(() => {
+        if (!closed) raw.write(": ping\n\n");
+      }, 15000);
+
+      const cleanup = () => {
+        closed = true;
+        clearInterval(snapshotTimer);
+        clearInterval(pingTimer);
+      };
+      req.raw.on("close", cleanup);
+      req.raw.on("error", cleanup);
+
+      // 先立即给一帧：切进仪表盘立刻有数据，不用等第一个采样周期
+      push();
+    });
+
     // GET /api/admin/monitoring/metrics — query raw metrics from JSONL
     app.get(
       "/admin/monitoring/metrics",

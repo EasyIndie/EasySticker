@@ -1,11 +1,11 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
-    <link rel="icon" href="/favicon.ico?v=2" sizes="32x32">
-  <link rel="icon" href="/logo.svg?v=2" type="image/svg+xml">
-  <link rel="icon" href="/favicon-32.png?v=2" type="image/png" sizes="32x32">
-  <link rel="icon" href="/favicon-16.png?v=2" type="image/png" sizes="16x16">
-  <link rel="apple-touch-icon" href="/favicon-128.png?v=2">
+    <link rel="icon" href="/favicon.ico?v=812763f6" sizes="32x32">
+  <link rel="icon" href="/logo.svg?v=c1ba1a48" type="image/svg+xml">
+  <link rel="icon" href="/favicon-32.png?v=a267b159" type="image/png" sizes="32x32">
+  <link rel="icon" href="/favicon-16.png?v=67cbc802" type="image/png" sizes="16x16">
+  <link rel="apple-touch-icon" href="/favicon-128.png?v=ebbd815a">
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
@@ -13,7 +13,7 @@
   <meta http-equiv="Expires" content="0">
   <title>EasySticker 管理后台</title>
   <meta name="theme-color" id="themeMeta" content="#F0F2F5" data-dark="#0f172a">
-  <script src="/js/theme.js?v=2"></script>
+  <script src="/js/theme.js?v=2ce5d795"></script>
   <link rel="stylesheet" href="admin.css?v=8">
 </head>
 <body>
@@ -21,7 +21,7 @@
   <!-- ====== 登录界面 ====== -->
   <div id="login-section">
     <div class="admin-card login-card">
-      <a href="/" class="login-logo"><img src="/logo.svg" width="72" height="72" alt="EasySticker"></a>
+      <a href="/" class="login-logo"><img src="/logo.svg?v=c1ba1a48" width="72" height="72" alt="EasySticker"></a>
       <h2>EasySticker 管理后台</h2>
       <div class="input-group">
         <label for="login-email">邮箱</label>
@@ -45,7 +45,7 @@
       <div class="topbar-left">
         <a href="/" class="topbar-back" title="返回首页" aria-label="返回首页"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg></a>
         <div class="topbar-brand">
-          <img src="/logo.svg" class="brand-icon" width="28" height="28" alt="">
+          <img src="/logo.svg?v=c1ba1a48" class="brand-icon" width="28" height="28" alt="">
           <span class="brand-name">EasySticker 管理后台</span>
         </div>
       </div>
@@ -70,6 +70,11 @@
 
       <!-- ====== 仪表盘 ====== -->
       <div id="dashboard-panel" class="tab-panel">
+
+        <div class="panel-head">
+          <span id="dashboard-live" class="live-indicator" data-tone="connecting" aria-live="polite">连接中…</span>
+          <span class="panel-head-hint">服务端推送，切到别的标签页会自动断开</span>
+        </div>
 
         <!-- 监控快照 -->
         <section class="metrics-grid">
@@ -254,6 +259,6 @@
     </main>
   </div>
 
-  <script src="/js/admin.js"></script>
+  <script src="/js/admin.js?v=8a42f77e"></script>
 </body>
 </html>

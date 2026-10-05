@@ -6,7 +6,10 @@
  */
 
 const API_BASE = "/api";
-let _refreshTimer: ReturnType<typeof setInterval> | null = null;
+import { openMonitoringStream, type MonitoringStream } from "../api/admin-stream";
+
+/** 仪表盘实时数据流；只在仪表盘标签页可见时保持连接。 */
+let _dashboardStream: MonitoringStream | null = null;
 
 // ── 统一 SVG 图标（stroke=currentColor，自动适配亮/暗模式）─────────────────
 const ICON_CHECK =
@@ -136,8 +139,7 @@ async function login(): Promise<void> {
 }
 
 function logout(): void {
-  try { if (_refreshTimer) clearInterval(_refreshTimer); } catch { /* ignore */ }
-  _refreshTimer = null;
+  stopLiveUpdates();
   try {
     localStorage.removeItem("easysticker_token");
     localStorage.removeItem("easysticker_user");
@@ -168,7 +170,6 @@ function showMainSection(user: any): void {
   userLabel.textContent = user.email + (user.role === "admin" ? " (管理员)" : "");
 
   switchTab("dashboard");
-  startAutoRefresh();
 }
 
 function checkAuth(): void {
@@ -192,20 +193,56 @@ function switchTab(tab: string): void {
   });
 
   switch (tab) {
-    case "dashboard": void loadDashboard(); break;
-    case "users": void loadUsers(); break;
-    case "stats": void loadStats(); break;
-    case "storage": void loadStorage(); break;
-    case "settings": void loadSettings(); void loadAlertRules(); void loadAiProviders(); break;
+    case "dashboard": startLiveUpdates(); break;
+    case "users": stopLiveUpdates(); void loadUsers(); break;
+    case "stats": stopLiveUpdates(); void loadStats(); break;
+    case "storage": stopLiveUpdates(); void loadStorage(); break;
+    case "settings":
+      stopLiveUpdates();
+      void loadSettings();
+      void loadAlertRules();
+      void loadAiProviders();
+      break;
   }
 }
 
-function startAutoRefresh(): void {
-  if (_refreshTimer) clearInterval(_refreshTimer);
-  _refreshTimer = setInterval(() => {
-    const active = document.querySelector(".tab-btn.active") as HTMLElement | null;
-    if (active && active.dataset.tab === "dashboard") void loadDashboard();
-  }, 15000);
+// ── 仪表盘实时更新（SSE，替代原先的 15 秒轮询）─────────────────────────────
+//
+// 原先 setInterval(loadDashboard, 15000) 有两个毛病：数据永远滞后，
+// 且只要后台页面开着就一直发请求。改成服务端推送后，切到别的标签页
+// 或浏览器标签页被隐藏时会主动断开，不再有空转连接。
+function startLiveUpdates(): void {
+  if (_dashboardStream) return;
+  setLiveStatus("connecting");
+  _dashboardStream = openMonitoringStream({
+    onSnapshot: (payload) => renderMetrics(payload?.snapshot),
+    onAlerts: (payload) => renderAlerts(payload?.alerts || []),
+    onStatus: (status) => {
+      setLiveStatus(status);
+      // 推送被中间层挡住时（部分代理会缓冲 SSE）退回到拉一次，
+      // 至少保证页面上有数据可看；连接本身会退避重试。
+      if (status === "offline") void loadDashboard();
+    }
+  });
+}
+
+function stopLiveUpdates(): void {
+  _dashboardStream?.close();
+  _dashboardStream = null;
+  setLiveStatus("offline");
+}
+
+function setLiveStatus(status: "connecting" | "live" | "offline"): void {
+  const el = byId("dashboard-live");
+  if (!el) return;
+  const map = {
+    live: { text: "实时更新中", tone: "live" },
+    connecting: { text: "连接中…", tone: "connecting" },
+    offline: { text: "已断开，正在重连", tone: "offline" }
+  } as const;
+  const { text, tone } = map[status];
+  el.dataset.tone = tone;
+  el.textContent = text;
 }
 
 // ── Dashboard ───────────────────────────────────────────────────────────────
@@ -819,6 +856,18 @@ export function mountAdmin(): void {
   document.querySelectorAll(".tab-btn").forEach((btn) => {
     btn.addEventListener("click", () => switchTab((btn as HTMLElement).dataset.tab || "dashboard"));
   });
+
+  // 页面/浏览器标签页被隐藏时断掉长连接：没人看仪表盘就不该继续推数据，
+  // 也避免后台标签页被浏览器限制后留下一堆半死的连接。
+  document.addEventListener("visibilitychange", () => {
+    const active = document.querySelector(".tab-btn.active") as HTMLElement | null;
+    if (document.hidden) {
+      stopLiveUpdates();
+    } else if (active?.dataset.tab === "dashboard") {
+      startLiveUpdates();
+    }
+  });
+  window.addEventListener("pagehide", stopLiveUpdates);
 
   req("login-password").addEventListener("keydown", (e) => { if (e.key === "Enter") void login(); });
   req("login-email").addEventListener("keydown", (e) => {
