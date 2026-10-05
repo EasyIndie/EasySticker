@@ -1585,6 +1585,20 @@ select {
   gap: var(--space-6);
 }
 
+/* 文档页「功能介绍」卡片图标 */
+.help-feature-icon {
+  width: 44px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-md);
+  background: var(--color-surface-accent);
+  color: var(--success-ink);
+  margin-bottom: var(--space-2);
+}
+.help-feature-icon .icon { width: 22px; height: 22px; }
+
 .docs-card h2,
 .docs-card h3,
 .component-demo h3,
@@ -2230,6 +2244,11 @@ select {
   outline: 2px solid var(--focus-ring);
   outline-offset: 2px;
 }
+
+/* 主题切换按钮：根据 data-theme 显示太阳/月亮图标（文档页共用 theme.js） */
+[data-theme-toggle] .theme-icon-sun { display: none; }
+[data-theme="dark"] [data-theme-toggle] .theme-icon-sun { display: inline-block; }
+[data-theme="dark"] [data-theme-toggle] .theme-icon-moon { display: none; }
 
 /* ========== Drop Zone Overlay ========== */
 .drop-zone-overlay {
