@@ -8,7 +8,7 @@ import type { AssetStore } from "../../lib/assets";
 import { uploadsDir } from "../../lib/paths";
 import { validateAsset, validateAssetList } from "../platform/validate";
 import { getPlatformPreset } from "../platform/presets";
-import { buildZipPack } from "../pack/service";
+import { createPack } from "../pack/service";
 
 type ImportMetadata = {
   title?: string;
@@ -208,7 +208,7 @@ export async function importStickerPack(assetStore: AssetStore, dataDir: string,
     }
   };
 
-  const { packId, downloadFilename, metadataJson } = await buildZipPack(assetStore, dataDir, {
+  const { packId, downloadFilename, metadataJson } = await createPack(assetStore, dataDir, {
     presetId,
     assets,
     coverAssetId,

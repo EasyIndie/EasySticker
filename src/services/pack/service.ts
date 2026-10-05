@@ -88,6 +88,17 @@ export type PackInfo = {
   downloadFilename: string;
 };
 
+/**
+ * 包清单，落在 `packs/<packId>.json`。
+ * ZIP 不再常驻磁盘，只看这份清单就能在下载时现打出来。
+ */
+export type PackManifest = {
+  packId: string;
+  downloadFilename: string;
+  /** 会原样写进 ZIP 里那份 `metadata.json` 的内容。 */
+  metadata: PackMetadata;
+};
+
 /** metadata.json 中每个文件的完整描述（名称、尺寸、用途、生成信息）。 */
 export type PackFileMetadata = {
   role: PackFileRole;
@@ -199,7 +210,14 @@ const EXTRA_FILES: Array<{ role: PackFileRole; field: keyof PackRequest }> = [
   { role: "reward-thanks", field: "rewardThanksAssetId" }
 ];
 
-export async function buildZipPack(assetStore: AssetStore, dataDir: string, req: PackRequest) {
+/**
+ * 生成一个包：只写清单（几 KB），**不再落地 ZIP**。
+ *
+ * 早期实现会把整包图片再复制一份成 `<packId>.zip`，于是「uploads 一份 + zip 一份」
+ * 双倍占用；而且前端每次单资源重生成都会 `POST /api/packs` 重建整包，一份结果会被
+ * 复制 N 次。现在下载时按需现打，存储降到约一半，重建也从「搬几 MB」变成「写几 KB」。
+ */
+export async function createPack(assetStore: AssetStore, dataDir: string, req: PackRequest) {
   const normalizedAssets: PackAssetInput[] =
     req.assets && req.assets.length
       ? req.assets
@@ -213,21 +231,6 @@ export async function buildZipPack(assetStore: AssetStore, dataDir: string, req:
 
   const packId = nanoid();
   const downloadFilename = buildDownloadFilename(req, packId);
-  const dir = packsDir(dataDir);
-  fs.mkdirSync(dir, { recursive: true });
-
-  const zipPath = path.join(dir, `${packId}.zip`);
-  const output = fs.createWriteStream(zipPath);
-  const zip = archiver("zip", { zlib: { level: 9 } });
-
-  const done = new Promise<void>((resolve, reject) => {
-    output.on("close", () => resolve());
-    output.on("error", reject);
-    zip.on("warning", reject);
-    zip.on("error", reject);
-  });
-
-  zip.pipe(output);
 
   const entries: Array<{ assetId: string; filename: string; zipPath: string }> = [];
   const files: PackFileMetadata[] = [];
@@ -240,7 +243,6 @@ export async function buildZipPack(assetStore: AssetStore, dataDir: string, req:
     const ext = path.extname(file.filename).toLowerCase();
     const name = `${asset.label}${ext}`;
     const inZip = path.posix.join("assets", name);
-    zip.file(file.filePath, { name: inZip });
     entries.push({ assetId: id, filename: name, zipPath: inZip });
     files.push({
       role: asset.role ?? "sticker",
@@ -264,7 +266,6 @@ export async function buildZipPack(assetStore: AssetStore, dataDir: string, req:
     const ext = path.extname(file.filename).toLowerCase();
     const name = `${extra.role}${ext}`;
     const inZip = path.posix.join("meta", name);
-    zip.file(file.filePath, { name: inZip });
     const detail = req.extraDetails?.[extra.role];
     files.push({
       role: extra.role,
@@ -279,14 +280,13 @@ export async function buildZipPack(assetStore: AssetStore, dataDir: string, req:
   }
 
   // 参考图是可选的补充素材：缺失时跳过而不是让整个打包失败
-  // （例如重建 ZIP 时 uploads 已被清理）。
+  // （例如重建时 uploads 已被清理）。
   if (req.referenceAssetId) {
     const reference = assetStore.find(req.referenceAssetId);
     if (reference) {
       const ext = path.extname(reference.filename).toLowerCase();
       const name = `reference${ext}`;
       const inZip = path.posix.join("source", name);
-      zip.file(reference.filePath, { name: inZip });
       files.push({
         role: "reference",
         assetId: req.referenceAssetId,
@@ -318,27 +318,173 @@ export async function buildZipPack(assetStore: AssetStore, dataDir: string, req:
     assets: entries
   };
 
-  const metadataJson = JSON.stringify(metadata, null, 2);
-  zip.append(metadataJson, { name: "metadata.json" });
+  const manifest: PackManifest = { packId, downloadFilename, metadata };
+  fs.mkdirSync(packsDir(dataDir), { recursive: true });
+  fs.writeFileSync(packInfoPath(dataDir, packId), JSON.stringify(manifest, null, 2));
 
-  await zip.finalize();
-  await done;
+  return {
+    packId,
+    downloadUrl: `/api/packs/${packId}/download`,
+    downloadFilename,
+    metadataJson: JSON.stringify(metadata, null, 2)
+  };
+}
 
-  fs.writeFileSync(packInfoPath(dataDir, packId), JSON.stringify({ packId, downloadFilename }, null, 2));
+/** 读取包清单；旧包（只有 ZIP 或只有 `{packId, downloadFilename}` 侧车）返回 null。 */
+export function readPackManifest(dataDir: string, packId: string): PackManifest | null {
+  const infoPath = packInfoPath(dataDir, packId);
+  if (!fs.existsSync(infoPath)) return null;
+  try {
+    const parsed = JSON.parse(fs.readFileSync(infoPath, "utf8")) as Partial<PackManifest>;
+    if (!parsed || typeof parsed !== "object" || !parsed.metadata) return null;
+    return {
+      packId: parsed.packId ?? packId,
+      downloadFilename: parsed.downloadFilename ?? `${packId}.zip`,
+      metadata: parsed.metadata
+    };
+  } catch {
+    return null;
+  }
+}
 
-  return { packId, zipPath, downloadFilename, metadataJson };
+/** 把清单落盘（迁移旧包、修复历史包时用）。 */
+export function writePackManifest(dataDir: string, manifest: PackManifest): void {
+  fs.mkdirSync(packsDir(dataDir), { recursive: true });
+  fs.writeFileSync(packInfoPath(dataDir, manifest.packId), JSON.stringify(manifest, null, 2));
+}
+
+/** 清单里所有文件是否都还在 uploads 里；返回缺失的 zipPath 列表。 */
+export function missingPackFiles(assetStore: AssetStore, manifest: PackManifest): string[] {
+  return manifest.metadata.files
+    .filter((f) => !assetStore.find(f.assetId))
+    .map((f) => f.zipPath);
+}
+
+/**
+ * 现场把清单打成 ZIP 流（边打边发，不在磁盘留副本）。
+ * 调用前请先用 `missingPackFiles` 校验，避免流到一半才发现缺文件。
+ */
+export function createPackArchive(assetStore: AssetStore, manifest: PackManifest) {
+  // 图片本身已是压缩格式（PNG/WebP），用低压缩级别换打包速度，体积几乎无差别
+  const zip = archiver("zip", { zlib: { level: 1 } });
+  for (const file of manifest.metadata.files) {
+    const found = assetStore.find(file.assetId);
+    if (!found) continue;
+    zip.file(found.filePath, { name: file.zipPath });
+  }
+  zip.append(JSON.stringify(manifest.metadata, null, 2), { name: "metadata.json" });
+  // archiver 出错时若无人监听 'error' 会抛未捕获异常；交给响应流自然中断
+  zip.on("error", () => {});
+  void zip.finalize();
+  return zip;
+}
+
+export function findPackZipPath(dataDir: string, packId: string): string | null {
+  const filePath = path.join(packsDir(dataDir), `${packId}.zip`);
+  return fs.existsSync(filePath) ? filePath : null;
 }
 
 export function getPackZipPath(dataDir: string, packId: string) {
-  const filePath = path.join(packsDir(dataDir), `${packId}.zip`);
-  if (!fs.existsSync(filePath)) throw createHttpError(404, "pack not found");
+  const filePath = findPackZipPath(dataDir, packId);
+  if (!filePath) throw createHttpError(404, "pack not found");
   return filePath;
+}
+
+/** 包是否存在（清单或旧 ZIP 任一在即为存在）。 */
+export function packExists(dataDir: string, packId: string): boolean {
+  return fs.existsSync(packInfoPath(dataDir, packId)) || findPackZipPath(dataDir, packId) !== null;
+}
+
+/** 删除一个包：清单 + 旧 ZIP 一并清掉。返回是否删掉了东西。 */
+export function deletePack(dataDir: string, packId: string): boolean {
+  let removed = false;
+  const zipPath = findPackZipPath(dataDir, packId);
+  if (zipPath) {
+    fs.rmSync(zipPath, { force: true });
+    removed = true;
+  }
+  const infoPath = packInfoPath(dataDir, packId);
+  if (fs.existsSync(infoPath)) {
+    fs.rmSync(infoPath, { force: true });
+    removed = true;
+  }
+  return removed;
+}
+
+export type PackSummary = {
+  packId: string;
+  downloadUrl: string;
+  downloadFilename: string;
+  createdAt: string;
+  presetId: string | null;
+  title: string | null;
+  author: string | null;
+  stickerCount: number;
+  bytes: number;
+  hasZip: boolean;
+};
+
+/**
+ * 列出服务端保存的所有包。会扫描 packs 目录，仅供后台/低频接口使用。
+ * 已压缩（只有清单）的包能给出完整信息；仍是旧 ZIP 的包只回退到文件时间与体积。
+ */
+export function listPacks(dataDir: string): PackSummary[] {
+  const dir = packsDir(dataDir);
+  if (!fs.existsSync(dir)) return [];
+  const ids = new Set<string>();
+  for (const name of fs.readdirSync(dir)) {
+    if (name.endsWith(".zip")) ids.add(name.slice(0, -4));
+    else if (name.endsWith(".json")) ids.add(name.slice(0, -5));
+  }
+
+  const out: PackSummary[] = [];
+  for (const packId of ids) {
+    const manifest = readPackManifest(dataDir, packId);
+    const zipPath = findPackZipPath(dataDir, packId);
+    const zipBytes = zipPath ? fs.statSync(zipPath).size : 0;
+    if (manifest) {
+      const stickerCount = manifest.metadata.files.filter((f) => f.role === "sticker").length;
+      const bytes = manifest.metadata.files.reduce((sum, f) => sum + (f.bytes ?? 0), 0) + zipBytes;
+      out.push({
+        packId,
+        downloadUrl: `/api/packs/${packId}/download`,
+        downloadFilename: manifest.downloadFilename,
+        createdAt: manifest.metadata.createdAt,
+        presetId: manifest.metadata.presetId ?? null,
+        title: manifest.metadata.metadata?.title ?? null,
+        author: manifest.metadata.metadata?.author ?? null,
+        stickerCount,
+        bytes,
+        hasZip: Boolean(zipPath)
+      });
+      continue;
+    }
+    const fallback = getPackInfo(dataDir, packId);
+    out.push({
+      packId,
+      downloadUrl: `/api/packs/${packId}/download`,
+      downloadFilename: fallback.downloadFilename,
+      createdAt: new Date(zipBytes ? fs.statSync(zipPath!).mtimeMs : 0).toISOString(),
+      presetId: null,
+      title: null,
+      author: null,
+      stickerCount: 0,
+      bytes: zipBytes,
+      hasZip: Boolean(zipPath)
+    });
+  }
+  return out.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
 }
 
 export function getPackInfo(dataDir: string, packId: string): PackInfo {
   const infoPath = packInfoPath(dataDir, packId);
   if (fs.existsSync(infoPath)) {
-    return JSON.parse(fs.readFileSync(infoPath, "utf8")) as PackInfo;
+    try {
+      const parsed = JSON.parse(fs.readFileSync(infoPath, "utf8")) as PackInfo;
+      if (parsed && typeof parsed.downloadFilename === "string") return parsed;
+    } catch {
+      // 退回到文件名默认值
+    }
   }
   return { packId, downloadFilename: `${packId}.zip` };
 }
