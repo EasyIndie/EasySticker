@@ -32,6 +32,7 @@ import archiver from "archiver";
 import sharp from "sharp";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const CURRENT_SCHEMA = "easysticker-pack@0.3";
 const EXTRA_ROLES = ["cover", "banner", "icon", "reward-guide", "reward-thanks"];
 
 /* ── 最小 ZIP 读取（只需支持本项目 archiver 产出的包） ───────────────────── */
@@ -225,7 +226,7 @@ export async function repairPack(packId, options = {}) {
     const isSticker = entry.name.startsWith("assets/");
     const filename = path.basename(entry.name);
     const role = isSticker ? "sticker" : path.basename(entry.name, path.extname(entry.name));
-    if (!isSticker && !EXTRA_ROLES.includes(role)) continue;
+    if (!isSticker && !EXTRA_ROLES.includes(role) && role !== "reference") continue;
 
     const label = isSticker ? path.basename(filename, path.extname(filename)) : undefined;
     const record = {
@@ -276,18 +277,39 @@ export async function repairPack(packId, options = {}) {
     files.push(record);
   }
 
-  // 按「贴纸序号 → 扩展资源固定顺序」排序，便于人工阅读 metadata.json
-  const extraRank = (role) => {
-    const i = EXTRA_ROLES.indexOf(role);
-    return i < 0 ? 99 : i;
+  // 参考图：ZIP 里已有则跳过；否则若 uploads 里还在，一并收入 source/
+  let referenceEntry = null;
+  const referenceAssetId =
+    context?.referenceAssetId ?? oldMeta.generation?.referenceAssetId ?? null;
+  if (!files.some((f) => f.role === "reference") && referenceAssetId) {
+    const uploadsDir = path.join(ROOT, "data", "uploads");
+    const match = fs.existsSync(uploadsDir)
+      ? fs.readdirSync(uploadsDir).find((f) => f.startsWith(`${referenceAssetId}.`))
+      : undefined;
+    if (match) {
+      const ext = path.extname(match).toLowerCase();
+      const content = fs.readFileSync(path.join(uploadsDir, match));
+      referenceEntry = { name: `source/reference${ext}`, content, date: new Date(oldMeta.createdAt ?? Date.now()) };
+      files.push({
+        role: "reference",
+        assetId: referenceAssetId,
+        filename: `reference${ext}`,
+        zipPath: `source/reference${ext}`,
+        ...(await fileFacts(content))
+      });
+    }
+  }
+
+  // 按「贴纸序号 → 扩展资源固定顺序 → 参考图」排序，便于人工阅读 metadata.json
+  const order = (f) => {
+    if (f.role === "sticker") return [0, Number(f.label) || 0];
+    if (f.role === "reference") return [2, 0];
+    return [1, EXTRA_ROLES.indexOf(f.role)];
   };
   files.sort((a, b) => {
-    if (a.role !== "sticker" || b.role !== "sticker") {
-      if (a.role === "sticker") return -1;
-      if (b.role === "sticker") return 1;
-      return extraRank(a.role) - extraRank(b.role);
-    }
-    return String(a.label).localeCompare(String(b.label));
+    const [ga, ia] = order(a);
+    const [gb, ib] = order(b);
+    return ga - gb || ia - ib || String(a.label ?? "").localeCompare(String(b.label ?? ""));
   });
 
   const generation = context
@@ -310,7 +332,7 @@ export async function repairPack(packId, options = {}) {
     : undefined;
 
   const newMeta = {
-    schema: "easysticker-pack@0.2",
+    schema: CURRENT_SCHEMA,
     packId: oldMeta.packId,
     presetId: oldMeta.presetId,
     createdAt: oldMeta.createdAt,
@@ -332,7 +354,8 @@ export async function repairPack(packId, options = {}) {
     zipPath,
     files: files.length,
     stickers: files.filter((f) => f.role === "sticker").length,
-    extras: files.filter((f) => f.role !== "sticker").map((f) => f.role),
+    extras: files.filter((f) => f.role !== "sticker" && f.role !== "reference").map((f) => f.role),
+    reference: files.find((f) => f.role === "reference")?.zipPath ?? null,
     withPrompt: files.filter((f) => f.prompt).length,
     generation: Boolean(generation),
     previousSchema: oldMeta.schema
@@ -358,6 +381,9 @@ export async function repairPack(packId, options = {}) {
     if (entry.name === "metadata.json") continue;
     zip.append(entry.content, { name: entry.name, date: entry.date });
   }
+  if (referenceEntry) {
+    zip.append(referenceEntry.content, { name: referenceEntry.name, date: referenceEntry.date });
+  }
   await zip.finalize();
   await done;
 
@@ -369,9 +395,14 @@ export async function repairPack(packId, options = {}) {
 
 /* ── CLI ───────────────────────────────────────────────────────────────── */
 
-/** 列出所有仍是旧 schema（非 0.2）的 packId。 */
-function listLegacyPackIds() {
+/**
+ * 列出「还能补东西」的包：缺少 files（旧 schema），或元数据里有参考图
+ * 而 ZIP 里还没收进去（uploads 里还在）。已经完全补齐的包会被跳过。
+ */
+function listRepairablePackIds() {
   const dir = path.join(ROOT, "data", "packs");
+  const uploadsDir = path.join(ROOT, "data", "uploads");
+  const uploads = fs.existsSync(uploadsDir) ? fs.readdirSync(uploadsDir) : [];
   if (!fs.existsSync(dir)) return [];
   return fs
     .readdirSync(dir)
@@ -381,7 +412,11 @@ function listLegacyPackIds() {
       try {
         const entries = readZipEntries(fs.readFileSync(path.join(dir, `${id}.zip`)));
         const meta = JSON.parse(entries.find((e) => e.name === "metadata.json").content.toString("utf8"));
-        return meta.schema !== "easysticker-pack@0.2";
+        const hasFiles = Array.isArray(meta.files) && meta.files.length > 0;
+        if (!hasFiles) return true;
+        const hasReference = meta.files.some((f) => f.role === "reference");
+        const refId = meta.generation?.referenceAssetId;
+        return Boolean(refId) && !hasReference && uploads.some((f) => f.startsWith(`${refId}.`));
       } catch {
         return false;
       }
@@ -405,8 +440,8 @@ async function runCli() {
     process.exit(1);
   }
 
-  const packIds = all ? listLegacyPackIds() : [packId];
-  if (all) console.log(`待修复的旧包：${packIds.length} 个`);
+  const packIds = all ? listRepairablePackIds() : [packId];
+  if (all) console.log(`待修复的包：${packIds.length} 个`);
 
   for (const id of packIds) {
     try {

@@ -63,7 +63,7 @@
 | 功能 | 说明 |
 |------|------|
 | **多平台校验** | 微信 240×240 PNG、Telegram 512×512 PNG、WhatsApp 512×512 WebP |
-| **结构化 ZIP** | 主表情 + 封面图标 + 横幅 + metadata.json，开箱即提交 |
+| **结构化 ZIP** | 主表情 + 封面图标 + 横幅 + 参考图 + metadata.json，开箱即提交 |
 | **文件尺寸自动控制** | WebP 质量递减至 ≤100KB，PNG 超限自动 palette 量化 |
 | **Swagger API** | 完整的 OpenAPI 文档（`/docs`） |
 
@@ -74,7 +74,7 @@
 
 ```json
 {
-  "schema": "easysticker-pack@0.2",
+  "schema": "easysticker-pack@0.3",
   "packId": "…",
   "presetId": "wechat_stickers",
   "createdAt": "2026-10-05T10:51:49.901Z",
@@ -128,17 +128,32 @@
       "bytes": 21447,
       "prompt": "…实际使用的完整提示词…",
       "style": "贴纸"
+    },
+    {
+      "role": "reference",
+      "assetId": "…",
+      "filename": "reference.png",
+      "zipPath": "source/reference.png",
+      "width": 1254,
+      "height": 1254,
+      "format": "png",
+      "mimeType": "image/png",
+      "bytes": 1088103
     }
   ],
   "assets": [{ "assetId": "…", "filename": "001.png", "zipPath": "assets/001.png" }]
 }
 ```
 
-- `files` 覆盖包内**所有**图片（贴纸 + 封面 / 图标 / 横幅 / 赞赏图），每条都带 `width`/`height`/`format`/`mimeType`/`bytes`；
+- `files` 覆盖包内**所有**图片（贴纸 + 封面 / 图标 / 横幅 / 赞赏图 + 参考图），每条都带 `width`/`height`/`format`/`mimeType`/`bytes`；
   贴纸与扩展资源还会带上各自实际使用的 `prompt` / `style`（贴纸另有 `emotion`）。
+- 参考图会原图存进 `source/reference.*`（不压缩、不改尺寸），配合 `generation` 即可**完整还原**这次生成：
+  参考图 + 原始提示词 + 风格 + 情绪序列 → 可重放出同一套图，也可在此基础上做二次编辑。
 - `generation` 记录整套图的生成上下文（提供商、模型、原始提示词、负向提示词、风格、参考图方式与尺寸），
   `source` 区分 `ai-generate` 与 `import`。
 - `assets` 是旧版最小清单，保留以兼容既有工具；新代码请优先读取 `files`。
+
+历史包（旧 schema）可用 `npm run repair-pack` 补全，见下方 FAQ。
 
 ---
 
@@ -304,7 +319,7 @@ A: 项目采用 Apache-2.0 许可证，可自由使用和修改。注意生成�
 A: 可调整提示词、更换风格、切换 AI 提供商；也可在 `prompt-config.json` 里调整 provider 的 `quality` / `outputFormat` / `size`（generic 变体）以及全局 `ai.imageSize`。某张图不满意时，直接点击该预览卡片即可单张重生成，无需整包重跑。
 
 **Q: 早期导出的 ZIP 里 metadata.json 没有尺寸 / 提示词，能补回来吗？**
-A: 图片本身不会丢（都在 `data/packs/*.zip` 与 `data/uploads/` 里）。用 `npm run repair-pack` 可以把旧包就地升级到 `easysticker-pack@0.2`，用 `sharp` 重新测量每张图的尺寸并补齐角色、`files` 等字段（原包会备份成 `<packId>.zip.orig`，下载链接不变）：
+A: 图片本身不会丢（都在 `data/packs/*.zip` 与 `data/uploads/` 里）。用 `npm run repair-pack` 可以把旧包就地升级到最新 schema，用 `sharp` 重新测量每张图的尺寸并补齐角色、`files` 等字段；若 `uploads/` 里还留着参考图，也会一并收进 `source/reference.*`（原包备份成 `<packId>.zip.orig`，下载链接不变）：
 
 ```bash
 npm run repair-pack -- <packId>          # 修复单个包
