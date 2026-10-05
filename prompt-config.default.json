@@ -24,7 +24,7 @@
     }
   },
   "ai": {
-    "defaultProvider": "picsum",
+    "defaultProvider": "mock",
     "referenceMode": "base64",
     "publicBaseUrl": "",
     "imageSize": {
@@ -39,23 +39,11 @@
     "providers": {
       "mock": {
         "type": "mock",
-        "name": "\u672c\u5730\u6a21\u62df (Mock - \u65e0\u9700\u914d\u7f6e Key)"
-      },
-      "picsum": {
-        "type": "picsum",
-        "name": "\u968f\u673a\u56fe\u7247 (Picsum)"
-      },
-      "doubao": {
-        "type": "doubao",
-        "name": "\u8c46\u5305\u5927\u6a21\u578b (Ark)",
-        "baseUrl": "https://ark.cn-beijing.volces.com/api/v3",
-        "model": "doubao-seedream-5-0-260128",
-        "size": "2K",
-        "apiKey": ""
+        "name": "本地模拟 (Mock - 无需配置 Key)"
       },
       "openai": {
         "type": "openai",
-        "name": "OpenAI \u56fe\u7247\u751f\u6210",
+        "name": "OpenAI 兼容图片生成",
         "baseUrl": "https://api.openai.com/v1",
         "model": "gpt-image-1.5",
         "apiKey": "",
@@ -65,118 +53,63 @@
         "moderation": "auto",
         "inputFidelity": "high"
       },
-      "hf": {
-        "type": "hf",
-        "name": "HuggingFace",
-        "endpoint": "https://router.huggingface.co/hf-inference/models/stabilityai/stable-diffusion-xl-base-1.0",
-        "model": "stabilityai/stable-diffusion-xl-base-1.0",
-        "apiKey": ""
-      },
-      "http": {
-        "type": "http",
-        "name": "\u901a\u7528 HTTP \u670d\u52a1",
-        "endpoint": ""
-      },
-      "comfy-local": {
-        "type": "http",
-        "name": "\u672c\u5730 ComfyUI",
-        "endpoint": "http://127.0.0.1:8787/generate",
-        "comfy": {
-          "qualityPreset": "standard",
-          "promptPrefix": "wechat sticker, chibi person, single character, big head, expressive face, exaggerated emotion, cute emoji pose, thick clean outline, simple flat color, centered composition, transparent background, high quality",
-          "negativePromptAppend": "realistic photo, complex background, multiple people, extra face, extra hands, bad hands, cropped head, out of frame",
-          "qualityPresets": {
-            "fast": {
-              "steps": 16,
-              "cfg": 5.5,
-              "denoise": 0.4,
-              "samplerName": "dpmpp_2m",
-              "scheduler": "karras"
-            },
-            "standard": {
-              "steps": 22,
-              "cfg": 5.5,
-              "denoise": 0.45,
-              "samplerName": "dpmpp_2m",
-              "scheduler": "karras"
-            },
-            "quality": {
-              "steps": 28,
-              "cfg": 6,
-              "denoise": 0.5,
-              "samplerName": "dpmpp_2m",
-              "scheduler": "karras"
-            },
-            "expressive": {
-              "steps": 26,
-              "cfg": 6.5,
-              "denoise": 0.6,
-              "samplerName": "dpmpp_2m",
-              "scheduler": "karras"
-            }
-          }
-        },
-        "autoStart": {
-          "command": "npm",
-          "args": [
-            "run",
-            "comfy-adapter"
-          ],
-          "cwd": ".",
-          "healthUrl": "http://127.0.0.1:8787/health",
-          "cancelUrl": "http://127.0.0.1:8787/cancel",
-          "startupTimeoutMs": 20000,
-          "idleMs": 120000
-        }
+      "seedream": {
+        "type": "openai",
+        "name": "豆包 Seedream（火山方舟）",
+        "baseUrl": "https://ark.cn-beijing.volces.com/api/v3",
+        "model": "doubao-seedream-5-0-flash-260915",
+        "apiKey": "",
+        "variant": "generic"
       }
     }
   },
   "global": {
-    "prompt": "\u57fa\u4e8e\u53c2\u8003\u56fe\u4e2d\u7684\u4eba\u7269\u4e3b\u4f53\uff0c\u751f\u6210\u5fae\u4fe1\u804a\u5929\u573a\u666f\u53ef\u7528\u7684\u8868\u60c5\u5305\u8d34\u7eb8\u3002\u8981\u6c42\uff1a\u5355\u4eba\u4e3b\u4f53\uff0cQ\u7248\u5927\u5934\uff0c\u8868\u60c5\u5938\u5f20\uff0c\u52a8\u4f5c\u660e\u786e\uff0c\u4e3b\u4f53\u5c45\u4e2d\uff0c\u5e72\u51c0\u7c97\u63cf\u8fb9\uff0c\u989c\u8272\u7b80\u6d01\uff0c\u80cc\u666f\u900f\u660e\u6216\u7eaf\u51c0\uff0c\u907f\u514d\u6c34\u5370\u548c\u590d\u6742\u80cc\u666f\uff0c\u4e0d\u8981\u751f\u6210\u957f\u6587\u5b57",
-    "negativePrompt": "\u6587\u5b57\u3001\u6c34\u5370\u3001\u4e8c\u7ef4\u7801\u3001\u54c1\u724clogo\u3001\u590d\u6742\u80cc\u666f\u3001\u591a\u4eba\u3001\u5199\u5b9e\u7167\u7247\u3001\u4f4e\u6e05\u6670\u5ea6\u3001\u952f\u9f7f\u3001\u6a21\u7cca\u3001\u574f\u624b\u3001\u7578\u5f62\u3001\u88c1\u5207\u5934\u90e8\u3001\u51fa\u6846",
+    "prompt": "基于参考图中的人物主体，生成微信聊天场景可用的表情包贴纸。要求：单人主体，Q版大头，表情夸张，动作明确，主体居中，干净粗描边，颜色简洁，背景透明或纯净，避免水印和复杂背景，不要生成长文字",
+    "negativePrompt": "文字、水印、二维码、品牌logo、复杂背景、多人、写实照片、低清晰度、锯齿、模糊、坏手、畸形、裁切头部、出框",
     "styles": [
-      "\u6241\u5e73\u63d2\u753b",
-      "3D \u5361\u901a",
-      "\u65e5\u7cfb Q \u7248",
-      "\u50cf\u7d20\u98ce",
-      "\u56fd\u6f6e\u98ce"
+      "扁平插画",
+      "贴纸",
+      "3D 卡通",
+      "日系 Q 版",
+      "像素风",
+      "国潮风"
     ]
   },
   "emotions": [
-    "\u5f00\u5fc3\uff0c\u5927\u7b11\uff0c\u6325\u624b\u6253\u62db\u547c",
-    "\u70b9\u8d5e\uff0c\u7ad6\u8d77\u5927\u62c7\u6307",
-    "\u6bd4\u5fc3\uff0c\u53cc\u624b\u6bd4\u5fc3",
-    "\u5bb3\u7f9e\uff0c\u6342\u8138",
-    "\u611f\u8c22\uff0c\u53cc\u624b\u5408\u5341",
-    "\u54ed\u6ce3\uff0c\u6d41\u6cea",
-    "\u751f\u6c14\uff0c\u53cc\u624b\u62b1\u80f8",
-    "\u7591\u95ee\uff0c\u5934\u4e0a\u5e26\u6709\u95ee\u53f7",
-    "\u7761\u89c9\uff0c\u6253\u547c\u565c",
-    "\u594b\u6597\uff0c\u5934\u7ed1\u53d1\u5e26\u52a0\u6cb9",
-    "\u9707\u60ca\uff0c\u4e0b\u5df4\u6389\u4e0b\u6765",
-    "\u65e0\u5948\uff0c\u644a\u624b",
-    "\u671f\u5f85\uff0c\u661f\u661f\u773c",
-    "\u5e86\u795d\uff0c\u6492\u82b1",
-    "\u62d2\u7edd\uff0c\u53cc\u624b\u6253\u53c9",
-    "\u5403\u74dc\uff0c\u62ff\u7206\u7c73\u82b1",
-    "\u53f9\u6c14\uff0c\u6276\u989d",
-    "\u5e86\u795d\uff0c\u4e3e\u8d77\u9152\u676f",
-    "\u601d\u8003\uff0c\u624b\u6258\u4e0b\u5df4",
-    "\u75b2\u60eb\uff0c\u762b\u5012",
-    "\u5077\u7b11\uff0c\u6342\u5634",
-    "\u62b1\u62b1\uff0c\u5f20\u5f00\u53cc\u81c2",
-    "\u51b7\u6c57\uff0c\u6d41\u6c57",
-    "\u671f\u5f85\uff0c\u6413\u624b"
+    "开心，大笑，挥手打招呼",
+    "点赞，竖起大拇指",
+    "比心，双手比心",
+    "害羞，捂脸",
+    "感谢，双手合十",
+    "哭泣，流泪",
+    "生气，双手抱胸",
+    "疑问，头上带有问号",
+    "睡觉，打呼噜",
+    "奋斗，头绑发带加油",
+    "震惊，下巴掉下来",
+    "无奈，摊手",
+    "期待，星星眼",
+    "庆祝，撒花",
+    "拒绝，双手打叉",
+    "吃瓜，拿爆米花",
+    "叹气，扶额",
+    "庆祝，举起酒杯",
+    "思考，手托下巴",
+    "疲惫，瘫倒",
+    "偷笑，捂嘴",
+    "抱抱，张开双臂",
+    "冷汗，流汗",
+    "期待，搓手"
   ],
   "templates": {
-    "sticker": "{{prompt}}\n\u5f53\u524d\u8868\u60c5\u4e3b\u9898\u4e0e\u52a8\u4f5c\uff1a{{emotion}}\n\u98ce\u683c\uff1a{{style}}\n\u753b\u9762\u8981\u6c42\uff1a\u4eba\u7269\u9762\u90e8\u6e05\u6670\uff0c\u52a8\u4f5c\u4e00\u773c\u53ef\u8bfb\uff0c\u9002\u5408\u4f5c\u4e3a\u5fae\u4fe1\u804a\u5929\u8868\u60c5\uff0c240px \u7f29\u7565\u56fe\u4e0b\u4ecd\u7136\u6e05\u695a",
-    "extra": "{{prompt}}\n{{customPrompt}}\n\u98ce\u683c\uff1a{{style}}"
+    "sticker": "{{prompt}}\n当前表情主题与动作：{{emotion}}\n风格：{{style}}\n画面要求：人物面部清晰，动作一眼可读，适合作为微信聊天表情，240px 缩略图下仍然清楚",
+    "extra": "{{prompt}}\n{{customPrompt}}\n风格：{{style}}"
   },
   "extraPrompts": {
-    "cover": "\u5f53\u524d\u8981\u6c42\uff1a\u751f\u6210\u4e00\u5f20\u80fd\u4ee3\u8868\u6574\u5957\u8868\u60c5\u5305\u7684\u9ad8\u8d28\u91cf\u4e3b\u5c01\u9762\uff0c\u6784\u56fe\u9971\u6ee1\uff0c\u4e3b\u4f53\u5c45\u4e2d\u3002",
-    "icon": "\u5f53\u524d\u8981\u6c42\uff1a\u751f\u6210\u4e00\u4e2a\u6781\u7b80\u7684\u5934\u50cf\u56fe\u6807\uff0c\u4e3b\u8981\u7a81\u51fa\u89d2\u8272\u9762\u90e8\u7279\u5f81\uff0c\u5927\u5934\u8d34\u7279\u5199\u3002",
-    "banner": "\u5f53\u524d\u8981\u6c42\uff1a\u8fd9\u662f\u4e00\u5f20\u5bbd\u5c4f\u6a2a\u5e45\u63d2\u753b\uff0c\u9002\u5408\u4f5c\u4e3a\u8be6\u60c5\u9875\u80cc\u666f\uff0c\u89d2\u8272\u5904\u4e8e\u753b\u9762\u53f3\u4fa7\uff0c\u5de6\u4fa7\u7559\u767d\u3002",
-    "rewardGuide": "\u5f53\u524d\u8981\u6c42\uff1a\u8fd9\u662f\u4e00\u5f20\u8d5e\u8d4f\u5f15\u5bfc\u56fe\u6a2a\u5e45\uff0c\u89d2\u8272\u505a\u51fa\u671f\u5f85\u3001\u53ef\u601c\u6216\u611f\u8c22\u7684\u52a8\u4f5c\uff0c\u53f3\u4fa7\u7559\u51fa\u7a7a\u767d\u533a\u57df\u3002",
-    "rewardThanks": "\u5f53\u524d\u8981\u6c42\uff1a\u8fd9\u662f\u4e00\u5f20\u611f\u8c22\u6253\u8d4f\u7684\u6a2a\u5e45\u63d2\u753b\uff0c\u89d2\u8272\u975e\u5e38\u5f00\u5fc3\u3001\u6b22\u547c\u6492\u82b1\uff0c\u6a2a\u5e45\u6bd4\u4f8b\u3002"
+    "cover": "当前要求：生成一张能代表整套表情包的高质量主封面，构图饱满，主体居中。",
+    "icon": "当前要求：生成一个极简的头像图标，主要突出角色面部特征，大头贴特写。",
+    "banner": "当前要求：这是一张宽屏横幅插画，适合作为详情页背景，角色处于画面右侧，左侧留白。",
+    "rewardGuide": "当前要求：这是一张赞赏引导图横幅，角色做出期待、可怜或感谢的动作，右侧留出空白区域。",
+    "rewardThanks": "当前要求：这是一张感谢打赏的横幅插画，角色非常开心、欢呼撒花，横幅比例。"
   }
 }

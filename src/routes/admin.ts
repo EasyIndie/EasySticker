@@ -1,6 +1,9 @@
 import type { AlertRule, AlertRecord } from "../lib/alertEngine";
 import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
 import type { AppDeps } from "../lib/deps";
+import { loadPromptConfig, updatePromptConfig } from "../services/generate/promptConfig";
+import { getAiProvider } from "../services/ai/index";
+import { providerApiKeyEnvName, resolveProviderApiKey, setProviderApiKey } from "../services/ai/apiKey";
 
 export function registerAdminRoutes(deps: AppDeps) {
   return async (app: FastifyInstance): Promise<void> => {
@@ -148,6 +151,95 @@ export function registerAdminRoutes(deps: AppDeps) {
         notificationInterval: config.notificationInterval,
         monitorRetentionDays: config.monitorRetentionDays,
       };
+    });
+
+    // ── AI 提供商配置（可视化）─────────────────────────────
+
+    /** 列出 provider（密钥只返回“是否已配置”，绝不回传明文）。 */
+    function listAiProviders() {
+      const config = loadPromptConfig();
+      const providers = Object.entries(config.ai?.providers || {}).map(([id, p]: [string, any]) => {
+        const type = p.type || id;
+        const hasKey = type !== "mock" && Boolean(resolveProviderApiKey(id, p));
+        return {
+          id,
+          type,
+          name: p.name || id,
+          baseUrl: p.baseUrl ?? null,
+          model: p.model ?? null,
+          variant: p.variant ?? null,
+          size: p.size ?? null,
+          hasKey,
+          envKey: type === "openai" ? providerApiKeyEnvName(id) : null,
+          ready: type === "mock" ? true : hasKey
+        };
+      });
+      return { defaultProvider: config.ai?.defaultProvider || "mock", providers };
+    }
+
+    // GET /api/admin/ai/providers
+    app.get("/admin/ai/providers", { preHandler: [requireAdmin] }, async () => listAiProviders());
+
+    // PUT /api/admin/ai/providers — 保存 provider 覆盖项 + 默认 provider（密钥写入 .env）
+    app.put("/admin/ai/providers", { preHandler: [requireAdmin] }, async (req, reply) => {
+      const body = (req.body as { defaultProvider?: string; providers?: Record<string, any> }) || {};
+      if (body.defaultProvider !== undefined && typeof body.defaultProvider !== "string") {
+        return reply.status(400).send({ error: "defaultProvider must be a string" });
+      }
+
+      const current = loadPromptConfig();
+      const known = new Set([
+        ...Object.keys(current.ai?.providers || {}),
+        ...Object.keys(body.providers || {}),
+        "mock"
+      ]);
+      if (body.defaultProvider && !known.has(body.defaultProvider)) {
+        return reply.status(400).send({ error: `unknown defaultProvider: ${body.defaultProvider}` });
+      }
+
+      const editable = ["type", "name", "baseUrl", "model", "variant", "size"] as const;
+      const providers: Record<string, Record<string, unknown>> = {};
+      for (const [id, raw] of Object.entries(body.providers || {})) {
+        if (!raw || typeof raw !== "object") continue;
+        const clean: Record<string, unknown> = {};
+        for (const key of editable) {
+          if (raw[key] !== undefined) clean[key] = raw[key];
+        }
+        providers[id] = clean;
+        // 密钥只写 .env（AI_<ID>_API_KEY），不写配置文件；空串表示不修改。
+        if (typeof raw.apiKey === "string" && raw.apiKey.length > 0) {
+          setProviderApiKey(id, raw.apiKey);
+        }
+      }
+
+      updatePromptConfig({ defaultProvider: body.defaultProvider, providers });
+      return listAiProviders();
+    });
+
+    // POST /api/admin/ai/test — 真实调用一次，验证 provider 链路（会消耗少量额度）
+    app.post("/admin/ai/test", { preHandler: [requireAdmin] }, async (req, reply) => {
+      const body = (req.body as { providerId?: string }) || {};
+      const config = loadPromptConfig();
+      const id = body.providerId || config.ai?.defaultProvider || "mock";
+      const started = Date.now();
+      try {
+        const provider = getAiProvider(id);
+        const size = config.ai?.imageSize || { width: 1024, height: 1024 };
+        const out = await provider.generateImage({
+          prompt: "connectivity test: a simple cute smiley sticker, flat icon, centered",
+          negativePrompt: "",
+          width: size.width,
+          height: size.height
+        });
+        return { ok: true, providerId: id, ms: Date.now() - started, bytes: out.bytes.length, mime: out.mime };
+      } catch (error) {
+        return {
+          ok: false,
+          providerId: id,
+          ms: Date.now() - started,
+          error: error instanceof Error ? error.message : String(error)
+        };
+      }
     });
   };
 }

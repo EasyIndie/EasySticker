@@ -176,10 +176,10 @@ export async function importStickerPack(assetStore: AssetStore, dataDir: string,
       ? saveImportedAsset(assetStore, await resizePng(importedExtras.banner, 750, 400, "cover"), "png")
       : undefined;
     rewardGuideAssetId = importedExtras.rewardGuide
-      ? saveImportedAsset(assetStore, await resizePng(importedExtras.rewardGuide, 750, 400, "cover"), "png")
+      ? saveImportedAsset(assetStore, await resizePng(importedExtras.rewardGuide, 750, 560, "cover"), "png")
       : undefined;
     rewardThanksAssetId = importedExtras.rewardThanks
-      ? saveImportedAsset(assetStore, await resizePng(importedExtras.rewardThanks, 750, 400, "cover"), "png")
+      ? saveImportedAsset(assetStore, await resizePng(importedExtras.rewardThanks, 750, 560, "cover"), "png")
       : undefined;
 
     await validateOptionalAsset(assetStore, "wechat_cover", coverAssetId);

@@ -16,9 +16,16 @@ services:
       - CORS_ALLOW_ORIGIN=${CORS_ALLOW_ORIGIN:-}
       - LOG_LEVEL=${LOG_LEVEL:-info}
       - DATA_DIR=${DATA_DIR:-/app/data}
+      # AI provider keys (recommended: set in .env, not in prompt-config.json)
+      - AI_SEEDREAM_API_KEY=${AI_SEEDREAM_API_KEY:-}
+      - AI_OPENAI_API_KEY=${AI_OPENAI_API_KEY:-}
     volumes:
       - ./data:/app/data
-      - ./prompt-config.json:/app/prompt-config.json
+      # 提示词/情绪/风格默认用镜像内置的 prompt-config.default.json，无需挂载。
+      # AI Key 建议通过上面的环境变量传入（写进宿主机的 .env 即可）。
+      # 如需深度定制：先创建宿主文件，再取消下行注释（切勿在不创建文件时直接挂载——
+      # Docker 会把不存在的宿主路径建成目录，导致配置读取失败）。
+      # - ./prompt-config.json:/app/prompt-config.json:ro
     restart: unless-stopped
 
   # Optional: daily cleanup of old temp files (disabled by default, enable via profile)

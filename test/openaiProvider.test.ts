@@ -89,6 +89,50 @@ describe("openai image provider", () => {
     expect(bodyText).toContain("Avoid: watermark");
   });
 
+  it("generic variant sends OpenAI-compatible generations payload", async () => {
+    requests.length = 0;
+    const provider = new OpenAiImageProvider(baseUrl, "test-key", "doubao-seedream-5-0-260128", {
+      variant: "generic",
+      size: "2K"
+    });
+
+    const out = await provider.generateImage({
+      prompt: "make a sticker",
+      width: 1024,
+      height: 1024
+    });
+
+    expect(out.mime).toBe("image/png");
+    expect(requests[0].url).toBe("/v1/images/generations");
+    const body = JSON.parse(requests[0].body.toString("utf8"));
+    expect(body.model).toBe("doubao-seedream-5-0-260128");
+    expect(body.size).toBe("2K");
+    expect(body.response_format).toBe("b64_json");
+    expect(body.watermark).toBe(false);
+    expect(body.background).toBeUndefined();
+  });
+
+  it("generic variant passes reference image via image field instead of edits", async () => {
+    requests.length = 0;
+    const provider = new OpenAiImageProvider(baseUrl, "test-key", "doubao-seedream-5-0-260128", {
+      variant: "generic"
+    });
+
+    const out = await provider.generateImage({
+      prompt: "make a sticker",
+      width: 1024,
+      height: 1024,
+      referenceImageBase64: Buffer.from("fake-image").toString("base64"),
+      referenceImageMime: "image/png"
+    });
+
+    expect(out.mime).toBe("image/png");
+    expect(requests[0].url).toBe("/v1/images/generations");
+    expect(requests[0].contentType).toContain("application/json");
+    const body = JSON.parse(requests[0].body.toString("utf8"));
+    expect(body.image).toBe(`data:image/png;base64,${Buffer.from("fake-image").toString("base64")}`);
+  });
+
   it("preserves non-retryable OpenAI 4xx errors", async () => {
     requests.length = 0;
     nextStatus = 400;

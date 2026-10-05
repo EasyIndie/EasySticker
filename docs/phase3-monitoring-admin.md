@@ -1,6 +1,8 @@
 # 监控告警系统 + 管理后台 — 项目现状
 
 > 本文档记录已实现的监控告警和管理后台功能。
+>
+> ⚠️ **路径已过时：** 文中提到的 `public/admin.js` 已迁至 `web/src/features/admin.ts`（构建为 `public/js/admin.js`）。
 
 ## 已实现的功能
 
@@ -71,5 +73,5 @@
 | `src/app.ts` | onRequest/onResponse hook 采集起点/耗时 |
 | `src/server.ts` | 初始化定时器（采样 + 告警评估 + 清理） |
 | `public/admin.html` | 管理后台页面 |
-| `public/admin.js` | 管理后台前端逻辑 |
+| `web/src/features/admin.ts`（原 `public/admin.js`） | 管理后台前端逻辑 |
 | `public/admin.css` | 管理后台样式 |

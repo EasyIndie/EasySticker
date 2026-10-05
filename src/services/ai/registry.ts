@@ -11,7 +11,7 @@ export type ProviderFactory = (config: Record<string, any>, providerId: string) 
 const registry = new Map<string, ProviderFactory>();
 
 /**
- * Register a provider implementation under its `type` string (e.g. "doubao", "http").
+ * Register a provider implementation under its `type` string (e.g. "mock", "openai").
  * Called at module load time from each provider file, so adding a new provider
  * only requires a new file — no central switch needs to change.
  */

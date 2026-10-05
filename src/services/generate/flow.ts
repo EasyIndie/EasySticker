@@ -3,13 +3,13 @@ import createHttpError from "http-errors";
 import { nanoid } from "nanoid";
 import type { AssetStore } from "../../lib/assets";
 import { validateAssetList } from "../platform/validate";
-import { getPlatformPreset } from "../platform/presets";
+import { getPlatformPreset, resolveTargetSize } from "../platform/presets";
 import { buildZipPack } from "../pack/service";
 import { getAiProvider } from "../ai";
 import { buildMinimalClient } from "../ai/client";
 import { loadPromptConfig, compilePrompt } from "./promptConfig";
 import { convertToPlatformFormat } from "./convert";
-import { generateWechatExtras } from "./extras";
+import { generateWechatExtras, type ExtrasResult } from "./extras";
 
 export type PlatformGenerateRequest = {
   referenceAssetId: string;
@@ -60,18 +60,7 @@ export async function generateAssetsAndPack(
   if (!req.prompt) throw createHttpError(400, "missing prompt");
 
   // Determine resize target
-  let targetW: number;
-  let targetH: number;
-  if (preset.exactWidth && preset.exactHeight) {
-    targetW = preset.exactWidth;
-    targetH = preset.exactHeight;
-  } else if (preset.requiredSquare) {
-    const size = Math.min(preset.maxWidth, preset.maxHeight);
-    targetW = targetH = size;
-  } else {
-    targetW = preset.maxWidth;
-    targetH = preset.maxHeight;
-  }
+  const { width: targetW, height: targetH } = resolveTargetSize(preset);
 
   const promptConfig = loadPromptConfig();
   const providerId = req.provider ?? promptConfig.ai?.defaultProvider ?? "mock";
@@ -81,7 +70,6 @@ export async function generateAssetsAndPack(
   if (!reference) throw createHttpError(404, "reference asset not found");
   const referenceBytes = fs.readFileSync(reference.filePath);
   const referenceBase64 = referenceBytes.toString("base64");
-  const providerComfyOptions = promptConfig.ai?.providers?.[providerId]?.comfy;
   const emotions = promptConfig.emotions;
 
   const referenceMode = promptConfig.ai?.referenceMode ?? "base64";
@@ -135,8 +123,7 @@ export async function generateAssetsAndPack(
           referenceMode === "base64" || referenceMode === "multipart" ? referenceBase64 : undefined,
         referenceImageUrl: referenceMode === "url" ? referenceUrl : undefined,
         referenceImageMime: "image/png",
-        referenceImageAssetId: referenceMode === "assetId" ? req.referenceAssetId : undefined,
-        providerOptions: providerComfyOptions ? { comfy: providerComfyOptions } : undefined
+        referenceImageAssetId: referenceMode === "assetId" ? req.referenceAssetId : undefined
       },
       signal
     );
@@ -179,7 +166,6 @@ export async function generateAssetsAndPack(
           referenceBase64,
           referenceUrl,
           referenceImageAssetId: req.referenceAssetId,
-          providerComfyOptions,
           emit,
           isCanceled,
           signal
@@ -193,7 +179,7 @@ export async function generateAssetsAndPack(
           totalImageCount
         }
       )
-    : { currentGenerated };
+    : ({ currentGenerated, failures: {} } as ExtrasResult);
 
   const coverAssetId = extrasResult.coverAssetId;
   const iconAssetId = extrasResult.iconAssetId;
@@ -237,7 +223,9 @@ export async function generateAssetsAndPack(
       referenceMode,
       presetId
     },
-    extras: { coverAssetId, iconAssetId, bannerAssetId, rewardGuideAssetId, rewardThanksAssetId }
+    extras: { coverAssetId, iconAssetId, bannerAssetId, rewardGuideAssetId, rewardThanksAssetId },
+    // 单张扩展资源失败的 key → 原因；前端据此渲染失败卡片并支持单资源重生成。
+    extraFailures: extrasResult.failures
   };
   emit?.("done", result);
   return result;

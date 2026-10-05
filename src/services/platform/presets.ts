@@ -20,6 +20,18 @@ export function getPlatformPreset(id: string): PlatformPreset | undefined {
   return PLATFORM_PRESETS.find((p) => p.id === id);
 }
 
+/** 计算一个预设的最终输出尺寸（贴纸主图）。 */
+export function resolveTargetSize(preset: PlatformPreset): { width: number; height: number } {
+  if (preset.exactWidth && preset.exactHeight) {
+    return { width: preset.exactWidth, height: preset.exactHeight };
+  }
+  if (preset.requiredSquare) {
+    const size = Math.min(preset.maxWidth, preset.maxHeight);
+    return { width: size, height: size };
+  }
+  return { width: preset.maxWidth, height: preset.maxHeight };
+}
+
 export const PLATFORM_PRESETS: PlatformPreset[] = [
   {
     id: "telegram_static",
@@ -79,26 +91,26 @@ export const PLATFORM_PRESETS: PlatformPreset[] = [
   },
   {
     id: "wechat_reward_guide",
-    title: "WeChat (Reward Guide 750x400)",
+    title: "WeChat (Reward Guide 750x560)",
     description: "微信赞赏引导图",
     allowedExts: [".png", ".jpg", ".jpeg"],
     maxBytes: 500 * 1024,
     exactWidth: 750,
-    exactHeight: 400,
+    exactHeight: 560,
     maxWidth: 750,
-    maxHeight: 400,
+    maxHeight: 560,
     outputFormat: "png"
   },
   {
     id: "wechat_reward_thanks",
-    title: "WeChat (Reward Thanks 750x400)",
+    title: "WeChat (Reward Thanks 750x560)",
     description: "微信赞赏感谢图",
     allowedExts: [".png", ".jpg", ".jpeg"],
     maxBytes: 500 * 1024,
     exactWidth: 750,
-    exactHeight: 400,
+    exactHeight: 560,
     maxWidth: 750,
-    maxHeight: 400,
+    maxHeight: 560,
     outputFormat: "png"
   },
   {
