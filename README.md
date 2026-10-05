@@ -67,6 +67,79 @@
 | **文件尺寸自动控制** | WebP 质量递减至 ≤100KB，PNG 超限自动 palette 量化 |
 | **Swagger API** | 完整的 OpenAPI 文档（`/docs`） |
 
+### 🧾 metadata.json 结构
+
+导出的 ZIP 内附带 `metadata.json`，记录**每个文件的名称与尺寸**，以及**生成时使用的提示词、要求与风格**，
+便于把包重新导入后继续做二次编辑 / 优化。
+
+```json
+{
+  "schema": "easysticker-pack@0.2",
+  "packId": "…",
+  "presetId": "wechat_stickers",
+  "createdAt": "2026-10-05T10:51:49.901Z",
+  "metadata": { "title": "…", "author": "…", "version": "v1.0", "copyright": "…" },
+  "generation": {
+    "source": "ai-generate",
+    "providerId": "seedream",
+    "model": "doubao-seedream-5-0-flash-260915",
+    "prompt": "一只橘猫在打篮球",
+    "negativePrompt": "文字、水印、二维码、…",
+    "styles": ["贴纸"],
+    "stickerCount": 8,
+    "imageSize": { "width": 1024, "height": 1024 },
+    "targetSize": { "width": 240, "height": 240 },
+    "referenceAssetId": "…",
+    "referenceMode": "base64",
+    "include": { "cover": true, "icon": true, "banner": true, "reward": false }
+  },
+  "extras": {
+    "coverAssetId": "…",
+    "bannerAssetId": "…",
+    "iconAssetId": "…",
+    "rewardGuideAssetId": null,
+    "rewardThanksAssetId": null
+  },
+  "files": [
+    {
+      "role": "sticker",
+      "label": "001",
+      "assetId": "…",
+      "filename": "001.png",
+      "zipPath": "assets/001.png",
+      "width": 240,
+      "height": 240,
+      "format": "png",
+      "mimeType": "image/png",
+      "bytes": 23187,
+      "prompt": "一只橘猫在打篮球\n当前表情主题与动作：开心，大笑，挥手打招呼\n风格：贴纸\n画面要求：…",
+      "style": "贴纸",
+      "emotion": "开心，大笑，挥手打招呼"
+    },
+    {
+      "role": "cover",
+      "assetId": "…",
+      "filename": "cover.png",
+      "zipPath": "meta/cover.png",
+      "width": 240,
+      "height": 240,
+      "format": "png",
+      "mimeType": "image/png",
+      "bytes": 21447,
+      "prompt": "…实际使用的完整提示词…",
+      "style": "贴纸"
+    }
+  ],
+  "assets": [{ "assetId": "…", "filename": "001.png", "zipPath": "assets/001.png" }]
+}
+```
+
+- `files` 覆盖包内**所有**图片（贴纸 + 封面 / 图标 / 横幅 / 赞赏图），每条都带 `width`/`height`/`format`/`mimeType`/`bytes`；
+  贴纸与扩展资源还会带上各自实际使用的 `prompt` / `style`（贴纸另有 `emotion`）。
+- `generation` 记录整套图的生成上下文（提供商、模型、原始提示词、负向提示词、风格、参考图方式与尺寸），
+  `source` 区分 `ai-generate` 与 `import`。
+- `assets` 是旧版最小清单，保留以兼容既有工具；新代码请优先读取 `files`。
+
 ---
 
 ## 🚀 Quick Start

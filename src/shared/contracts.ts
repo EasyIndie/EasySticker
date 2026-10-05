@@ -81,6 +81,48 @@ export const cancelSchema = z.object({
 });
 export type CancelRequest = z.infer<typeof cancelSchema>;
 
+/** 包内文件角色。 */
+export const packFileRoleSchema = z.enum([
+  "sticker",
+  "cover",
+  "icon",
+  "banner",
+  "reward-guide",
+  "reward-thanks"
+]);
+
+/** 单张扩展资源的生成细节。 */
+export const packExtraDetailSchema = z.object({
+  prompt: z.string().optional(),
+  style: z.string().optional(),
+  sourceAssetId: z.string().optional()
+});
+
+/** 生成上下文：随 pack 一起写入 metadata.json，便于 ZIP 再导入后二次编辑。 */
+export const packGenerationSchema = z.object({
+  source: z.enum(["ai-generate", "import"]).optional(),
+  providerId: z.string().optional(),
+  model: z.string().optional(),
+  prompt: z.string().optional(),
+  negativePrompt: z.string().optional(),
+  styles: z.array(z.string()).optional(),
+  stickerCount: z.number().int().optional(),
+  emotions: z.array(z.string()).optional(),
+  imageSize: z.object({ width: z.number(), height: z.number() }).optional(),
+  targetSize: z.object({ width: z.number(), height: z.number() }).optional(),
+  referenceAssetId: z.string().nullable().optional(),
+  referenceMode: z.string().optional(),
+  include: z
+    .object({
+      cover: z.boolean().optional(),
+      icon: z.boolean().optional(),
+      banner: z.boolean().optional(),
+      reward: z.boolean().optional()
+    })
+    .optional(),
+  createdAt: z.string().optional()
+});
+
 /** POST /api/packs */
 export const packSchema = z.object({
   presetId: z.string().min(1),
@@ -89,7 +131,12 @@ export const packSchema = z.object({
     .array(
       z.object({
         label: z.string().min(1),
-        assetId: z.string().min(1)
+        assetId: z.string().min(1),
+        role: packFileRoleSchema.optional(),
+        prompt: z.string().optional(),
+        style: z.string().optional(),
+        emotion: z.string().optional(),
+        sourceAssetId: z.string().optional()
       })
     )
     .optional(),
@@ -98,7 +145,17 @@ export const packSchema = z.object({
   iconAssetId: z.string().min(1).optional(),
   rewardGuideAssetId: z.string().min(1).optional(),
   rewardThanksAssetId: z.string().min(1).optional(),
-  metadata: metadataSchema.optional()
+  metadata: metadataSchema.optional(),
+  generation: packGenerationSchema.optional(),
+  extraDetails: z
+    .object({
+      cover: packExtraDetailSchema.optional(),
+      icon: packExtraDetailSchema.optional(),
+      banner: packExtraDetailSchema.optional(),
+      "reward-guide": packExtraDetailSchema.optional(),
+      "reward-thanks": packExtraDetailSchema.optional()
+    })
+    .optional()
 });
 export type PackRequest = z.infer<typeof packSchema>;
 
