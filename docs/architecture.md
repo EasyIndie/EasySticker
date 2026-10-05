@@ -45,7 +45,7 @@ infrastructure（适配器）  providers 实现、exporters、repositories、mai
 - **组合根 + 依赖注入**：`server.ts` 装配全部依赖，`src/lib/deps.ts` 定义 `AppDeps`；路由/服务不再 `app.decorate("xxx")`，彻底移除 `declare module "fastify"` 的 `FastifyInstance` 增强。
 - **领域层去 Fastify 化**：`findAssetFile`/`buildZipPack`/`generateAssetsAndPack` 等不再接收 `FastifyInstance`。
 - **平台策略化**：`PlatformPreset.supportsExtras` 取代散落的 `isWeChat` 判断；微信额外资源生成抽到 `generate/extras.ts`。
-- **单资源重生成**：`generate/single.ts` + `POST /api/generate/resource`。按 `target`（`sticker.index` 或 `extra.key`）只重生成一张，复用统一提示词模板、尺寸与平台校验；`mode="edit"` + `sourceAssetId` + `instruction` 已落到前端：卡片上的「二次编辑」会以**当前这张图**为参考图、把 `instruction` 以「编辑要求：…」追加到提示词，只重做这一张，并把 `sourceAssetId` 写回 metadata 供追溯；还可再附一张参考图（`editReferenceAssetId`），
+- **单资源重生成**：`generate/single.ts` + `POST /api/generate/resource`。按 `target`（`sticker.index` 或 `extra.key`）只重生成一张，复用统一提示词模板、尺寸与平台校验；`mode="edit"` + `sourceAssetId` + `instruction` 已落到前端：卡片上的「编辑图片」会以**当前这张图**为参考图、把 `instruction` 以「编辑要求：…」追加到提示词，只重做这一张，并把 `sourceAssetId` 写回 metadata 供追溯；还可再附一张参考图（`editReferenceAssetId`），
 它会被记进 metadata，因此不会被 GC 当作孤儿素材回收。多图通过 `AiGenerateInput.additionalReferenceImages`
 往下传 —— generic 变体把 `image` 传成数组（实测豆包 Seedream 接受），gpt-image 变体用 `image[]` 字段；
 **只有一张时不走数组**，既有单图路径行为不变。扩展资源改为「单张失败不中断整包」：`extras.ts` 记录 `failures` 并发出发带 `error` 的 `extra` 事件，前端将该卡片渲染为可点击重试的错误态。
@@ -58,6 +58,7 @@ infrastructure（适配器）  providers 实现、exporters、repositories、mai
 - **保留期不追溯既往**：`services/maintenance/retention.ts` 记录策略生效起点（`data/maintenance.json`），过期时间 = `max(创建时间, 生效起点) + 保留天数`，避免开启策略当天清空既有数据。
 - **单资源改动走定点更新**：`renderPreview` 只能追加卡片（增量渲染），所以早期更新一张图时只能 `innerHTML=""` + 整组重绘 —— 24 张贴纸会把 24 个 `<img>` 全部销毁重建，实测多出 26 次图片请求与 136ms 长任务。现在 `updatePreviewCard(index)` / `updateExtraAsset(key)` 只替换受影响的那个节点（重测：0 次图片请求、0 长任务）。
 - **弹窗不做背景模糊**：`backdrop-filter` 会强制浏览器对弹窗背后的整个视口重新做模糊合成，首次打开多出约 30ms 长任务；换成纯色遮罩后视觉几乎一致。另外挂载后空闲时空跑一次弹窗，把首次绘制的样式/合成开销前移。
+- **静态资源缓存分两类**：`/api/assets/:id` 是内容不可变的 nanoid（写入即定、永不覆盖），用 `public, max-age=31536000, immutable` 长缓存 —— 这条头直接决定预览区会不会每次导航都重传几十张图（修复前 24 张贴纸每次约 1MB，修复后预热即 0 请求）。HTML/JS/CSS 则 `no-cache` 每次校验：改前端不用记得 bump `?v=` 也能立刻生效，命中就是 304。注意 `@fastify/static` 的 `maxAge: "3600"` 会被 `send` 按**毫秒**解析（= 3.6 秒），要写成 `"1h"`；同理它的 `setHeaders` 会被随后的 `reply.headers()` 覆盖，想改 cache-control 要用 `onSend` 钩子。
 - **数据目录 GC**：`services/maintenance/gc.ts` + `scheduler.ts`，服务端每 6 小时巡检（`server.maintenance` 配置）。只做可证明安全的回收：压缩旧包、清孤儿素材（需过 6 小时安全期）、清 `.orig` 备份；按保留期删包默认关闭。CLI 入口 `src/cli/gc.ts`（`npm run gc`），后台「存储」面板同源调用。
 - **静态资源豁免**：`isPublicRoute` 放行 `/api/assets/:id` 与 `/api/packs/:id/download`（前缀匹配）。它们既豁免鉴权（`<img>`/`<a>` 无法携带 `Authorization`），也不计入 API 频率限制，避免结果页并发加载几十张图触发 429。
 - **typecheck 门禁**：`npm run typecheck`（`tsc --noEmit`）已接入 `npm test`，当前 0 错误。

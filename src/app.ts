@@ -119,6 +119,9 @@ export function buildApp(config: AppConfig, deps?: Partial<AppDeps>): FastifyIns
 
   app.addHook("onResponse", async (req, reply) => {
     if (!req.url.startsWith("/api/")) return;
+    // 图片是静态内容，不是「API 请求」：记进来只会让监控 JSONL 膨胀、
+    // 把请求趋势图上的真实接口调用淹没（一次页面加载就有几十条）。
+    if (req.url.startsWith("/api/assets/")) return;
     const startTime = (req as any).__startTime;
     if (typeof startTime !== "number") return;
     const latencyMs = Math.round(performance.now() - startTime);
@@ -264,9 +267,26 @@ export function buildApp(config: AppConfig, deps?: Partial<AppDeps>): FastifyIns
     root: path.join(process.cwd(), "public"),
     prefix: "/",
     cacheControl: true,
-    maxAge: "3600",
+    // 注意：`send` 用 ms 解析这里的字符串，"3600" 会被当成 3600 毫秒（=3.6 秒），
+    // 于是每次导航都要重新校验一遍静态资源。这里明确写成 1 小时，只用于
+    // 图标 / logo 这类已经带 ?v= 的二进制资源。
+    maxAge: "1h",
     immutable: false,
     decorateReply: false
+  });
+
+  // 代码与文档一律「每次校验」：
+  //  - 改了前端不用记得 bump 版本号也能立刻生效（命中就是 304，很便宜）；
+  //  - 长缓存 JS/CSS 需要一套「改文件必须记得改 ?v=」的纪律，实测省下的
+  //    只有一个 RTT（本地导航 122ms / DCL 24ms），不值得引入这个坑。
+  // 用 onSend 而不是 static 的 setHeaders：后者会被插件随后的 reply.headers() 覆盖。
+  app.addHook("onSend", async (req, reply, payload) => {
+    const pathname = req.url.split("?")[0] ?? "";
+    if (pathname.startsWith("/api/")) return payload;
+    if (pathname === "/" || /\.(?:html|js|css|json)$/.test(pathname)) {
+      reply.header("cache-control", "no-cache");
+    }
+    return payload;
   });
 
   app.get("/@vite/client", async (_req, reply) => {

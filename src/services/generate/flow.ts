@@ -94,7 +94,7 @@ export async function generateAssetsAndPack(
 
   emit?.("start", { count: totalImageCount, styles, referenceMode, presetId });
   const stickerAssetIds: string[] = [];
-  // 逐张记录生成上下文，随 metadata.json 一起落盘，方便后续二次编辑。
+  // 逐张记录生成上下文，随 metadata.json 一起落盘，方便后续编辑图片。
   const stickerMetas: Array<{ label: string; assetId: string; prompt: string; style: string; emotion: string }> = [];
   let currentGenerated = 0;
   const throwIfCanceled = () => {

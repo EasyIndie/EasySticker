@@ -155,7 +155,7 @@ const PLACEHOLDER_STATE_TEXT: Record<Tone, string> = {
 const EDIT_ICON_SVG =
   '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>';
 
-/** 标记「这一张是在原图基础上二次编辑过的」。 */
+/** 标记「这一张是在原图基础上编辑过的」。 */
 function markEdited(card: HTMLElement): void {
   const title = card.querySelector(".preview-title");
   if (!title || title.querySelector(".preview-edited-tag")) return;
@@ -165,7 +165,7 @@ function markEdited(card: HTMLElement): void {
   title.appendChild(tag);
 }
 
-/** 给成功生成的卡片挂上「二次编辑」入口（失败卡片走点击重新生成，不需要它）。 */
+/** 给成功生成的卡片挂上「编辑图片」入口（失败卡片走点击重新生成，不需要它）。 */
 function appendEditAction(card: HTMLElement): void {
   const actions = document.createElement("div");
   actions.className = "preview-actions";
@@ -175,7 +175,7 @@ function appendEditAction(card: HTMLElement): void {
   edit.className = "preview-action-btn";
   edit.dataset.action = "edit-resource";
   edit.title = "在这一张的基础上继续修改，不影响其它图片";
-  edit.innerHTML = `${EDIT_ICON_SVG}<span>二次编辑</span>`;
+  edit.innerHTML = `${EDIT_ICON_SVG}<span>编辑图片</span>`;
 
   actions.appendChild(edit);
   card.appendChild(actions);
@@ -432,7 +432,7 @@ const EXTRA_CONTAINERS: Record<string, () => HTMLElement | null> = {
 /**
  * 只更新一张贴纸卡片（按索引），不触碰其它卡片。
  *
- * 单资源重生成 / 二次编辑后如果整组重建，浏览器会把 20+ 张图全部重新请求与解码，
+ * 单资源重生成 / 编辑图片后如果整组重建，浏览器会把 20+ 张图全部重新请求与解码，
  * 实测会多花一次网络往返并产生 100ms+ 的长任务；这里就地替换单个节点即可。
  */
 export function updatePreviewCard(index: number, sticker: StickerPreview, tone: Tone = "success"): boolean {

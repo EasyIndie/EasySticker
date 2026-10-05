@@ -193,7 +193,7 @@ describe("pipeline", () => {
     expect(json.metadataJson).toContain('"rewardMessage": "喜欢这套表情的话，欢迎赞赏支持"');
 
     // metadata.json 需记录每个文件的名称/尺寸，以及生成时的提示词/风格/情绪，
-    // 以便导出后重新导入再做二次编辑。
+    // 以便导出后重新导入再做编辑。
     const packMeta = JSON.parse(json.metadataJson);
     expect(packMeta.schema).toBe("easysticker-pack@0.3");
     expect(packMeta.generation.source).toBe("ai-generate");
@@ -719,7 +719,7 @@ describe("pipeline", () => {
       prompt: "封面提示词",
       style: "贴纸"
     });
-    // 二次编辑用过的附加参考图要记录在案（既便于追溯，也避免被 GC 当孤儿回收）
+    // 编辑图片用过的附加参考图要记录在案（既便于追溯，也避免被 GC 当孤儿回收）
     const editRefAsset = await mkAsset(512, 512, { r: 5, g: 5, b: 5 });
     const withEditRef = await app.inject({
       method: "POST",

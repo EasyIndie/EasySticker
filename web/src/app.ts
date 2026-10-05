@@ -573,7 +573,7 @@ function restorePersistedPackResult(): boolean {
     hasGenerationAttempted = Boolean(restored.uploadId && restored.prompt && restored.hasGenerationAttempted);
     lastPackResult = restored.result;
     // 必须把资源写回模块状态，否则恢复出来的预览只是「看得见」：
-    // 单资源重生成、二次编辑都会因为 currentStickers 为空而静默失效。
+    // 单资源重生成、编辑图片都会因为 currentStickers 为空而静默失效。
     syncStateFromResult(restored.result);
 
     wechatAiPrompt.value = restored.prompt;
@@ -1087,7 +1087,7 @@ function resourceLabel(target: ResourceTarget): string {
   return (target.key && EXTRA_TITLE_BY_KEY[target.key]) || "该资源";
 }
 
-/** 该资源当前的 assetId —— 二次编辑要拿它当参考图。 */
+/** 该资源当前的 assetId —— 编辑图片要拿它当参考图。 */
 function resourceAssetId(target: ResourceTarget): string | null {
   if (target.kind === "sticker" && typeof target.index === "number") {
     return currentStickers[target.index]?.assetId ?? null;
@@ -1201,7 +1201,7 @@ async function regenerateResource(target: ResourceTarget): Promise<void> {
   }
 }
 
-// ── 二次编辑：在某一张图的基础上继续改 ──────────────────────────────────
+// ── 编辑图片：在某一张图的基础上继续改 ────────────────────────────────────
 let editTarget: ResourceTarget | null = null;
 let editSourceAssetId: string | null = null;
 
@@ -1235,7 +1235,7 @@ function renderEditChips(): void {
 function openEditDialog(target: ResourceTarget): void {
   if (resourceRegenerating) return;
   if (!currentUploadId) {
-    window._ui!.setNotice("请先上传参考图，再使用二次编辑。", "error");
+    window._ui!.setNotice("请先上传参考图，再编辑图片。", "error");
     return;
   }
   const assetId = resourceAssetId(target);
@@ -1272,7 +1272,7 @@ async function submitEditDialog(): Promise<void> {
     return;
   }
   if (!resolveBasePrompt()) {
-    if (editDialogStatus) editDialogStatus.textContent = "请先在「提示词」里描述主体，再使用二次编辑。";
+    if (editDialogStatus) editDialogStatus.textContent = "请先在「提示词」里描述主体，再编辑图片。";
     return;
   }
 
@@ -1520,7 +1520,7 @@ function getMetadataPayload(): Record<string, string> | undefined {
 /**
  * 把结果里的资源与生成上下文写回模块状态，供「单资源重生成」与「重新打包」使用。
  * 导入图片（`/api/generate/import`）与导入 ZIP 还原（`/api/generate/import-pack`）也走这里，
- * 于是导入后的包同样能单张重生成、二次编辑并重建 ZIP。
+ * 于是导入后的包同样能单张重生成、编辑图片并重建 ZIP。
  */
 function syncStateFromResult(json: any): void {
   const stickers = Array.isArray(json?.stickers) ? json.stickers : [];
@@ -1689,7 +1689,7 @@ async function restorePackZip(file: File): Promise<void> {
     window._ui!.setStatus(importState, "已还原", "success");
     renderCompletedPackResult(
       json,
-      "已还原之前的生成现场，可继续单张重新生成或二次编辑。",
+      "已还原之前的生成现场，可继续单张重新生成或编辑图片。",
       "提示词、风格、情绪与参考图已从 ZIP 包中读回，可直接下载或继续编辑。"
     );
 
@@ -1811,7 +1811,11 @@ async function generatePlatformPack(): Promise<void> {
           if (data.error) currentExtras[`${data.key}_error`] = data.error;
           else delete currentExtras[`${data.key}_error`];
         }
-        window._preview!.renderExtraAssets(currentExtras, "loading");
+        // 每次只有一个 key 变化：定点更新那个容器即可。
+        // 整组重建会把 5 个容器全部清空重画，连带把已加载的图片重新请求一遍。
+        if (!data?.key || !window._preview!.updateExtraAsset(data.key, currentExtras, "loading")) {
+          window._preview!.renderExtraAssets(currentExtras, "loading");
+        }
         const current = Number(data?.current || 0);
         window._ui!.setStatus(generateState, `生成中 (${current}/${totalCount})`, "loading");
         window._ui!.updateGenerationProgress(current, totalCount);
@@ -2302,7 +2306,7 @@ function bindEvents(): void {
     const target = (e.target as HTMLElement | null)?.closest?.("#historyToggle, .collapse-btn");
     if (target) toggleHistory();
   });
-  // 卡片上的「二次编辑」：在这一张的基础上继续改，不影响其它图片
+  // 卡片上的「编辑图片」：在这一张的基础上继续改，不影响其它图片
   document.addEventListener("click", (e) => {
     const editBtn = (e.target as HTMLElement | null)?.closest?.('[data-action="edit-resource"]') as HTMLElement | null;
     if (!editBtn) return;
