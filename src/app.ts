@@ -275,16 +275,30 @@ export function buildApp(config: AppConfig, deps?: Partial<AppDeps>): FastifyIns
     decorateReply: false
   });
 
-  // 代码与文档一律「每次校验」：
-  //  - 改了前端不用记得 bump 版本号也能立刻生效（命中就是 304，很便宜）；
-  //  - 长缓存 JS/CSS 需要一套「改文件必须记得改 ?v=」的纪律，实测省下的
-  //    只有一个 RTT（本地导航 122ms / DCL 24ms），不值得引入这个坑。
+  // 静态资源缓存分三档：
+  //  1. HTML / JSON —— 永远「每次校验」（no-cache）。这是整套方案的地基：
+  //     只有 HTML 总在重新校验，新的资源哈希才一定能被发现。
+  //  2. 带 `?v=<内容哈希>` 的 JS / CSS / 图标 —— immutable 长缓存一年。
+  //     哈希由 scripts/version-assets.mjs 在构建期写进 HTML，内容一变 URL 就变，
+  //     所以「永久缓存」是安全的（旧 URL 本来就该命中旧内容）。
+  //  3. 没带版本号的静态资源 —— 退回 no-cache。它们可能是被直接外链或被
+  //     遗漏的引用，长缓存会变成「永久持有旧文件」的陷阱。
   // 用 onSend 而不是 static 的 setHeaders：后者会被插件随后的 reply.headers() 覆盖。
   app.addHook("onSend", async (req, reply, payload) => {
-    const pathname = req.url.split("?")[0] ?? "";
+    const [pathname = "", query = ""] = req.url.split("?");
     if (pathname.startsWith("/api/")) return payload;
-    if (pathname === "/" || /\.(?:html|js|css|json)$/.test(pathname)) {
+
+    if (pathname === "/" || /\.(?:html|json)$/.test(pathname)) {
       reply.header("cache-control", "no-cache");
+      return payload;
+    }
+
+    if (/\.(?:js|css|svg|ico|png|webp|woff2)$/.test(pathname)) {
+      const versioned = /(^|&)v=[^&]+/.test(query);
+      reply.header(
+        "cache-control",
+        versioned ? "public, max-age=31536000, immutable" : "no-cache"
+      );
     }
     return payload;
   });

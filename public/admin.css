@@ -750,3 +750,69 @@ input { font-family: inherit; }
 .storage-actions .section-desc {
   margin: 0;
 }
+
+/* ── 仪表盘实时状态指示 ─────────────────────────────────────────────
+   SSE 长连接替代原 15 秒轮询后，需要一个地方告诉管理员
+   「数据是实时推来的」还是「连接断了在重连」。 */
+.panel-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 14px;
+}
+
+.panel-head-hint {
+  font-size: 12px;
+  color: var(--c-text-secondary);
+}
+
+.live-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px;
+  border-radius: var(--radius-pill, 999px);
+  font-size: 12px;
+  font-weight: 600;
+  background: var(--c-surface-2, rgba(127, 127, 127, 0.12));
+  color: var(--c-text-secondary);
+}
+
+.live-indicator::before {
+  content: "";
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: currentColor;
+  flex-shrink: 0;
+}
+
+.live-indicator[data-tone="live"] {
+  color: #52c41a;
+  background: rgba(82, 196, 26, 0.12);
+}
+
+/* 呼吸感表示「正在推送」，用 prefers-reduced-motion 时自动静止 */
+.live-indicator[data-tone="live"]::before {
+  animation: live-pulse 2s ease-in-out infinite;
+}
+
+.live-indicator[data-tone="connecting"] {
+  color: #faad14;
+  background: rgba(250, 173, 20, 0.12);
+}
+
+.live-indicator[data-tone="offline"] {
+  color: #ff4d4f;
+  background: rgba(255, 77, 79, 0.12);
+}
+
+@keyframes live-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .live-indicator[data-tone="live"]::before { animation: none; }
+}
