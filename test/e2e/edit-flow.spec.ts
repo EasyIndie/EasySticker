@@ -13,22 +13,31 @@ test.describe("单图二次编辑", () => {
   });
 
   /** 造一个「已有生成结果」的现场，避免为了测试真去打一次生图 API。 */
-  async function seedGeneratedPack(page: import("@playwright/test").Page) {
+  async function seedGeneratedPack(page: import("@playwright/test").Page, count = 1) {
     const upload = await apiRequest(page.request, "post", "/api/uploads", {
       multipart: { file: { name: "ref.png", mimeType: "image/png", buffer: TINY_PNG } }
     });
     const ref = await upload.json();
 
-    const stickerUpload = await apiRequest(page.request, "post", "/api/uploads", {
-      multipart: { file: { name: "s.png", mimeType: "image/png", buffer: TINY_PNG } }
-    });
-    const stickerAsset = await stickerUpload.json();
+    const stickerAssets: Array<{ uploadId: string }> = [];
+    for (let i = 0; i < count; i++) {
+      const up = await apiRequest(page.request, "post", "/api/uploads", {
+        multipart: { file: { name: `s${i}.png`, mimeType: "image/png", buffer: TINY_PNG } }
+      });
+      stickerAssets.push(await up.json());
+    }
 
     const packRes = await apiRequest(page.request, "post", "/api/packs", {
       headers: { "content-type": "application/json" },
       data: {
         presetId: "wechat_stickers",
-        assets: [{ label: "001", assetId: stickerAsset.uploadId, role: "sticker", prompt: "第一张", style: "贴纸" }],
+        assets: stickerAssets.map((a, i) => ({
+          label: String(i + 1).padStart(3, "0"),
+          assetId: a.uploadId,
+          role: "sticker",
+          prompt: `第 ${i + 1} 张`,
+          style: "贴纸"
+        })),
         metadata: { title: "二次编辑测试" },
         generation: { source: "ai-generate", providerId: "mock", prompt: "Q版人物", styles: ["贴纸"] }
       }
@@ -49,22 +58,20 @@ test.describe("单图二次编辑", () => {
         copyrightText: "",
         rewardEnabled: false,
         rewardMessage: "",
-        stickerCount: 1,
+        stickerCount: count,
         styles: ["贴纸"],
         hasGenerationAttempted: true,
         result: {
           packId: pack.packId,
           downloadUrl: pack.downloadUrl,
           downloadFilename: pack.downloadFilename,
-          stickers: [
-            {
-              label: "001",
-              url: `/api/assets/${stickerAsset.uploadId}`,
-              assetId: stickerAsset.uploadId,
-              prompt: "Q版人物"
-            }
-          ],
-          meta: { count: 1, styles: ["贴纸"], title: "二次编辑测试", presetId: "wechat_stickers" },
+          stickers: stickerAssets.map((a, i) => ({
+            label: String(i + 1).padStart(3, "0"),
+            url: `/api/assets/${a.uploadId}`,
+            assetId: a.uploadId,
+            prompt: `第 ${i + 1} 张`
+          })),
+          meta: { count, styles: ["贴纸"], title: "二次编辑测试", presetId: "wechat_stickers" },
           extras: {}
         }
       }
@@ -186,6 +193,39 @@ test.describe("单图二次编辑", () => {
     expect(body.editReferenceAssetId).not.toBe("");
 
     await expect(page.locator("#editDialog")).toBeHidden({ timeout: 60_000 });
+    await apiRequest(page.request, "delete", `/api/packs/${packId}`);
+  });
+
+  test("编辑其中一张后，其它未编辑的图仍然正常显示", async ({ page }) => {
+    test.setTimeout(120000);
+    const { packId } = await seedGeneratedPack(page, 3);
+    await page.selectOption("#wechatAiProvider", "mock");
+
+    const cards = page.locator("#wechatAiPreview .preview-item");
+    await expect(cards).toHaveCount(3);
+    await expect(cards.locator("img")).toHaveCount(3);
+
+    // 编辑第 3 张
+    await cards.nth(2).locator('[data-action="edit-resource"]').click();
+    await expect(page.locator("#editDialog")).toBeVisible();
+    await page.fill("#editInstruction", "把背景换成浅蓝色");
+    await page.locator("#editDialogSubmit").click();
+    await expect(page.locator("#editDialog")).toBeHidden({ timeout: 60_000 });
+
+    // 回归：三张都必须在，而且每张都还有 <img>（曾经这里是「只剩被编辑的那张」）
+    await expect(cards).toHaveCount(3);
+    await expect(cards.locator("img")).toHaveCount(3);
+    await expect(page.locator("#wechatAiPreview .preview-edited-tag")).toHaveCount(1);
+    // 根 tsconfig 没有 DOM lib，这里用 any 避免引入 DOM 类型
+    const broken = await page.evaluate(() => {
+      const doc = (globalThis as any).document;
+      const imgs: Array<{ complete: boolean; naturalWidth: number }> = Array.from(
+        doc.querySelectorAll("#wechatAiPreview .preview-item img")
+      );
+      return imgs.filter((img) => img.complete && img.naturalWidth === 0).length;
+    });
+    expect(broken).toBe(0);
+
     await apiRequest(page.request, "delete", `/api/packs/${packId}`);
   });
 });
