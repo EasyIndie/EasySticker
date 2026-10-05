@@ -183,7 +183,29 @@ function toArrayContext(raw, packId) {
 
 export async function repairPack(packId, options = {}) {
   const zipPath = path.join(ROOT, "data", "packs", `${packId}.zip`);
-  if (!fs.existsSync(zipPath)) throw new Error(`找不到包：${zipPath}`);
+
+  if (!fs.existsSync(zipPath)) {
+    // 包已被 GC 压缩成清单格式：清单里的 metadata 是完整的，没有可修的东西。
+    const manifestPath = path.join(ROOT, "data", "packs", `${packId}.json`);
+    if (fs.existsSync(manifestPath)) {
+      let meta = {};
+      try {
+        meta = JSON.parse(fs.readFileSync(manifestPath, "utf8"))?.metadata ?? {};
+      } catch {
+        /* 忽略 */
+      }
+      const fileCount = Array.isArray(meta.files) ? meta.files.length : 0;
+      if (fileCount > 0) {
+        throw new Error(
+          `这个包已经是清单格式（被 GC 压缩过），metadata 完整（${fileCount} 个文件），无需修复：\n  ${manifestPath}`
+        );
+      }
+      throw new Error(
+        `这个包只有清单且缺少 files[]，无法就地修复（repair-pack 需要原始 ZIP）。\n  ${manifestPath}`
+      );
+    }
+    throw new Error(`找不到包：${zipPath}`);
+  }
 
   const entries = readZipEntries(fs.readFileSync(zipPath));
   const metaEntry = entries.find((e) => e.name === "metadata.json");

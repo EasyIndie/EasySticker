@@ -35,12 +35,15 @@ function dosToDate(time: number, date: number): Date {
 }
 
 /**
- * 读出 ZIP 的所有条目（名称 + 解压后内容 + 修改时间）。
+ * 读出 ZIP 的条目（名称 + 解压后内容 + 修改时间）。
  *
  * 以中央目录为准：本地头在流式写入（带 data descriptor）时长度字段可能是 0，
  * 而中央目录里始终是最终值。
+ *
+ * `filter` 用于只取需要的条目（例如只读 `metadata.json`），命中的条目才解压，
+ * 避免为了读一个几 KB 的清单把整包图片都 inflate 一遍。
  */
-export function readZipEntries(buf: Buffer): ZipEntry[] {
+export function readZipEntries(buf: Buffer, filter?: (name: string) => boolean): ZipEntry[] {
   if (buf.length < 22) throw new Error("不是有效的 ZIP：文件过小");
   const eocd = findEocd(buf);
   if (eocd < 0) throw new Error("不是有效的 ZIP：找不到 EOCD");
@@ -66,12 +69,14 @@ export function readZipEntries(buf: Buffer): ZipEntry[] {
     const localNameLen = buf.readUInt16LE(localOff + 26);
     const localExtraLen = buf.readUInt16LE(localOff + 28);
     const start = localOff + 30 + localNameLen + localExtraLen;
-    const raw = buf.subarray(start, start + compSize);
-    entries.push({
-      name,
-      content: method === 0 ? Buffer.from(raw) : zlib.inflateRawSync(raw),
-      date: dosToDate(time, date)
-    });
+    if (!filter || filter(name)) {
+      const raw = buf.subarray(start, start + compSize);
+      entries.push({
+        name,
+        content: method === 0 ? Buffer.from(raw) : zlib.inflateRawSync(raw),
+        date: dosToDate(time, date)
+      });
+    }
     off += 46 + nameLen + extraLen + commentLen;
   }
   return entries;

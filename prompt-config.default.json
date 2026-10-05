@@ -21,6 +21,14 @@
       "registration": {
         "mode": "invite"
       }
+    },
+    "maintenance": {
+      "gcEnabled": true,
+      "gcIntervalMs": 21600000,
+      "packRetentionDays": 0,
+      "orphanMinAgeHours": 6,
+      "compactLegacyPacks": true,
+      "dropOrigBackups": true
     }
   },
   "ai": {

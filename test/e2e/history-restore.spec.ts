@@ -79,6 +79,9 @@ test.describe("历史记录一键还原", () => {
     await expect(page.locator("#globalNotice")).toContainText("已还原", { timeout: 10_000 });
     // 包里的标题写回了表单
     await expect(page.locator("#wechatAiTitle")).toHaveValue("历史还原测试包");
+
+    // 不留测试垃圾：把这次造出来的包删掉
+    await page.request.delete(`/api/packs/${packId}`);
   });
 
   test("包已被清理时退回「只恢复配置」并给出提示", async ({ page }) => {
@@ -102,5 +105,40 @@ test.describe("历史记录一键还原", () => {
     await expect(page.locator("#globalNotice")).toContainText("已只恢复配置", { timeout: 10_000 });
     // 标题等配置仍然恢复
     await expect(page.locator("#wechatAiTitle")).toHaveValue("已删除的包");
+  });
+
+  test("删除记录会同时删掉服务端的包", async ({ page }) => {
+    const upload = await page.request.post("/api/uploads", {
+      multipart: { file: { name: "s.png", mimeType: "image/png", buffer: TINY_PNG } }
+    });
+    const { uploadId } = await upload.json();
+    const packRes = await page.request.post("/api/packs", {
+      data: {
+        presetId: "wechat_stickers",
+        assets: [{ label: "001", assetId: uploadId, role: "sticker" }],
+        metadata: { title: "待删除的包" }
+      }
+    });
+    const { packId } = await packRes.json();
+    expect((await page.request.get(`/api/packs/${packId}`)).status()).toBe(200);
+
+    await seedHistory(page, {
+      packId,
+      title: "待删除的包",
+      stickerCount: 1,
+      styles: "贴纸",
+      platform: "wechat_stickers",
+      createdAt: Date.now(),
+      downloadUrl: `/api/packs/${packId}/download`,
+      downloadFilename: `${packId}.zip`
+    });
+
+    await page.locator("#historyToggle").click();
+    await expect(page.locator(`.history-item[data-pack-id="${packId}"]`)).toBeVisible();
+    await page.locator(`.history-item[data-pack-id="${packId}"] .history-delete-btn`).click();
+
+    await expect(page.locator(`.history-item[data-pack-id="${packId}"]`)).toHaveCount(0, { timeout: 10_000 });
+    // 服务端的包也一起没了
+    expect((await page.request.get(`/api/packs/${packId}`)).status()).toBe(404);
   });
 });

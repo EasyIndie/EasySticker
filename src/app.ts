@@ -26,6 +26,7 @@ import { registerGenerateRoutes } from "./routes/generate";
 import { registerConfigRoutes } from "./routes/config";
 import { registerAuthRoutes } from "./routes/auth";
 import { registerAdminRoutes } from "./routes/admin";
+import { startMaintenanceGc, type MaintenanceConfig } from "./services/maintenance/scheduler";
 
 export type AppConfig = {
   host: string;
@@ -34,6 +35,8 @@ export type AppConfig = {
   logLevel: string;
   security?: SecurityConfig;
   monitorRetentionDays?: number;
+  /** 数据目录定期清理（见 services/maintenance/scheduler.ts）。 */
+  maintenance?: MaintenanceConfig;
 };
 
 // Routes that don't require authentication
@@ -92,12 +95,20 @@ export function buildApp(config: AppConfig, deps?: Partial<AppDeps>): FastifyIns
   app.register(jwt, { secret: jwtSecret });
 
   // Start periodic cleanup
+  let stopMaintenanceGc: (() => void) | null = null;
   app.addHook("onReady", () => {
     resolved.security.startCleanup();
+    if (config.maintenance?.gcEnabled !== false) {
+      stopMaintenanceGc = startMaintenanceGc(config.dataDir, config.maintenance ?? {}, (message, meta) => {
+        app.log.info(meta ?? {}, message);
+      });
+    }
   });
 
   app.addHook("onClose", (_instance, done) => {
     resolved.security.stopCleanup();
+    stopMaintenanceGc?.();
+    stopMaintenanceGc = null;
     done();
   });
 

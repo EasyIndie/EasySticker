@@ -32,6 +32,39 @@ EasySticker 按以下优先级加载配置：
 | `taskTtlMs` | number | `3600000` | 生成任务 TTL（毫秒，默认 1 小时） |
 | `taskGcIntervalMs` | number | `600000` | 过期任务清理间隔（毫秒，默认 10 分钟） |
 
+#### `maintenance` — 数据目录清理
+
+`data/uploads`（素材）与 `data/packs`（包清单）如果不清理会一直增长。这里配置定期巡检。
+GC 只做「可证明安全」的回收：压缩旧包、清孤儿素材、清备份；按时间删包默认关闭。
+
+| 字段 | 类型 | 默认值 | 说明 |
+|------|------|--------|------|
+| `gcEnabled` | boolean | `true` | 是否启用定期清理。关掉则只在手动 `npm run gc` 时清理 |
+| `gcIntervalMs` | number | `21600000` | 巡检间隔（毫秒，默认 6 小时）。启动后延迟 30 秒跑第一次 |
+| `packRetentionDays` | number | `0` | 包保留天数；`0` = 不按时间清理。**非 0 会真的删除用户的历史包**，请确认前端有相应提示 |
+| `orphanMinAgeHours` | number | `6` | 孤儿素材安全期（小时）。只有「无人引用」且「落盘超过这么久」的素材才会被删，避免误删正在生成的文件 |
+| `compactLegacyPacks` | boolean | `true` | 把仅有 `.zip` 的历史包转成清单（素材本来就在 uploads 里，ZIP 改为下载时现打） |
+| `dropOrigBackups` | boolean | `true` | 删除 `repair-pack` 留下的 `<packId>.zip.orig` 备份 |
+
+示例：
+
+```json
+{
+  "server": {
+    "maintenance": {
+      "gcEnabled": true,
+      "gcIntervalMs": 21600000,
+      "packRetentionDays": 0,
+      "orphanMinAgeHours": 6
+    }
+  }
+}
+```
+
+> 存储模型：**素材只存一份**（`data/uploads/<assetId>.<ext>`），包只存一份几 KB 的清单
+> （`data/packs/<packId>.json`）。ZIP 在用户点下载时现场打包，不常驻磁盘。
+> 因此「一个包」的磁盘成本 ≈ 素材体积，重试/重建不会成倍放大。
+
 ### `server.security` — 安全与认证
 
 | 字段 | 类型 | 默认值 | 说明 |
