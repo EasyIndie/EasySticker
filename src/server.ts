@@ -62,6 +62,7 @@ function loadSecurityConfig(config: PromptConfig): SecurityConfig {
   const envToken = process.env["API_TOKEN"];
   const envRateLimit = process.env["RATE_LIMIT_MAX"];
   const envQuota = process.env["DAILY_QUOTA_MAX"];
+  const envAnonymousQuota = process.env["DAILY_QUOTA_ANONYMOUS_MAX"];
   const envCors = process.env["CORS_ALLOW_ORIGIN"];
   const envDisableAuth = process.env["DISABLE_AUTH"];
   const envJwtSecret = process.env["JWT_SECRET"];
@@ -76,7 +77,7 @@ function loadSecurityConfig(config: PromptConfig): SecurityConfig {
     },
     dailyQuota: {
       maxGenerations: Number(envQuota ?? security.dailyQuota?.maxGenerations ?? 100),
-      anonymousMaxGenerations: Number(security.dailyQuota?.anonymousMaxGenerations ?? 10)
+      anonymousMaxGenerations: Number(envAnonymousQuota ?? security.dailyQuota?.anonymousMaxGenerations ?? 10)
     },
     corsAllowOrigin: envCors || security.corsAllowOrigin,
     trustProxy: security.trustProxy,
