@@ -116,6 +116,41 @@ function parseCompiledPrompt(prompt) {
   return { style, emotion };
 }
 
+const EXTRA_PROMPT_KEY = {
+  cover: "cover",
+  icon: "icon",
+  banner: "banner",
+  "reward-guide": "rewardGuide",
+  "reward-thanks": "rewardThanks"
+};
+
+function deepMerge(base, override) {
+  if (Array.isArray(override)) return override;
+  if (override === undefined || override === null) return base;
+  if (typeof override !== "object") return override;
+  const out = base && typeof base === "object" && !Array.isArray(base) ? { ...base } : {};
+  for (const [k, v] of Object.entries(override)) out[k] = deepMerge(out[k], v);
+  return out;
+}
+
+/** 读取与运行服务相同的提示词配置（default + 用户覆盖）。 */
+function loadPromptConfig() {
+  const read = (p) => (fs.existsSync(p) ? JSON.parse(fs.readFileSync(p, "utf8")) : {});
+  return deepMerge(
+    read(path.join(ROOT, "prompt-config.default.json")),
+    read(path.join(ROOT, "prompt-config.json"))
+  );
+}
+
+/** 与 src/services/generate/promptConfig.ts 的 compilePrompt 保持一致。 */
+function compilePrompt(template, variables) {
+  let result = template;
+  for (const [key, value] of Object.entries(variables)) {
+    result = result.replace(new RegExp(`{{\\s*${key}\\s*}}`, "g"), value);
+  }
+  return result;
+}
+
 function toArrayContext(raw, packId) {
   if (!raw || typeof raw !== "object") return null;
   // 既接受 localStorage 里 last-wechat-pack 的原始 payload，也接受 { last, history } 包装
@@ -178,6 +213,12 @@ export async function repairPack(packId, options = {}) {
     if (s?.label && s?.prompt) stickerPrompts.set(String(s.label), s.prompt);
   }
 
+  // 逐张提示词可以精确重建：compilePrompt 是 prompt × emotion[i] × style[i] 的纯函数，
+  // 且生成之后模板与情绪列表都没再变过。
+  const cfg = context?.prompt ? loadPromptConfig() : null;
+  const emotions = Array.isArray(cfg?.emotions) ? cfg.emotions : [];
+  const styles = context?.styles ?? [];
+
   const files = [];
   for (const entry of entries) {
     if (entry.name === "metadata.json") continue;
@@ -196,15 +237,58 @@ export async function repairPack(packId, options = {}) {
       ...(await fileFacts(entry.content))
     };
 
-    const compiled = isSticker && label ? stickerPrompts.get(label) : undefined;
-    if (compiled) {
-      record.prompt = compiled;
-      const { style, emotion } = parseCompiledPrompt(compiled);
+    if (isSticker && label) {
+      const stored = stickerPrompts.get(label);
+      if (stored) {
+        // 优先用 localStorage 里存的原始编译结果
+        record.prompt = stored;
+        const { style, emotion } = parseCompiledPrompt(stored);
+        if (style) record.style = style;
+        if (emotion) record.emotion = emotion;
+      } else if (cfg?.templates?.sticker) {
+        const idx = Number(label) - 1;
+        if (Number.isInteger(idx) && idx >= 0) {
+          const style = styles.length ? styles[idx % styles.length] : undefined;
+          const emotion = emotions.length ? emotions[idx % emotions.length] : undefined;
+          record.prompt = compilePrompt(cfg.templates.sticker, {
+            prompt: context.prompt,
+            emotion: emotion ?? "",
+            style: style ?? ""
+          });
+          if (style) record.style = style;
+          if (emotion) record.emotion = emotion;
+        }
+      }
+    } else if (!isSticker && cfg?.templates?.extra) {
+      const promptKey = EXTRA_PROMPT_KEY[role];
+      const customPrompt = promptKey ? cfg.extraPrompts?.[promptKey] : undefined;
+      const style = styles[0];
+      if (customPrompt) {
+        record.prompt = compilePrompt(cfg.templates.extra, {
+          prompt: context.prompt,
+          customPrompt,
+          style: style ?? ""
+        });
+      }
       if (style) record.style = style;
-      if (emotion) record.emotion = emotion;
     }
+
     files.push(record);
   }
+
+  // 按「贴纸序号 → 扩展资源固定顺序」排序，便于人工阅读 metadata.json
+  const extraRank = (role) => {
+    const i = EXTRA_ROLES.indexOf(role);
+    return i < 0 ? 99 : i;
+  };
+  files.sort((a, b) => {
+    if (a.role !== "sticker" || b.role !== "sticker") {
+      if (a.role === "sticker") return -1;
+      if (b.role === "sticker") return 1;
+      return extraRank(a.role) - extraRank(b.role);
+    }
+    return String(a.label).localeCompare(String(b.label));
+  });
 
   const generation = context
     ? {
