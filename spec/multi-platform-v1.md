@@ -166,6 +166,7 @@ const PLATFORM_SPECS = {
 | `/api/generate/stream` | GET | SSE 流式进度 |
 | `/api/generate/cancel` | POST | 取消生成 |
 | `/api/generate/import` | POST | 导入已有图片 |
+| `/api/generate/import-pack` | POST | 导入本站下载的 ZIP 包，还原提示词 / 风格 / 参考图 |
 | `/api/wechat/*` | 同上 | 向后兼容别名，固定 `presetId=wechat_stickers` |
 
 ### 3.2 config 端点

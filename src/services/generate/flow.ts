@@ -264,6 +264,8 @@ export async function generateAssetsAndPack(
       presetId
     },
     extras: { coverAssetId, iconAssetId, bannerAssetId, rewardGuideAssetId, rewardThanksAssetId },
+    // 扩展资源各自实际使用的提示词 / 风格：导入 ZIP 还原或重建时据此写回 metadata
+    extraDetails,
     // 单张扩展资源失败的 key → 原因；前端据此渲染失败卡片并支持单资源重生成。
     extraFailures: extrasResult.failures
   };

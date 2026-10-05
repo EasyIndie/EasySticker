@@ -113,6 +113,7 @@ export const packGenerationSchema = z.object({
   targetSize: z.object({ width: z.number(), height: z.number() }).optional(),
   referenceAssetId: z.string().nullable().optional(),
   referenceMode: z.string().optional(),
+  restoredFrom: z.string().nullable().optional(),
   include: z
     .object({
       cover: z.boolean().optional(),

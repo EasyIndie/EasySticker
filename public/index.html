@@ -11,7 +11,7 @@
     <title>EasySticker</title>
     <meta name="theme-color" id="themeMeta" content="#07c160" data-dark="#111827" />
     <script src="/js/theme.js?v=2"></script>
-    <link rel="stylesheet" href="/styles.css?v=17" />
+    <link rel="stylesheet" href="/styles.css?v=18" />
   </head>
   <body>
     <a href="#mainContent" class="skip-link">跳到主要内容</a>
@@ -223,6 +223,20 @@
                 <span class="section-title">赞赏答谢图<span class="optional-mark">可选</span></span>
                 <input id="importRewardThanks" type="file" accept="image/png,image/jpeg,image/webp,image/gif" />
                 <div class="field-hint">上传后处理为 750 × 560。</div>
+              </label>
+            </div>
+
+            <div class="restore-panel">
+              <div class="restore-head">
+                <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 8v13H3V8"/><path d="M1 3h22v5H1z"/><path d="M10 12h4"/></svg>
+                <div>
+                  <span class="section-title">还原之前的生成现场<span class="optional-mark">可选</span></span>
+                  <p class="field-hint">选择之前从本站下载的 ZIP 包，会自动读回提示词、风格、情绪与参考图，可继续单张重新生成或二次编辑。</p>
+                </div>
+              </div>
+              <label class="field" for="importZip">
+                <input id="importZip" name="packZip" type="file" accept="application/zip,.zip" />
+                <div class="field-hint">仅支持本站「下载 ZIP」导出的包（含 metadata.json）。</div>
               </label>
             </div>
           </form>
