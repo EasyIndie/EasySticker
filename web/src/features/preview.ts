@@ -20,6 +20,9 @@ declare global {
       setFeedback: (text: string, tone?: Tone) => void;
       renderPreview: (stickers: StickerPreview[], tone?: Tone) => void;
       renderExtraAssets: (extras: Record<string, any>, tone?: Tone) => void;
+      /** 定点更新：只重建一张卡片，避免整组重绘导致图片全部重新请求。 */
+      updatePreviewCard: (index: number, sticker: StickerPreview, tone?: Tone) => boolean;
+      updateExtraAsset: (key: string, extras: Record<string, any>, tone?: Tone) => boolean;
       renderDownload: (
         packId: string | undefined,
         downloadUrl: string | undefined,
@@ -417,6 +420,50 @@ export function renderPreview(stickers: StickerPreview[], tone: Tone = "success"
   wechatAiPreview.appendChild(frag);
 }
 
+/** 扩展资源 key → 承载它的容器。 */
+const EXTRA_CONTAINERS: Record<string, () => HTMLElement | null> = {
+  coverAssetId: () => wechatAiCover,
+  iconAssetId: () => wechatAiIcon,
+  bannerAssetId: () => wechatAiBanner,
+  rewardGuideAssetId: () => wechatAiRewardGuide,
+  rewardThanksAssetId: () => wechatAiRewardThanks
+};
+
+/**
+ * 只更新一张贴纸卡片（按索引），不触碰其它卡片。
+ *
+ * 单资源重生成 / 二次编辑后如果整组重建，浏览器会把 20+ 张图全部重新请求与解码，
+ * 实测会多花一次网络往返并产生 100ms+ 的长任务；这里就地替换单个节点即可。
+ */
+export function updatePreviewCard(index: number, sticker: StickerPreview, tone: Tone = "success"): boolean {
+  if (!wechatAiPreview) return false;
+  const existing = wechatAiPreview.children[index] as HTMLElement | undefined;
+  if (!existing) return false;
+  const next = createPreviewCard(sticker, tone, index);
+  existing.replaceWith(next);
+  return true;
+}
+
+/** 只更新一张扩展资源卡片，其余容器不动。 */
+export function updateExtraAsset(key: string, extras: Record<string, any> = {}, tone: Tone = "success"): boolean {
+  const container = EXTRA_CONTAINERS[key]?.();
+  const defs = getExtraAssetDefs(extras).filter((item) => item.key === key);
+  if (!container || !defs.length) return false;
+
+  container.innerHTML = "";
+  const card = createExtraCard(defs[0]!, extras, tone);
+  container.appendChild(card);
+
+  const item = defs[0]!;
+  const revealSection = Boolean(extras?.[key]) || card.dataset.tone === "error";
+  if (item.reward) {
+    if (revealSection && sectionRewardGroup) sectionRewardGroup.hidden = false;
+  } else if (revealSection && sectionAssetsGroup) {
+    sectionAssetsGroup.hidden = false;
+  }
+  return true;
+}
+
 export function renderExtraAssets(extras: Record<string, any> = {}, tone: Tone = "idle"): void {
   if (wechatAiCover) wechatAiCover.innerHTML = "";
   if (wechatAiIcon) wechatAiIcon.innerHTML = "";
@@ -432,7 +479,13 @@ export function renderExtraAssets(extras: Record<string, any> = {}, tone: Tone =
   if (!defs.length) return;
 
   for (const item of defs) {
-    const assetId = extras?.[item.key] as string | undefined;
+    appendExtraCard(createExtraCard(item, extras, tone), item, extras);
+  }
+}
+
+/** 构建一张扩展资源卡片（不含挂载）。 */
+function createExtraCard(item: ExtraAssetDef, extras: Record<string, any>, tone: Tone): HTMLElement {
+  const assetId = extras?.[item.key] as string | undefined;
     // 整包成功但该资源缺失（单张失败）时，也渲染为可点击重试的错误卡片。
     const effectiveTone: Tone = tone === "success" && !assetId ? "error" : tone;
     const card = document.createElement("article");
@@ -487,24 +540,19 @@ export function renderExtraAssets(extras: Record<string, any> = {}, tone: Tone =
       appendEditAction(card);
     }
 
-    // 有资源，或本次生成失败（显示失败卡片供点击重试），都要让分组可见。
-    const revealSection = Boolean(assetId) || effectiveTone === "error";
-    if (item.key === "coverAssetId") {
-      wechatAiCover?.appendChild(card);
-      if (revealSection && sectionAssetsGroup) sectionAssetsGroup.hidden = false;
-    } else if (item.key === "iconAssetId") {
-      wechatAiIcon?.appendChild(card);
-      if (revealSection && sectionAssetsGroup) sectionAssetsGroup.hidden = false;
-    } else if (item.key === "bannerAssetId") {
-      wechatAiBanner?.appendChild(card);
-      if (revealSection && sectionAssetsGroup) sectionAssetsGroup.hidden = false;
-    } else if (item.key === "rewardGuideAssetId") {
-      wechatAiRewardGuide?.appendChild(card);
-      if (revealSection && sectionRewardGroup) sectionRewardGroup.hidden = false;
-    } else if (item.key === "rewardThanksAssetId") {
-      wechatAiRewardThanks?.appendChild(card);
-      if (revealSection && sectionRewardGroup) sectionRewardGroup.hidden = false;
-    }
+  return card;
+}
+
+/** 把卡片挂到对应的容器，并按需显示分组。 */
+function appendExtraCard(card: HTMLElement, item: ExtraAssetDef, extras: Record<string, any>): void {
+  const revealSection = Boolean(extras?.[item.key]) || card.dataset.tone === "error";
+  const container = EXTRA_CONTAINERS[item.key]?.();
+  container?.appendChild(card);
+  if (!revealSection) return;
+  if (item.reward) {
+    if (sectionRewardGroup) sectionRewardGroup.hidden = false;
+  } else if (sectionAssetsGroup) {
+    sectionAssetsGroup.hidden = false;
   }
 }
 
@@ -958,6 +1006,8 @@ export function mountPreview(): void {
     setFeedback,
     renderPreview,
     renderExtraAssets,
+    updatePreviewCard,
+    updateExtraAsset,
     renderDownload,
     renderExportInfo,
     renderMetadataPreview,

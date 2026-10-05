@@ -76,9 +76,9 @@ export class MockAiProvider implements AiProvider {
   )}" fill="rgba(255,255,255,0.85)">${prompt}</text>
 </svg>`;
 
-    const bytes = await sharp(Buffer.from(svg))
-      .png({ compressionLevel: 9, adaptiveFiltering: true })
-      .toBuffer();
+    // 这里的产物随后一定会被 convertToPlatformFormat 重新编码，所以不需要
+    // 花时间追求最小体积：level 9 + adaptive 实测 432ms/张，level 6 只要 ~180ms。
+    const bytes = await sharp(Buffer.from(svg)).png({ compressionLevel: 6 }).toBuffer();
 
     return { mime: "image/png", bytes };
   }

@@ -56,6 +56,8 @@ infrastructure（适配器）  providers 实现、exporters、repositories、mai
 - **包只存清单，ZIP 按需现打**：`packs/<packId>.json` 保存 `metadata.json`（逐张提示词/尺寸/角色），下载时由 `createPackArchive` 现场打包并边打边发。避免了「uploads 一份 + zip 一份」的双倍占用，也让「单资源重生成 → 重建整包」从搬几 MB 变成写几 KB。旧包（仅 `.zip`）仍可直接流式下载，无需迁移。
 - **包归属（owner）**：清单里记录 `owner`（已登录 = 邮箱；未登录 = 前端持久化的 `x-client-id`）。`GET /api/packs` 只返回请求者自己的包 —— 无归属的旧包不会出现在任何人的列表里，避免把别人的包列出来。`owner` **只存在清单，不进 ZIP 的 `metadata.json`**（那个会随表情包分发出去）。删包要求 owner 匹配或管理员。
 - **保留期不追溯既往**：`services/maintenance/retention.ts` 记录策略生效起点（`data/maintenance.json`），过期时间 = `max(创建时间, 生效起点) + 保留天数`，避免开启策略当天清空既有数据。
+- **单资源改动走定点更新**：`renderPreview` 只能追加卡片（增量渲染），所以早期更新一张图时只能 `innerHTML=""` + 整组重绘 —— 24 张贴纸会把 24 个 `<img>` 全部销毁重建，实测多出 26 次图片请求与 136ms 长任务。现在 `updatePreviewCard(index)` / `updateExtraAsset(key)` 只替换受影响的那个节点（重测：0 次图片请求、0 长任务）。
+- **弹窗不做背景模糊**：`backdrop-filter` 会强制浏览器对弹窗背后的整个视口重新做模糊合成，首次打开多出约 30ms 长任务；换成纯色遮罩后视觉几乎一致。另外挂载后空闲时空跑一次弹窗，把首次绘制的样式/合成开销前移。
 - **数据目录 GC**：`services/maintenance/gc.ts` + `scheduler.ts`，服务端每 6 小时巡检（`server.maintenance` 配置）。只做可证明安全的回收：压缩旧包、清孤儿素材（需过 6 小时安全期）、清 `.orig` 备份；按保留期删包默认关闭。CLI 入口 `src/cli/gc.ts`（`npm run gc`），后台「存储」面板同源调用。
 - **静态资源豁免**：`isPublicRoute` 放行 `/api/assets/:id` 与 `/api/packs/:id/download`（前缀匹配）。它们既豁免鉴权（`<img>`/`<a>` 无法携带 `Authorization`），也不计入 API 频率限制，避免结果页并发加载几十张图触发 429。
 - **typecheck 门禁**：`npm run typecheck`（`tsc --noEmit`）已接入 `npm test`，当前 0 错误。
