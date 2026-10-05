@@ -303,6 +303,28 @@ A: 项目采用 Apache-2.0 许可证，可自由使用和修改。注意生成�
 **Q: 生图质量不满意怎么办？**
 A: 可调整提示词、更换风格、切换 AI 提供商；也可在 `prompt-config.json` 里调整 provider 的 `quality` / `outputFormat` / `size`（generic 变体）以及全局 `ai.imageSize`。某张图不满意时，直接点击该预览卡片即可单张重生成，无需整包重跑。
 
+**Q: 早期导出的 ZIP 里 metadata.json 没有尺寸 / 提示词，能补回来吗？**
+A: 图片本身不会丢（都在 `data/packs/*.zip` 与 `data/uploads/` 里）。用 `npm run repair-pack` 可以把旧包就地升级到 `easysticker-pack@0.2`，用 `sharp` 重新测量每张图的尺寸并补齐角色、`files` 等字段（原包会备份成 `<packId>.zip.orig`，下载链接不变）：
+
+```bash
+npm run repair-pack -- <packId>          # 修复单个包
+npm run repair-pack -- --all             # 修复所有旧 schema 的包
+npm run repair-pack -- --all --dry-run   # 只看会改什么，不写盘
+```
+
+生成上下文（原始提示词 / 风格 / 提供商 / 参考图）旧版本没有落盘，只能从浏览器 localStorage 找回：
+
+```js
+// 在项目页面按 F12，console 里执行
+copy(localStorage.getItem('easysticker:last-wechat-pack'))
+```
+
+把结果存成 `context.json` 后带 `--context` 重跑，即可把 `generation` 与逐张 `prompt`/`style`/`emotion` 一并写回：
+
+```bash
+npm run repair-pack -- <packId> --context context.json
+```
+
 ---
 
 ## 📄 License
