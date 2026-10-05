@@ -17,6 +17,7 @@
     "prod": "NODE_ENV=production node dist/server.js",
     "setup": "node scripts/setup.mjs",
     "mock-ai": "node scripts/mock-ai-server.mjs",
+    "repair-pack": "node scripts/repair-pack.mjs",
     "test": "npm run typecheck && npm run web:typecheck && npm run build && node ./node_modules/.bin/vitest run",
     "test:e2e": "playwright test"
   },
