@@ -4,7 +4,7 @@ import path from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import sharp from "sharp";
 import { buildApp } from "../src/app";
-import { buildZipPack } from "../src/services/pack/service";
+import { createPack } from "../src/services/pack/service";
 import { createFileAssetStore } from "../src/lib/assets";
 import { readZipEntries } from "../src/lib/zip";
 
@@ -20,6 +20,14 @@ describe("导入 ZIP 还原生成现场", () => {
     await app.close();
     fs.rmSync(dataDir, { recursive: true, force: true });
   });
+
+
+  /** 走真实下载接口拿 ZIP 字节（ZIP 现在不再常驻磁盘，是现场打的）。 */
+  async function downloadZip(packId: string): Promise<Buffer> {
+    const res = await app.inject({ method: "GET", url: `/api/packs/${packId}/download` });
+    expect(res.statusCode).toBe(200);
+    return res.rawPayload;
+  }
 
   it("下载的 ZIP 重新导入后，提示词 / 风格 / 参考图都还在，且图片字节不变", async () => {
     const store = createFileAssetStore(dataDir);
@@ -60,7 +68,7 @@ describe("导入 ZIP 还原生成现场", () => {
     store.save(await solid(240, 240, 90), coverId, "png");
 
     // 先产出一个「和本站下载按钮导出的一样」的 ZIP
-    const { packId: originalPackId } = await buildZipPack(store, dataDir, {
+    const { packId: originalPackId } = await createPack(store, dataDir, {
       presetId: "wechat_stickers",
       assets,
       coverAssetId: coverId,
@@ -77,7 +85,7 @@ describe("导入 ZIP 还原生成现场", () => {
       extraDetails: { cover: { prompt: "封面提示词\n风格：贴纸", style: "贴纸" } }
     });
 
-    const zipBytes = fs.readFileSync(path.join(dataDir, "packs", `${originalPackId}.zip`));
+    const zipBytes = await downloadZip(originalPackId);
 
     // 走真实路由导入这个 ZIP
     const boundary = `----easysticker-restore-${stamp}`;
@@ -129,7 +137,7 @@ describe("导入 ZIP 还原生成现场", () => {
     expect(restored.extras.coverAssetId).toBeTruthy();
 
     // 重新导出的 ZIP：参考图仍在 source/，且图片字节与导入前逐字节一致
-    const newZipBytes = fs.readFileSync(path.join(dataDir, "packs", `${restored.packId}.zip`));
+    const newZipBytes = await downloadZip(restored.packId);
     const entries = new Map(readZipEntries(newZipBytes).map((e) => [e.name, e.content]));
     expect(entries.has("source/reference.png")).toBe(true);
     expect(entries.get("source/reference.png")!.equals(referenceBytes)).toBe(true);
@@ -168,7 +176,7 @@ describe("导入 ZIP 还原生成现场", () => {
       "png"
     );
 
-    const { packId, downloadFilename } = await buildZipPack(store, dataDir, {
+    const { packId, downloadFilename } = await createPack(store, dataDir, {
       presetId: "wechat_stickers",
       assets: [
         { label: "001", assetId: stickerId, role: "sticker", prompt: "按 packId 还原的提示词", style: "贴纸", emotion: "开心" }
@@ -199,14 +207,55 @@ describe("导入 ZIP 还原生成现场", () => {
       emotion: "开心"
     });
     expect(json.generation.prompt).toBe("原始提示词");
-    expect(json.meta.referenceAssetId).toBeTruthy();
-    expect(json.meta.referenceAssetId).not.toBe(refId);
+    // 走清单快路径：素材零拷贝，参考图仍是库里原来那个 assetId
+    expect(json.meta.referenceAssetId).toBe(refId);
 
     // 不存在的 packId → 404；非法 packId → 400（防路径穿越）
     const missing = await app.inject({ method: "POST", url: "/api/packs/doesnotexist0000000000/restore", payload: {} });
     expect(missing.statusCode).toBe(404);
     const bad = await app.inject({ method: "POST", url: "/api/packs/abc/restore", payload: {} });
     expect(bad.statusCode).toBe(400);
+  }, 60000);
+
+  it("旧包（只有 ZIP、没有清单）也能按 packId 还原", async () => {
+    const store = createFileAssetStore(dataDir);
+    const stamp = Date.now();
+    const stickerId = `legacy-sticker-${stamp}`;
+    store.save(
+      await sharp({ create: { width: 240, height: 240, channels: 4, background: { r: 7, g: 7, b: 7, alpha: 1 } } })
+        .png()
+        .toBuffer(),
+      stickerId,
+      "png"
+    );
+
+    const { packId } = await createPack(store, dataDir, {
+      presetId: "wechat_stickers",
+      assets: [
+        { label: "001", assetId: stickerId, role: "sticker", prompt: "旧包提示词", style: "贴纸", emotion: "开心" }
+      ],
+      metadata: { title: "旧包" },
+      generation: { source: "ai-generate", providerId: "mock", prompt: "旧包原始提示词", styles: ["贴纸"] }
+    });
+
+    // 先把 ZIP 打出来，然后删掉清单 —— 模拟迁移前那批「只有 zip」的历史包
+    const zipBytes = await downloadZip(packId);
+    const zipPath = path.join(dataDir, "packs", `${packId}.zip`);
+    fs.writeFileSync(zipPath, zipBytes);
+    fs.rmSync(path.join(dataDir, "packs", `${packId}.json`));
+
+    const res = await app.inject({
+      method: "POST",
+      url: `/api/packs/${packId}/restore`,
+      payload: { presetId: "wechat_stickers" }
+    });
+    expect(res.statusCode).toBe(200);
+    const json = res.json();
+    expect(json.packId).toBe(packId);
+    expect(json.stickers[0]).toMatchObject({ prompt: "旧包提示词", style: "贴纸", emotion: "开心" });
+    expect(json.restored.fromPackId).toBe(packId);
+    // 旧包仍从 ZIP 里直接发，不做二次打包
+    expect((await app.inject({ method: "GET", url: `/api/packs/${packId}/download` })).statusCode).toBe(200);
   }, 60000);
 
   it("不是本站导出的 ZIP 会被拒绝", async () => {
