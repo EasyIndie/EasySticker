@@ -12,7 +12,9 @@
   <meta http-equiv="Pragma" content="no-cache">
   <meta http-equiv="Expires" content="0">
   <title>EasySticker 管理后台</title>
-  <link rel="stylesheet" href="admin.css?v=5">
+  <meta name="theme-color" id="themeMeta" content="#F0F2F5" data-dark="#0f172a">
+  <script src="/js/theme.js?v=1"></script>
+  <link rel="stylesheet" href="admin.css?v=7">
 </head>
 <body>
 
@@ -49,6 +51,7 @@
       </div>
       <div class="topbar-right">
         <span id="topbar-user" class="topbar-user"></span>
+        <button id="theme-toggle" class="btn btn-outline btn-sm btn-icon" type="button" aria-label="切换深色模式" title="切换深色模式"></button>
         <button id="logout-btn" class="btn btn-outline btn-sm">退出</button>
       </div>
     </header>
@@ -73,7 +76,7 @@
             <h3 class="metric-title">CPU</h3>
             <div class="metric-ring">
               <svg viewBox="0 0 120 120" width="120" height="120">
-                <circle cx="60" cy="60" r="52" fill="none" stroke="#eee" stroke-width="6"/>
+                <circle class="ring-track" cx="60" cy="60" r="52" fill="none" stroke="currentColor" stroke-width="6"/>
                 <circle cx="60" cy="60" r="52" fill="none" stroke="currentColor" stroke-width="6"
                   stroke-linecap="round" stroke-dasharray="326.73" stroke-dashoffset="326.73" transform="rotate(-90 60 60)"/>
               </svg>
@@ -86,7 +89,7 @@
             <h3 class="metric-title">内存</h3>
             <div class="metric-ring">
               <svg viewBox="0 0 120 120" width="120" height="120">
-                <circle cx="60" cy="60" r="52" fill="none" stroke="#eee" stroke-width="6"/>
+                <circle class="ring-track" cx="60" cy="60" r="52" fill="none" stroke="currentColor" stroke-width="6"/>
                 <circle cx="60" cy="60" r="52" fill="none" stroke="currentColor" stroke-width="6"
                   stroke-linecap="round" stroke-dasharray="326.73" stroke-dashoffset="326.73" transform="rotate(-90 60 60)"/>
               </svg>
@@ -99,7 +102,7 @@
             <h3 class="metric-title">磁盘</h3>
             <div class="metric-ring">
               <svg viewBox="0 0 120 120" width="120" height="120">
-                <circle cx="60" cy="60" r="52" fill="none" stroke="#eee" stroke-width="6"/>
+                <circle class="ring-track" cx="60" cy="60" r="52" fill="none" stroke="currentColor" stroke-width="6"/>
                 <circle cx="60" cy="60" r="52" fill="none" stroke="currentColor" stroke-width="6"
                   stroke-linecap="round" stroke-dasharray="326.73" stroke-dashoffset="326.73" transform="rotate(-90 60 60)"/>
               </svg>
