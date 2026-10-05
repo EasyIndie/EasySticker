@@ -34,6 +34,8 @@ Fastify + TypeScript 后端，Vite + TypeScript 前端（构建为 `public/js/*`
 ```bash
 npm test                           # 确认基线绿（typecheck + web:typecheck + build + vitest）
 npm run web:build                  # 重新生成 public/js/{auth,preview,generator-api,ui,app,admin}.js
+                                   # 并自动跑 version-assets：把 HTML 里的引用改成 ?v=<内容哈希>
+npm run web:version                # 只重跑内容哈希（改了 HTML 但没动 JS/CSS 时用）
 # 起服务（端口默认 3000，见 .env 的 PORT / prompt-config.default.json 的 server.port）：
 npm run build && node dist/server.js &
 BASE_URL=http://localhost:3000 npm run test:e2e   # 37/37

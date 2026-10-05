@@ -2,16 +2,16 @@
 <html lang="zh-CN">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" href="/favicon.ico?v=2" sizes="32x32">
-    <link rel="icon" href="/logo.svg?v=2" type="image/svg+xml">
-    <link rel="icon" href="/favicon-32.png?v=2" type="image/png" sizes="32x32">
-    <link rel="icon" href="/favicon-16.png?v=2" type="image/png" sizes="16x16">
-    <link rel="apple-touch-icon" href="/favicon-128.png?v=2">
+    <link rel="icon" href="/favicon.ico?v=812763f6" sizes="32x32">
+    <link rel="icon" href="/logo.svg?v=c1ba1a48" type="image/svg+xml">
+    <link rel="icon" href="/favicon-32.png?v=a267b159" type="image/png" sizes="32x32">
+    <link rel="icon" href="/favicon-16.png?v=67cbc802" type="image/png" sizes="16x16">
+    <link rel="apple-touch-icon" href="/favicon-128.png?v=ebbd815a">
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>EasySticker</title>
     <meta name="theme-color" id="themeMeta" content="#07c160" data-dark="#111827" />
-    <script src="/js/theme.js?v=2"></script>
-    <link rel="stylesheet" href="/styles.css?v=24" />
+    <script src="/js/theme.js?v=2ce5d795"></script>
+    <link rel="stylesheet" href="/styles.css?v=d98c783a" />
   </head>
   <body>
     <a href="#mainContent" class="skip-link">跳到主要内容</a>
@@ -182,63 +182,85 @@
           <div class="step-index">02</div>
           <div class="step-head">
             <h2 id="importHeading">导入已有表情图</h2>
-            <p class="muted" id="importSectionDesc">已有成品图片时，可直接批量导入并自动规范为微信 240 × 240 表情图。</p>
+            <p class="muted" id="importSectionDesc">已有成品图片时可直接批量导入并规范为微信 240 × 240；想继续改以前生成的包，就用当时下载的 ZIP 还原生成现场。</p>
           </div>
-          <form id="importForm" class="step-body">
-            <label class="upload-panel" for="importFiles">
-              <span class="upload-title">批量选择图片</span>
-              <span class="upload-text" id="importUploadText">支持 PNG、JPG、WebP、GIF，建议一次导入 8-24 张。</span>
-              <input
-                id="importFiles"
-                name="stickers"
-                type="file"
-                accept="image/png,image/jpeg,image/webp,image/gif"
-                multiple
-                aria-describedby="importHint"
-              />
-              <span id="importHint" class="field-hint">导入后会统一居中、等比缩放、补透明边，并转换为符合微信表情包规格的 PNG。</span>
-            </label>
-            <div class="config-grid import-extra-grid" id="importExtraSection" aria-label="扩展资源导入">
-              <label class="field" for="importCover">
-                <span class="section-title">Cover<span class="optional-mark">可选</span></span>
-                <input id="importCover" type="file" accept="image/png,image/jpeg,image/webp,image/gif" />
-                <div class="field-hint">未上传时自动使用第 1 张主表情生成 240 × 240。</div>
+          <form id="importForm" class="step-body step-body-stack">
+            <section class="import-method" aria-labelledby="importMethodBulkTitle">
+              <div class="import-method-head">
+                <span class="import-method-badge">方式一</span>
+                <div class="import-method-copy">
+                  <h3 class="import-method-title" id="importMethodBulkTitle">批量导入成品图片</h3>
+                  <p class="field-hint">手里已经有画好的表情图，交给本站统一裁剪与规范化。</p>
+                </div>
+              </div>
+
+              <label class="upload-panel" for="importFiles">
+                <span class="upload-title">选择主表情图片（必填）</span>
+                <span class="upload-text" id="importUploadText">支持 PNG、JPG、WebP、GIF，建议一次导入 8-24 张。</span>
+                <input
+                  id="importFiles"
+                  name="stickers"
+                  type="file"
+                  accept="image/png,image/jpeg,image/webp,image/gif"
+                  multiple
+                  aria-describedby="importHint"
+                />
+                <span id="importHint" class="field-hint">导入后会统一居中、等比缩放、补透明边，并转换为符合微信表情包规格的 PNG。</span>
               </label>
-              <label class="field" for="importIcon">
-                <span class="section-title">Icon<span class="optional-mark">可选</span></span>
-                <input id="importIcon" type="file" accept="image/png,image/jpeg,image/webp,image/gif" />
-                <div class="field-hint">未上传时自动从 Cover 或第 1 张主表情生成 50 × 50。</div>
-              </label>
-              <label class="field" for="importBanner">
-                <span class="section-title">Banner<span class="optional-mark">可选</span></span>
-                <input id="importBanner" type="file" accept="image/png,image/jpeg,image/webp,image/gif" />
-                <div class="field-hint">上传后处理为 750 × 400。</div>
-              </label>
-              <label class="field" for="importRewardGuide">
-                <span class="section-title">赞赏引导图<span class="optional-mark">可选</span></span>
-                <input id="importRewardGuide" type="file" accept="image/png,image/jpeg,image/webp,image/gif" />
-                <div class="field-hint">上传后处理为 750 × 560。</div>
-              </label>
-              <label class="field" for="importRewardThanks">
-                <span class="section-title">赞赏答谢图<span class="optional-mark">可选</span></span>
-                <input id="importRewardThanks" type="file" accept="image/png,image/jpeg,image/webp,image/gif" />
-                <div class="field-hint">上传后处理为 750 × 560。</div>
-              </label>
+
+              <div class="import-extra-block" id="importExtraSection">
+                <div class="import-extra-head">
+                  <span class="section-title">附加素材</span>
+                  <span class="optional-mark">可选</span>
+                  <p class="field-hint">封面、图标等配套图片。不上传时其中一部分会由主表情自动生成，上传则按平台规格裁成固定尺寸。</p>
+                </div>
+                <div class="config-grid import-extra-grid" aria-label="扩展资源导入">
+                  <label class="field" for="importCover">
+                    <span class="section-title">Cover<span class="optional-mark">可选</span></span>
+                    <input id="importCover" type="file" accept="image/png,image/jpeg,image/webp,image/gif" />
+                    <div class="field-hint">未上传时自动使用第 1 张主表情生成 240 × 240。</div>
+                  </label>
+                  <label class="field" for="importIcon">
+                    <span class="section-title">Icon<span class="optional-mark">可选</span></span>
+                    <input id="importIcon" type="file" accept="image/png,image/jpeg,image/webp,image/gif" />
+                    <div class="field-hint">未上传时自动从 Cover 或第 1 张主表情生成 50 × 50。</div>
+                  </label>
+                  <label class="field" for="importBanner">
+                    <span class="section-title">Banner<span class="optional-mark">可选</span></span>
+                    <input id="importBanner" type="file" accept="image/png,image/jpeg,image/webp,image/gif" />
+                    <div class="field-hint">上传后处理为 750 × 400。</div>
+                  </label>
+                  <label class="field" for="importRewardGuide">
+                    <span class="section-title">赞赏引导图<span class="optional-mark">可选</span></span>
+                    <input id="importRewardGuide" type="file" accept="image/png,image/jpeg,image/webp,image/gif" />
+                    <div class="field-hint">上传后处理为 750 × 560。</div>
+                  </label>
+                  <label class="field" for="importRewardThanks">
+                    <span class="section-title">赞赏答谢图<span class="optional-mark">可选</span></span>
+                    <input id="importRewardThanks" type="file" accept="image/png,image/jpeg,image/webp,image/gif" />
+                    <div class="field-hint">上传后处理为 750 × 560。</div>
+                  </label>
+                </div>
+              </div>
+            </section>
+
+            <div class="import-or" role="separator" aria-label="或者">
+              <span>或者</span>
             </div>
 
-            <div class="restore-panel">
-              <div class="restore-head">
-                <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 8v13H3V8"/><path d="M1 3h22v5H1z"/><path d="M10 12h4"/></svg>
-                <div>
-                  <span class="section-title">还原之前的生成现场<span class="optional-mark">可选</span></span>
-                  <p class="field-hint">选择之前从本站下载的 ZIP 包，会自动读回提示词、风格、情绪与参考图，可继续单张重新生成或编辑图片。</p>
+            <section class="import-method restore-panel" aria-labelledby="importMethodRestoreTitle">
+              <div class="import-method-head">
+                <span class="import-method-badge">方式二</span>
+                <div class="import-method-copy">
+                  <h3 class="import-method-title" id="importMethodRestoreTitle">还原之前的生成现场</h3>
+                  <p class="field-hint">选一个之前从本站下载的 ZIP 包，会自动读回提示词、风格、情绪与参考图，可继续单张重新生成或编辑图片。</p>
                 </div>
               </div>
               <label class="field" for="importZip">
                 <input id="importZip" name="packZip" type="file" accept="application/zip,.zip" />
                 <div class="field-hint">仅支持本站「下载 ZIP」导出的包（含 metadata.json）。</div>
               </label>
-            </div>
+            </section>
           </form>
           <div id="importState" class="status-chip" aria-live="polite">等待导入</div>
         </article>
@@ -562,10 +584,10 @@
       <p class="footer-muted">EasySticker · 本地部署</p>
     </footer>
 
-    <script src="/js/auth.js"></script>
-    <script src="/js/preview.js"></script>
-    <script src="/js/generator-api.js"></script>
-    <script src="/js/ui.js"></script>
-    <script src="/js/app.js"></script>
+    <script src="/js/auth.js?v=cac9e5cb"></script>
+    <script src="/js/preview.js?v=820bcee9"></script>
+    <script src="/js/generator-api.js?v=a1439256"></script>
+    <script src="/js/ui.js?v=5463a81e"></script>
+    <script src="/js/app.js?v=c186d79b"></script>
   </body>
 </html>

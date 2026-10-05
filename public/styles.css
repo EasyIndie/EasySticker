@@ -931,31 +931,92 @@ input[type="file"].file-native:focus-visible + .file-picker {
   font-style: italic;
 }
 
-/* 导入区里的「还原 ZIP」子块 */
-.restore-panel {
+/* 导入区：两种导入方式各自独立成块，中间用「或者」分隔 */
+.step-body-stack {
   display: grid;
-  gap: 12px;
-  margin-top: 4px;
-  padding-top: 16px;
-  border-top: 1px dashed var(--color-border-default);
+  gap: var(--space-3);
+  align-items: stretch;
 }
 
-.restore-head {
+.import-method {
+  display: grid;
+  gap: var(--space-3);
+  padding: 16px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border-default);
+  background: var(--color-surface-secondary);
+}
+
+.import-method-head {
   display: flex;
   align-items: flex-start;
   gap: 10px;
 }
 
-.restore-head .icon {
+.import-method-badge {
   flex-shrink: 0;
-  width: 18px;
-  height: 18px;
-  margin-top: 2px;
-  color: var(--color-text-secondary);
+  margin-top: 1px;
+  padding: 2px 8px;
+  border-radius: var(--radius-pill);
+  background: var(--color-primary-soft);
+  color: var(--color-primary);
+  font-size: var(--font-11);
+  font-weight: 800;
+  white-space: nowrap;
 }
 
-.restore-head .field-hint {
+.import-method-copy {
+  min-width: 0;
+}
+
+.import-method-title {
+  margin: 0;
+  font-size: var(--font-14);
+  font-weight: 700;
+  color: var(--color-text-primary);
+}
+
+.import-method-copy .field-hint {
   margin-top: 4px;
+}
+
+/* 「或者」分隔：两侧各一条线，明确这是二选一而不是叠加 */
+.import-or {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: var(--color-text-tertiary);
+  font-size: var(--font-12);
+  font-weight: 600;
+}
+
+.import-or::before,
+.import-or::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--color-border-default);
+}
+
+/* 附加素材：从主图区块里再分一层，避免与导入方式混在一起 */
+.import-extra-block {
+  display: grid;
+  gap: 10px;
+  padding-top: 14px;
+  border-top: 1px dashed var(--color-border-default);
+}
+
+.import-extra-block[hidden] {
+  display: none;
+}
+
+.import-extra-head .field-hint {
+  margin-top: 4px;
+}
+
+/* 5 个素材自动铺开，不再挤进 220px / 1fr 两列 */
+.import-extra-grid {
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
 }
 
 .upload-title {
@@ -2029,8 +2090,10 @@ select {
 .step-nav-item {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 8px 16px 8px 12px;
+  /* 间距一律用 margin 显式控制：用 flex gap 的话，连接线会贴着前一个
+     label、离后一个序号却隔着两层 padding，看起来偏左。 */
+  gap: 0;
+  padding: 8px 0;
   position: relative;
   cursor: pointer;
   color: var(--color-text-tertiary);
@@ -2040,12 +2103,18 @@ select {
   font-weight: 500;
 }
 
+.step-nav-number {
+  margin-right: 8px;
+}
+
+/* 连接线：两侧等距 15px，正好居中于相邻两个步骤之间 */
 .step-nav-item::after {
-  content: "\203A";
-  margin-left: 12px;
-  color: var(--color-border-default);
-  font-size: 18px;
-  line-height: 1;
+  content: "";
+  flex-shrink: 0;
+  width: 22px;
+  height: 1px;
+  margin: 0 15px;
+  background: var(--color-border-default);
 }
 
 .step-nav-item:last-child::after {
@@ -2096,7 +2165,11 @@ select {
     margin-bottom: var(--space-3);
   }
   .step-nav-item {
-    padding: 6px 12px 6px 8px;
+    padding: 6px 0;
+  }
+  .step-nav-item::after {
+    width: 14px;
+    margin: 0 10px;
   }
   .step-nav-label {
     font-size: var(--font-12);
@@ -2614,20 +2687,6 @@ textarea:focus-visible {
 }
 
 /* --- 步骤导航打磨 --- */
-.step-nav-item {
-  gap: 8px;
-  padding: 8px 14px;
-}
-
-.step-nav-item::after {
-  content: "";
-  width: 22px;
-  height: 1px;
-  margin-left: 0;
-  background: var(--color-border-default);
-  color: transparent;
-}
-
 .step-nav-number {
   width: 26px;
   height: 26px;
