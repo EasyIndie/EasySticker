@@ -5,6 +5,7 @@ import { loadPromptConfig, updatePromptConfig } from "../services/generate/promp
 import { getAiProvider } from "../services/ai/index";
 import { providerApiKeyEnvName, resolveProviderApiKey, setProviderApiKey } from "../services/ai/apiKey";
 import { runGc } from "../services/maintenance/gc";
+import { ensureRetentionStarted } from "../services/maintenance/retention";
 import { deletePack, listPacks } from "../services/pack/service";
 
 export function registerAdminRoutes(deps: AppDeps) {
@@ -247,16 +248,22 @@ export function registerAdminRoutes(deps: AppDeps) {
     // ── 存储：占用体检 / 手动清理 / 包列表 ──────────────────────────────
     // 这些是运维视角的接口：整个服务的磁盘占用与包清单（用户侧看不到彼此的数据）。
     app.get("/admin/storage", { preHandler: [requireAdmin] }, async () => {
+      const retentionDays = loadPromptConfig().server?.maintenance?.packRetentionDays ?? 0;
       const report = await runGc({ dataDir: deps.dataDir, dryRun: true });
+      const { retentionStartedAt } = retentionDays > 0 ? ensureRetentionStarted(deps.dataDir) : { retentionStartedAt: null };
       return {
         report,
-        packs: listPacks(deps.dataDir).map((p) => ({
+        retentionDays,
+        retentionStartedAt,
+        packs: listPacks(deps.dataDir, retentionDays, retentionStartedAt).map((p) => ({
           packId: p.packId,
           title: p.title,
           createdAt: p.createdAt,
           stickerCount: p.stickerCount,
           bytes: p.bytes,
-          hasZip: p.hasZip
+          hasZip: p.hasZip,
+          owner: p.owner,
+          expiresAt: p.expiresAt
         }))
       };
     });

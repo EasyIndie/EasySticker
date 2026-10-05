@@ -2731,3 +2731,26 @@ textarea:focus-visible {
   width: 16px;
   height: 16px;
 }
+
+/* 历史记录：已过期 / 已删除的条目 */
+.history-item-missing {
+  opacity: 0.62;
+}
+
+.history-item-missing .history-item-title {
+  text-decoration: line-through;
+  text-decoration-color: var(--color-border-default);
+}
+
+.history-tag {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: var(--color-surface-secondary);
+  color: var(--muted);
+  font-size: var(--font-11, 11px);
+  font-weight: 600;
+  text-decoration: none;
+  vertical-align: middle;
+}

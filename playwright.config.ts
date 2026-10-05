@@ -27,12 +27,18 @@ export default defineConfig({
     },
   ],
 
-  webServer: process.env.CI
-    ? {
-        command: "npm run build && NODE_ENV=production node dist/server.js",
+  // 没有显式指定 BASE_URL 时，由 Playwright 起一个专用服务端。
+  // e2e 会在几十秒内集中打上百个 API，默认的 30 req/min 限流（另有单测覆盖）
+  // 会把测试打成 flaky，所以这里放宽；已有的服务端会被复用。
+  webServer: process.env.BASE_URL
+    ? undefined
+    : {
+        command: process.env.CI
+          ? "npm run build && NODE_ENV=production node dist/server.js"
+          : "npm run build && node dist/server.js",
         url: "http://localhost:3000",
         reuseExistingServer: true,
         timeout: 120_000,
-      }
-    : undefined,
+        env: { RATE_LIMIT_MAX: "600" },
+      },
 });

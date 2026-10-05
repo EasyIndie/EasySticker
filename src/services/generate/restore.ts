@@ -250,7 +250,8 @@ export async function restorePackFromZip(
   assetStore: AssetStore,
   dataDir: string,
   fallbackPresetId: string,
-  req: FastifyRequest
+  req: FastifyRequest,
+  owner?: string | null
 ) {
   const partsFactory = (req as any).parts;
   if (typeof partsFactory !== "function") {
@@ -279,7 +280,7 @@ export async function restorePackFromZip(
 
   const parsed = parsePackEntries(entries);
   const presetId = cleanText(fields.presetId) ?? cleanText(parsed.presetId) ?? fallbackPresetId;
-  return restoreFromEntries(assetStore, dataDir, presetId, entries, parsed);
+  return restoreFromEntries(assetStore, dataDir, presetId, entries, parsed, undefined, owner);
 }
 
 /* ── 入口 2 / 3：按 packId 还原服务端已存的包 ──────────────────────────── */
@@ -288,7 +289,8 @@ export async function restorePackById(
   assetStore: AssetStore,
   dataDir: string,
   fallbackPresetId: string,
-  packId: string
+  packId: string,
+  owner?: string | null
 ) {
   if (!PACK_ID_PATTERN.test(packId)) throw createHttpError(400, "invalid packId");
   if (!packExists(dataDir, packId)) {
@@ -347,11 +349,19 @@ export async function restorePackById(
 
   const parsed = parsePackEntries(entries);
   const presetId = cleanText(parsed.presetId) ?? fallbackPresetId;
-  return restoreFromEntries(assetStore, dataDir, presetId, entries, parsed, {
-    packId,
-    downloadUrl: `/api/packs/${packId}/download`,
-    downloadFilename: info.downloadFilename
-  });
+  return restoreFromEntries(
+    assetStore,
+    dataDir,
+    presetId,
+    entries,
+    parsed,
+    {
+      packId,
+      downloadUrl: `/api/packs/${packId}/download`,
+      downloadFilename: info.downloadFilename
+    },
+    owner
+  );
 }
 
 async function collectValidationWarnings(
@@ -378,7 +388,8 @@ async function restoreFromEntries(
   presetId: string,
   entries: ZipEntry[],
   parsed: ParsedPack,
-  reusePack?: { packId: string; downloadUrl: string; downloadFilename: string }
+  reusePack?: { packId: string; downloadUrl: string; downloadFilename: string },
+  owner?: string | null
 ) {
   const preset = getPlatformPreset(presetId);
   if (!preset) throw createHttpError(400, `unknown presetId: ${presetId}`);
@@ -498,7 +509,7 @@ async function restoreFromEntries(
       metadata,
       generation,
       extraDetails
-    });
+    }, owner);
     packId = built.packId;
     downloadUrl = built.downloadUrl;
     downloadFilename = built.downloadFilename;
