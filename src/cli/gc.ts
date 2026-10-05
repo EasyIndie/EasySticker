@@ -12,6 +12,7 @@
  */
 import path from "node:path";
 import { runGc } from "../services/maintenance/gc";
+import { loadPromptConfig } from "../services/generate/promptConfig";
 
 function arg(name: string): string | undefined {
   const index = process.argv.indexOf(`--${name}`);
@@ -29,8 +30,10 @@ const mb = (bytes: number) => `${(bytes / MB).toFixed(2)} MB`;
 
 async function main() {
   const dryRun = !hasFlag("apply");
+  // 没显式指定时用配置里的值，否则体检结果会和服务端实际行为对不上
+  const configRetention = loadPromptConfig().server?.maintenance?.packRetentionDays ?? 0;
   const retentionRaw = arg("retention-days");
-  const retentionDays = retentionRaw ? Number(retentionRaw) : 0;
+  const retentionDays = retentionRaw ? Number(retentionRaw) : configRetention;
   const orphanAgeRaw = arg("orphan-min-age-hours");
   const orphanMinAgeMs = orphanAgeRaw ? Number(orphanAgeRaw) * 60 * 60 * 1000 : undefined;
   const dataDir = arg("data-dir") || process.env["DATA_DIR"] || path.join(process.cwd(), "data");
@@ -45,6 +48,11 @@ async function main() {
     ...(Number.isFinite(orphanMinAgeMs) ? { orphanMinAgeMs: orphanMinAgeMs as number } : {}),
     dropOrigBackups: !hasFlag("keep-orig")
   });
+
+  if (retentionDays > 0) {
+    console.log(`保留期：   包保留 ${retentionDays} 天（生效起点 ${report.expired.retentionStartedAt ?? "待锚定"}）`);
+    console.log("           过期时间 = max(包创建时间, 生效起点) + 保留天数，不追溯既往\n");
+  }
 
   console.log("─ 现状 ──────────────────────────────");
   console.log(`包：       ${report.packs.total} 个 (${mb(report.packs.bytes)})，其中仍是整包 ZIP 的 ${report.packs.legacyZips} 个`);
