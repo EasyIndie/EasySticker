@@ -94,6 +94,8 @@ const editDialogTarget = req("editDialogTarget");
 const editDialogStatus = req("editDialogStatus");
 const editInstruction = req<HTMLTextAreaElement>("editInstruction");
 const editChips = req("editChips");
+const editReference = req<HTMLInputElement>("editReference");
+const editUseOriginalRef = req<HTMLInputElement>("editUseOriginalRef");
 const importState = req("importState");
 const originalPreview = req<HTMLImageElement>("originalPreview");
 const creationModeAi = byId<HTMLInputElement>("creationModeAi");
@@ -989,9 +991,13 @@ function collectPackAssets(): {
     style?: string;
     emotion?: string;
     sourceAssetId?: string;
+    editReferenceAssetId?: string;
   }>;
   extras: Record<string, string>;
-  extraDetails: Record<string, { prompt?: string; style?: string; sourceAssetId?: string }>;
+  extraDetails: Record<
+    string,
+    { prompt?: string; style?: string; sourceAssetId?: string; editReferenceAssetId?: string }
+  >;
 } {
   const assets = currentStickers
     .filter((s) => s && s.assetId)
@@ -1002,17 +1008,24 @@ function collectPackAssets(): {
       ...(s.prompt ? { prompt: s.prompt } : {}),
       ...(s.style ? { style: s.style } : {}),
       ...(s.emotion ? { emotion: s.emotion } : {}),
-      ...(s.sourceAssetId ? { sourceAssetId: s.sourceAssetId } : {})
+      ...(s.sourceAssetId ? { sourceAssetId: s.sourceAssetId } : {}),
+      ...(s.editReferenceAssetId ? { editReferenceAssetId: s.editReferenceAssetId } : {})
     }));
   const extras: Record<string, string> = {};
-  const extraDetails: Record<string, { prompt?: string; style?: string; sourceAssetId?: string }> = {};
+  const extraDetails: Record<
+    string,
+    { prompt?: string; style?: string; sourceAssetId?: string; editReferenceAssetId?: string }
+  > = {};
   for (const key of EXTRA_ASSET_KEYS) {
     const id = currentExtras[key];
     if (typeof id === "string" && id) extras[key] = id;
-    const detail: { prompt?: string; style?: string; sourceAssetId?: string } = {};
+    const detail: { prompt?: string; style?: string; sourceAssetId?: string; editReferenceAssetId?: string } = {};
     if (currentExtras[`${key}_prompt`]) detail.prompt = currentExtras[`${key}_prompt`];
     if (currentExtras[`${key}_style`]) detail.style = currentExtras[`${key}_style`];
     if (currentExtras[`${key}_sourceAssetId`]) detail.sourceAssetId = currentExtras[`${key}_sourceAssetId`];
+    if (currentExtras[`${key}_editReferenceAssetId`]) {
+      detail.editReferenceAssetId = currentExtras[`${key}_editReferenceAssetId`];
+    }
     if (Object.keys(detail).length) extraDetails[EXTRA_ROLE_BY_KEY[key]!] = detail;
   }
   return { assets, extras, extraDetails };
@@ -1098,7 +1111,8 @@ function applyResourceResult(target: ResourceTarget, res: any): void {
       prompt: res.prompt,
       style: res.style ?? existing.style,
       emotion: res.emotion ?? existing.emotion,
-      ...(res.sourceAssetId ? { sourceAssetId: res.sourceAssetId } : {})
+      ...(res.sourceAssetId ? { sourceAssetId: res.sourceAssetId } : {}),
+      ...(res.editReferenceAssetId ? { editReferenceAssetId: res.editReferenceAssetId } : {})
     };
     // renderPreview 带增量渲染，已存在的卡片不会重绘；先清空以强制整组重建。
     wechatAiPreview.innerHTML = "";
@@ -1110,6 +1124,7 @@ function applyResourceResult(target: ResourceTarget, res: any): void {
     currentExtras[`${target.key}_prompt`] = res.prompt;
     if (res.style) currentExtras[`${target.key}_style`] = res.style;
     if (res.sourceAssetId) currentExtras[`${target.key}_sourceAssetId`] = res.sourceAssetId;
+    if (res.editReferenceAssetId) currentExtras[`${target.key}_editReferenceAssetId`] = res.editReferenceAssetId;
     delete currentExtras[`${target.key}_error`];
     window._preview!.renderExtraAssets(currentExtras, "success");
   }
@@ -1118,7 +1133,12 @@ function applyResourceResult(target: ResourceTarget, res: any): void {
 /** 单资源生成的公共部分：请求 → 写回状态 → 重建 ZIP。 */
 async function runSingleResource(
   target: ResourceTarget,
-  options: { mode: "regenerate" | "edit"; instruction?: string; sourceAssetId?: string }
+  options: {
+    mode: "regenerate" | "edit";
+    instruction?: string;
+    sourceAssetId?: string;
+    editReferenceAssetId?: string;
+  }
 ): Promise<void> {
   const res = await requestJson("/api/generate/resource", {
     method: "POST",
@@ -1134,11 +1154,21 @@ async function runSingleResource(
       target,
       mode: options.mode,
       ...(options.sourceAssetId ? { sourceAssetId: options.sourceAssetId } : {}),
-      ...(options.instruction ? { instruction: options.instruction } : {})
+      ...(options.instruction ? { instruction: options.instruction } : {}),
+      ...(options.editReferenceAssetId ? { editReferenceAssetId: options.editReferenceAssetId } : {})
     })
   });
   applyResourceResult(target, res);
   if (lastPackResult) await rebuildPackFromState();
+}
+
+/** 把一张本地图片上传成 asset，用作附加参考图。 */
+async function uploadReferenceFile(file: File): Promise<string> {
+  const form = new FormData();
+  form.append("file", file);
+  const json = await requestJson("/api/uploads", { method: "POST", body: form });
+  if (!json?.uploadId) throw new Error("参考图上传失败，请重试。");
+  return json.uploadId as string;
 }
 
 /** 只重生成失败的那一张资源（贴纸或扩展图），不重跑整包。 */
@@ -1210,6 +1240,10 @@ function openEditDialog(target: ResourceTarget): void {
   if (editDialogImage) editDialogImage.src = window._preview!.buildAssetUrl(assetId);
   if (editDialogTarget) editDialogTarget.textContent = `${resourceLabel(target)} · 当前版本`;
   editInstruction.value = "";
+  editReference.value = "";
+  editReference.dispatchEvent(new Event("change"));
+  editUseOriginalRef.checked = false;
+  editUseOriginalRef.disabled = false;
   if (editDialogStatus) editDialogStatus.textContent = "";
   renderEditChips();
   editDialog.hidden = false;
@@ -1240,10 +1274,22 @@ async function submitEditDialog(): Promise<void> {
   const sourceAssetId = editSourceAssetId;
   const label = resourceLabel(target);
   editDialogSubmit.disabled = true;
-  if (editDialogStatus) editDialogStatus.textContent = "正在生成新版本…";
   resourceRegenerating = true;
   try {
-    await runSingleResource(target, { mode: "edit", instruction, sourceAssetId });
+    // 可选：再给模型一张参考图（优先用用户新选的图，否则用本包的原始参考图）
+    let editReferenceAssetId: string | undefined;
+    const extraFile = editReference.files?.[0];
+    if (extraFile) {
+      if (editDialogStatus) editDialogStatus.textContent = "正在上传附加参考图…";
+      editReferenceAssetId = await uploadReferenceFile(extraFile);
+    } else if (editUseOriginalRef.checked && currentUploadId) {
+      editReferenceAssetId = currentUploadId;
+    }
+
+    if (editDialogStatus) {
+      editDialogStatus.textContent = editReferenceAssetId ? "正在生成新版本（含附加参考图）…" : "正在生成新版本…";
+    }
+    await runSingleResource(target, { mode: "edit", instruction, sourceAssetId, editReferenceAssetId });
     closeEditDialog();
     window._ui!.setNotice(`${label}已更新为编辑后的新版本。`, "success");
   } catch (error) {
@@ -1273,6 +1319,12 @@ function mountEditDialog(): void {
   editDialogClose?.addEventListener("click", closeEditDialog);
   editDialogCancel?.addEventListener("click", closeEditDialog);
   editDialogSubmit?.addEventListener("click", () => void submitEditDialog());
+  editReference?.addEventListener("change", () => {
+    const picked = Boolean(editReference.files?.length);
+    // 两者都指同一条 editReferenceAssetId，同时选会让人困惑 —— 选了图就以图为准
+    editUseOriginalRef.disabled = picked;
+    if (picked) editUseOriginalRef.checked = false;
+  });
   editInstruction?.addEventListener("keydown", (event) => {
     if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) {
       event.preventDefault();
@@ -1462,6 +1514,9 @@ function syncStateFromResult(json: any): void {
     if (detail.prompt) currentExtras[`${key}_prompt`] = detail.prompt;
     if (detail.style) currentExtras[`${key}_style`] = detail.style;
     if (detail.sourceAssetId) currentExtras[`${key}_sourceAssetId`] = detail.sourceAssetId;
+    if (detail.editReferenceAssetId) {
+      currentExtras[`${key}_editReferenceAssetId`] = detail.editReferenceAssetId;
+    }
   }
 
   // 还原 ZIP 时把包里的风格 / 标题 / 作者写回表单，后续重建 ZIP 才能保持一致

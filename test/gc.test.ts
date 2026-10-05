@@ -196,6 +196,27 @@ describe("数据目录 GC", () => {
     expect(store.find(sticker)).toBeNull();
   }, 60000);
 
+  it("二次编辑用过的附加参考图算「被引用」，不会被当孤儿回收", async () => {
+    const sticker = await mkAsset(240, 240, 80);
+    const editRef = await mkAsset(512, 512, 85);
+    await createPack(store, dataDir, {
+      presetId: "wechat_stickers",
+      assets: [
+        { label: "001", assetId: sticker, role: "sticker", sourceAssetId: sticker, editReferenceAssetId: editRef }
+      ],
+      metadata: { title: "带编辑参考图" },
+      generation: { source: "ai-generate", providerId: "mock", prompt: "x", styles: ["贴纸"] }
+    });
+    // 都调老，越过安全期
+    ageFile(store.find(editRef)!.filePath, 48);
+    ageFile(store.find(sticker)!.filePath, 48);
+
+    const report = await runGc({ dataDir, dryRun: false, orphanMinAgeMs: 6 * 3600_000 });
+    expect(report.errors).toEqual([]);
+    expect(store.find(editRef)).not.toBeNull();
+    expect(store.find(sticker)).not.toBeNull();
+  }, 60000);
+
   it("删除包后其素材变成孤儿，下一轮 GC 会回收", async () => {
     const sticker = await mkAsset(240, 240, 50);
     const created = await createPack(store, dataDir, {

@@ -71,7 +71,9 @@ export const resourceSchema = z.object({
   target: resourceTargetSchema,
   mode: z.enum(["regenerate", "edit"]).default("regenerate"),
   sourceAssetId: z.string().min(1).optional(),
-  instruction: z.string().min(1).optional()
+  instruction: z.string().min(1).optional(),
+  /** 编辑时额外提供的一张参考图（与待修改的图一起送给模型）。 */
+  editReferenceAssetId: z.string().min(1).optional()
 });
 export type ResourceGenerateRequest = z.infer<typeof resourceSchema>;
 
@@ -96,7 +98,8 @@ export const packFileRoleSchema = z.enum([
 export const packExtraDetailSchema = z.object({
   prompt: z.string().optional(),
   style: z.string().optional(),
-  sourceAssetId: z.string().optional()
+  sourceAssetId: z.string().optional(),
+  editReferenceAssetId: z.string().optional()
 });
 
 /** 生成上下文：随 pack 一起写入 metadata.json，便于 ZIP 再导入后二次编辑。 */
@@ -138,7 +141,9 @@ export const packSchema = z.object({
         prompt: z.string().optional(),
         style: z.string().optional(),
         emotion: z.string().optional(),
-        sourceAssetId: z.string().optional()
+        sourceAssetId: z.string().optional(),
+        /** 二次编辑时额外提供的那张参考图，记录下来便于复现且不会被 GC 回收。 */
+        editReferenceAssetId: z.string().optional()
       })
     )
     .optional(),

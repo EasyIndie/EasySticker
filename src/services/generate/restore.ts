@@ -87,6 +87,7 @@ type DeclaredFile = {
   style?: unknown;
   emotion?: unknown;
   sourceAssetId?: unknown;
+  editReferenceAssetId?: unknown;
 };
 
 type RestoredFile = PackFileMetadata & { role: PackFileRole };
@@ -97,6 +98,7 @@ type StickerPayload = {
   style?: string;
   emotion?: string;
   sourceAssetId?: string;
+  editReferenceAssetId?: string;
 };
 
 async function readFileBuffer(file: NodeJS.ReadableStream): Promise<Buffer> {
@@ -174,7 +176,8 @@ function splitFiles(files: PackFileMetadata[]) {
       ...(f.prompt ? { prompt: f.prompt } : {}),
       ...(f.style ? { style: f.style } : {}),
       ...(f.emotion ? { emotion: f.emotion } : {}),
-      ...(f.sourceAssetId ? { sourceAssetId: f.sourceAssetId } : {})
+      ...(f.sourceAssetId ? { sourceAssetId: f.sourceAssetId } : {}),
+      ...(f.editReferenceAssetId ? { editReferenceAssetId: f.editReferenceAssetId } : {})
     }));
 
   const extraIds: Record<string, string> = {};
@@ -185,7 +188,9 @@ function splitFiles(files: PackFileMetadata[]) {
     extraIds[key] = file.assetId;
     const detail = {
       ...(file.prompt ? { prompt: file.prompt } : {}),
-      ...(file.style ? { style: file.style } : {})
+      ...(file.style ? { style: file.style } : {}),
+      ...(file.sourceAssetId ? { sourceAssetId: file.sourceAssetId } : {}),
+      ...(file.editReferenceAssetId ? { editReferenceAssetId: file.editReferenceAssetId } : {})
     };
     if (Object.keys(detail).length) extraDetails[role] = detail;
   }
@@ -430,7 +435,8 @@ async function restoreFromEntries(
       ...(cleanText(file.prompt) ? { prompt: String(file.prompt) } : {}),
       ...(cleanText(file.style) ? { style: String(file.style) } : {}),
       ...(cleanText(file.emotion) ? { emotion: String(file.emotion) } : {}),
-      ...(cleanText(file.sourceAssetId) ? { sourceAssetId: String(file.sourceAssetId) } : {})
+      ...(cleanText(file.sourceAssetId) ? { sourceAssetId: String(file.sourceAssetId) } : {}),
+      ...(cleanText(file.editReferenceAssetId) ? { editReferenceAssetId: String(file.editReferenceAssetId) } : {})
     });
   }
 
@@ -451,7 +457,9 @@ async function restoreFromEntries(
     extraIds[key] = file.assetId;
     const detail = {
       ...(file.prompt ? { prompt: file.prompt } : {}),
-      ...(file.style ? { style: file.style } : {})
+      ...(file.style ? { style: file.style } : {}),
+      ...(file.sourceAssetId ? { sourceAssetId: file.sourceAssetId } : {}),
+      ...(file.editReferenceAssetId ? { editReferenceAssetId: file.editReferenceAssetId } : {})
     };
     if (Object.keys(detail).length) extraDetails[role] = detail;
   }
@@ -538,7 +546,10 @@ async function restoreFromEntries(
       ...(stickerFiles[i]?.prompt ? { prompt: stickerFiles[i].prompt } : {}),
       ...(stickerFiles[i]?.style ? { style: stickerFiles[i].style } : {}),
       ...(stickerFiles[i]?.emotion ? { emotion: stickerFiles[i].emotion } : {}),
-      ...(stickerFiles[i]?.sourceAssetId ? { sourceAssetId: stickerFiles[i].sourceAssetId } : {})
+      ...(stickerFiles[i]?.sourceAssetId ? { sourceAssetId: stickerFiles[i].sourceAssetId } : {}),
+      ...(stickerFiles[i]?.editReferenceAssetId
+        ? { editReferenceAssetId: stickerFiles[i].editReferenceAssetId }
+        : {})
     })),
     extraIds,
     extraDetails,

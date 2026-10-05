@@ -231,7 +231,11 @@ export async function runGc(options: GcOptions): Promise<GcReport> {
   for (const packId of packIds) {
     const metadata = readPackMetadata(dataDir, packId);
     if (!metadata) continue;
-    for (const file of metadata.files) referencedAssetIds.add(file.assetId);
+    for (const file of metadata.files) {
+      referencedAssetIds.add(file.assetId);
+      // 二次编辑用过的附加参考图也要算「被引用」，否则会被当孤儿素材回收掉
+      if (file.editReferenceAssetId) referencedAssetIds.add(file.editReferenceAssetId);
+    }
   }
 
   // 统计包与素材的当前占用
