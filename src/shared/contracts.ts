@@ -88,7 +88,8 @@ export const packFileRoleSchema = z.enum([
   "icon",
   "banner",
   "reward-guide",
-  "reward-thanks"
+  "reward-thanks",
+  "reference"
 ]);
 
 /** 单张扩展资源的生成细节。 */
@@ -145,6 +146,8 @@ export const packSchema = z.object({
   iconAssetId: z.string().min(1).optional(),
   rewardGuideAssetId: z.string().min(1).optional(),
   rewardThanksAssetId: z.string().min(1).optional(),
+  /** 参考图会一并打进 `source/reference.*`，便于完整还原生成结果。 */
+  referenceAssetId: z.string().min(1).optional(),
   metadata: metadataSchema.optional(),
   generation: packGenerationSchema.optional(),
   extraDetails: z

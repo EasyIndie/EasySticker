@@ -194,7 +194,7 @@ describe("pipeline", () => {
     // metadata.json 需记录每个文件的名称/尺寸，以及生成时的提示词/风格/情绪，
     // 以便导出后重新导入再做二次编辑。
     const packMeta = JSON.parse(json.metadataJson);
-    expect(packMeta.schema).toBe("easysticker-pack@0.2");
+    expect(packMeta.schema).toBe("easysticker-pack@0.3");
     expect(packMeta.generation.source).toBe("ai-generate");
     expect(packMeta.generation.prompt).toBe("test");
     expect(packMeta.generation.styles).toEqual(["flat"]);
@@ -223,7 +223,23 @@ describe("pipeline", () => {
     const byRole = Object.fromEntries(
       packMeta.files.filter((f: any) => f.role !== "sticker").map((f: any) => [f.role, f])
     );
-    expect(Object.keys(byRole).sort()).toEqual(["banner", "cover", "icon", "reward-guide", "reward-thanks"]);
+    expect(Object.keys(byRole).sort()).toEqual([
+      "banner",
+      "cover",
+      "icon",
+      "reference",
+      "reward-guide",
+      "reward-thanks"
+    ]);
+    // 参考图一并收入 source/，让 ZIP 能完整还原这次生成
+    expect(byRole.reference).toMatchObject({
+      assetId: upload.uploadId,
+      filename: "reference.png",
+      zipPath: "source/reference.png",
+      format: "png"
+    });
+    expect(byRole.reference.width).toBeGreaterThan(0);
+    expect(byRole.reference.bytes).toBeGreaterThan(0);
     expect(byRole.cover).toMatchObject({ width: 240, height: 240, zipPath: "meta/cover.png" });
     expect(byRole.icon).toMatchObject({ width: 50, height: 50, zipPath: "meta/icon.png" });
     expect(byRole.banner).toMatchObject({ width: 750, height: 400, zipPath: "meta/banner.png" });
@@ -339,7 +355,9 @@ describe("pipeline", () => {
 
     // 导入模式同样写入生成上下文（来源、目标尺寸）与文件尺寸
     const importMeta = JSON.parse(json.metadataJson);
-    expect(importMeta.schema).toBe("easysticker-pack@0.2");
+    expect(importMeta.schema).toBe("easysticker-pack@0.3");
+    // 导入模式没有参考图
+    expect(importMeta.files.some((f: any) => f.role === "reference")).toBe(false);
     expect(importMeta.generation.source).toBe("import");
     expect(importMeta.generation.targetSize).toEqual({ width: 240, height: 240 });
     const importedStickers = importMeta.files.filter((f: any) => f.role === "sticker");
@@ -600,6 +618,7 @@ describe("pipeline", () => {
     const sticker1 = await mkAsset(240, 240, { r: 200, g: 10, b: 10 });
     const sticker2 = await mkAsset(240, 240, { r: 10, g: 10, b: 200 });
     const coverAsset = await mkAsset(240, 240, { r: 20, g: 20, b: 20 });
+    const referenceAsset = await mkAsset(512, 512, { r: 240, g: 240, b: 240 });
 
     const payload = {
       presetId: "wechat_stickers",
@@ -608,6 +627,7 @@ describe("pipeline", () => {
         { label: "002", assetId: sticker2, role: "sticker" as const, prompt: "第二张提示词", style: "贴纸", emotion: "哭泣" }
       ],
       coverAssetId: coverAsset,
+      referenceAssetId: referenceAsset,
       metadata: { title: "重新打包" },
       generation: {
         source: "ai-generate" as const,
@@ -631,7 +651,7 @@ describe("pipeline", () => {
     // 内容层：metadata.json 写入生成上下文与每个文件的尺寸/提示词/风格
     const { metadataJson } = await buildZipPack(store, dataDir, payload);
     const meta = JSON.parse(metadataJson);
-    expect(meta.schema).toBe("easysticker-pack@0.2");
+    expect(meta.schema).toBe("easysticker-pack@0.3");
     expect(meta.generation).toMatchObject({
       source: "ai-generate",
       providerId: "mock",
@@ -665,6 +685,17 @@ describe("pipeline", () => {
       prompt: "封面提示词",
       style: "贴纸"
     });
+    // 参考图也会被打进 source/（重建 ZIP 时由前端传入 referenceAssetId）
+    const referenceFile = meta.files.find((f: any) => f.role === "reference");
+    expect(referenceFile).toMatchObject({
+      assetId: referenceAsset,
+      filename: "reference.png",
+      zipPath: "source/reference.png",
+      width: 512,
+      height: 512,
+      format: "png"
+    });
+
     // 兼容旧格式
     expect(meta.assets).toHaveLength(2);
   });

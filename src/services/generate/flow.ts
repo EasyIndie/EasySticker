@@ -237,6 +237,7 @@ export async function generateAssetsAndPack(
     bannerAssetId,
     rewardGuideAssetId,
     rewardThanksAssetId,
+    referenceAssetId: req.referenceAssetId,
     metadata: req.metadata,
     generation,
     extraDetails
