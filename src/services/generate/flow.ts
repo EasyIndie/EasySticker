@@ -4,7 +4,7 @@ import { nanoid } from "nanoid";
 import type { AssetStore } from "../../lib/assets";
 import { validateAssetList } from "../platform/validate";
 import { getPlatformPreset, resolveTargetSize } from "../platform/presets";
-import { buildZipPack } from "../pack/service";
+import { buildZipPack, EXTRA_ASSET_KEY_TO_ROLE, type PackFileRole } from "../pack/service";
 import { getAiProvider } from "../ai";
 import { buildMinimalClient } from "../ai/client";
 import { loadPromptConfig, compilePrompt } from "./promptConfig";
@@ -93,6 +93,8 @@ export async function generateAssetsAndPack(
 
   emit?.("start", { count: totalImageCount, styles, referenceMode, presetId });
   const stickerAssetIds: string[] = [];
+  // 逐张记录生成上下文，随 metadata.json 一起落盘，方便后续二次编辑。
+  const stickerMetas: Array<{ label: string; assetId: string; prompt: string; style: string; emotion: string }> = [];
   let currentGenerated = 0;
   const throwIfCanceled = () => {
     if (signal?.aborted || isCanceled?.()) throw createHttpError(499, "生成任务已取消");
@@ -136,11 +138,14 @@ export async function generateAssetsAndPack(
     stickerAssetIds.push(id);
     currentGenerated++;
     const label = String(i + 1).padStart(3, "0");
+    stickerMetas.push({ label, assetId: id, prompt: compiledPrompt, style, emotion });
     emit?.("sticker", {
       label,
       assetId: id,
       url: `/api/assets/${id}`,
       prompt: compiledPrompt,
+      style,
+      emotion,
       current: currentGenerated,
       total: totalImageCount
     });
@@ -179,7 +184,7 @@ export async function generateAssetsAndPack(
           totalImageCount
         }
       )
-    : ({ currentGenerated, failures: {} } as ExtrasResult);
+    : ({ currentGenerated, failures: {}, details: {} } as ExtrasResult);
 
   const coverAssetId = extrasResult.coverAssetId;
   const iconAssetId = extrasResult.iconAssetId;
@@ -188,10 +193,41 @@ export async function generateAssetsAndPack(
   const rewardThanksAssetId = extrasResult.rewardThanksAssetId;
   currentGenerated = extrasResult.currentGenerated;
 
-  const assets = stickerAssetIds.map((assetId, idx) => ({
-    label: String(idx + 1).padStart(3, "0"),
-    assetId
+  const assets = stickerMetas.map((meta) => ({
+    label: meta.label,
+    assetId: meta.assetId,
+    role: "sticker" as const,
+    prompt: meta.prompt,
+    style: meta.style,
+    emotion: meta.emotion
   }));
+
+  const extraDetails: Partial<Record<PackFileRole, { prompt?: string; style?: string }>> = {};
+  for (const [key, detail] of Object.entries(extrasResult.details)) {
+    const role = EXTRA_ASSET_KEY_TO_ROLE[key];
+    if (role) extraDetails[role] = detail;
+  }
+
+  const generation = {
+    source: "ai-generate" as const,
+    providerId,
+    model: promptConfig.ai?.providers?.[providerId]?.model,
+    prompt: req.prompt,
+    negativePrompt: promptConfig.global.negativePrompt,
+    styles,
+    stickerCount: count,
+    emotions,
+    imageSize: { width: imageWidth, height: imageHeight },
+    targetSize: { width: targetW, height: targetH },
+    referenceAssetId: req.referenceAssetId,
+    referenceMode,
+    include: {
+      cover: Boolean(req.includeCover),
+      icon: Boolean(req.includeIcon),
+      banner: Boolean(req.includeBanner),
+      reward: Boolean(req.enableReward)
+    }
+  };
 
   const { packId, downloadFilename, metadataJson } = await buildZipPack(assetStore, dataDir, {
     presetId,
@@ -201,7 +237,9 @@ export async function generateAssetsAndPack(
     bannerAssetId,
     rewardGuideAssetId,
     rewardThanksAssetId,
-    metadata: req.metadata
+    metadata: req.metadata,
+    generation,
+    extraDetails
   });
 
   const result = {
@@ -210,6 +248,7 @@ export async function generateAssetsAndPack(
     downloadFilename,
     stickers: assets.map((a) => ({ ...a, url: `/api/assets/${a.assetId}` })),
     metadataJson,
+    generation,
     meta: {
       count,
       styles,

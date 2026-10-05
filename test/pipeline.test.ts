@@ -6,6 +6,8 @@ import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import * as promptConfigModule from "../src/services/generate/promptConfig";
 import sharp from "sharp";
 import { buildApp } from "../src/app";
+import { buildZipPack } from "../src/services/pack/service";
+import { createFileAssetStore } from "../src/lib/assets";
 
 function multipartPayload(field: string, filename: string, contentType: string, buf: Buffer) {
   const boundary = `----easysticker-${Math.random().toString(16).slice(2)}`;
@@ -188,6 +190,53 @@ describe("pipeline", () => {
     expect(json.metadataJson).toContain('"presetId": "wechat_stickers"');
     expect(json.metadataJson).toContain('"title": "Cute Cat Pack"');
     expect(json.metadataJson).toContain('"rewardMessage": "喜欢这套表情的话，欢迎赞赏支持"');
+
+    // metadata.json 需记录每个文件的名称/尺寸，以及生成时的提示词/风格/情绪，
+    // 以便导出后重新导入再做二次编辑。
+    const packMeta = JSON.parse(json.metadataJson);
+    expect(packMeta.schema).toBe("easysticker-pack@0.2");
+    expect(packMeta.generation.source).toBe("ai-generate");
+    expect(packMeta.generation.prompt).toBe("test");
+    expect(packMeta.generation.styles).toEqual(["flat"]);
+    expect(packMeta.generation.stickerCount).toBe(24);
+    expect(packMeta.generation.imageSize).toEqual({ width: 1024, height: 1024 });
+    expect(packMeta.generation.targetSize).toEqual({ width: 240, height: 240 });
+    expect(packMeta.generation.referenceAssetId).toBe(upload.uploadId);
+    expect(packMeta.generation.include).toEqual({ cover: true, icon: true, banner: true, reward: true });
+    expect(packMeta.generation.negativePrompt).toBeTypeOf("string");
+
+    const stickerFiles = packMeta.files.filter((f: any) => f.role === "sticker");
+    expect(stickerFiles).toHaveLength(24);
+    for (const f of stickerFiles) {
+      expect(f.width).toBe(240);
+      expect(f.height).toBe(240);
+      expect(f.format).toBe("png");
+      expect(f.mimeType).toBe("image/png");
+      expect(f.bytes).toBeGreaterThan(0);
+      expect(f.filename).toMatch(/^\d{3}\.png$/);
+      expect(f.zipPath).toBe(`assets/${f.filename}`);
+      expect(f.prompt).toContain("test");
+      expect(f.style).toBe("flat");
+      expect(typeof f.emotion).toBe("string");
+    }
+
+    const byRole = Object.fromEntries(
+      packMeta.files.filter((f: any) => f.role !== "sticker").map((f: any) => [f.role, f])
+    );
+    expect(Object.keys(byRole).sort()).toEqual(["banner", "cover", "icon", "reward-guide", "reward-thanks"]);
+    expect(byRole.cover).toMatchObject({ width: 240, height: 240, zipPath: "meta/cover.png" });
+    expect(byRole.icon).toMatchObject({ width: 50, height: 50, zipPath: "meta/icon.png" });
+    expect(byRole.banner).toMatchObject({ width: 750, height: 400, zipPath: "meta/banner.png" });
+    expect(byRole["reward-guide"]).toMatchObject({ width: 750, height: 560 });
+    expect(byRole["reward-thanks"]).toMatchObject({ width: 750, height: 560 });
+    // 扩展资源也记录各自使用的提示词/风格
+    for (const role of ["cover", "icon", "banner", "reward-guide", "reward-thanks"]) {
+      expect(byRole[role].prompt).toBeTypeOf("string");
+      expect(byRole[role].style).toBeTypeOf("string");
+    }
+    // 兼容旧格式：assets 仍是最简贴纸清单
+    expect(packMeta.assets).toHaveLength(24);
+
     expect(json.meta.title).toBe("Cute Cat Pack");
     expect(json.meta.author).toBe("EasySticker Studio");
     expect(json.meta.version).toBe("v1.0");
@@ -287,6 +336,15 @@ describe("pipeline", () => {
     expect(json.extras.rewardThanksAssetId).toBeTypeOf("string");
     expect(json.metadataJson).toContain('"title": "Imported Pack"');
     expect(json.metadataJson).toContain('"rewardMessage": "谢谢支持"');
+
+    // 导入模式同样写入生成上下文（来源、目标尺寸）与文件尺寸
+    const importMeta = JSON.parse(json.metadataJson);
+    expect(importMeta.schema).toBe("easysticker-pack@0.2");
+    expect(importMeta.generation.source).toBe("import");
+    expect(importMeta.generation.targetSize).toEqual({ width: 240, height: 240 });
+    const importedStickers = importMeta.files.filter((f: any) => f.role === "sticker");
+    expect(importedStickers).toHaveLength(8);
+    expect(importedStickers[0]).toMatchObject({ width: 240, height: 240, format: "png" });
 
     const assetRes = await app.inject({ method: "GET", url: `/api/assets/${json.stickers[0].assetId}` });
     expect(assetRes.statusCode).toBe(200);
@@ -464,6 +522,9 @@ describe("pipeline", () => {
       expect(thanks.assetId).toBeTypeOf("string");
       expect(thanks.url).toBe(`/api/assets/${thanks.assetId}`);
       expect(thanks.prompt).toContain("感谢打赏");
+      // 返回落盘尺寸与所用风格，供前端写回 pack 的 metadata.json
+      expect(thanks.style).toBe("贴纸");
+      expect(thanks.targetSize).toEqual({ width: 750, height: 560 });
       const thanksAsset = await app.inject({ method: "GET", url: `/api/assets/${thanks.assetId}` });
       expect(thanksAsset.statusCode).toBe(200);
       const thanksMeta = await sharp(thanksAsset.rawPayload).metadata();
@@ -486,6 +547,9 @@ describe("pipeline", () => {
       expect(stickerRes.statusCode).toBe(200);
       const sticker = stickerRes.json();
       expect(sticker.label).toBe("003");
+      expect(sticker.style).toBe("贴纸");
+      expect(typeof sticker.emotion).toBe("string");
+      expect(sticker.targetSize).toEqual({ width: 240, height: 240 });
       const stickerAsset = await app.inject({ method: "GET", url: `/api/assets/${sticker.assetId}` });
       const stickerMeta = await sharp(stickerAsset.rawPayload).metadata();
       expect(stickerMeta.width).toBe(240);
@@ -524,4 +588,84 @@ describe("pipeline", () => {
       vi.restoreAllMocks();
     }
   }, 120000);
+
+  it("重新打包保留 generation / extraDetails 与逐张尺寸、提示词、风格", async () => {
+    const store = createFileAssetStore(dataDir);
+    let seq = 0;
+    const mkAsset = async (w: number, h: number, color: { r: number; g: number; b: number }) => {
+      const id = `repack-${Date.now()}-${seq++}`;
+      store.save(await solidPng(w, h, color), id, "png");
+      return id;
+    };
+    const sticker1 = await mkAsset(240, 240, { r: 200, g: 10, b: 10 });
+    const sticker2 = await mkAsset(240, 240, { r: 10, g: 10, b: 200 });
+    const coverAsset = await mkAsset(240, 240, { r: 20, g: 20, b: 20 });
+
+    const payload = {
+      presetId: "wechat_stickers",
+      assets: [
+        { label: "001", assetId: sticker1, role: "sticker" as const, prompt: "第一张提示词", style: "贴纸", emotion: "开心" },
+        { label: "002", assetId: sticker2, role: "sticker" as const, prompt: "第二张提示词", style: "贴纸", emotion: "哭泣" }
+      ],
+      coverAssetId: coverAsset,
+      metadata: { title: "重新打包" },
+      generation: {
+        source: "ai-generate" as const,
+        providerId: "mock",
+        prompt: "原始提示词",
+        styles: ["贴纸"],
+        targetSize: { width: 240, height: 240 }
+      },
+      extraDetails: { cover: { prompt: "封面提示词", style: "贴纸" } }
+    };
+
+    // 路由层：schema 需接受 generation / extraDetails（前端重建 ZIP 时发送）
+    const routeRes = await app.inject({
+      method: "POST",
+      url: "/api/packs",
+      payload,
+      headers: { "content-type": "application/json" }
+    });
+    expect(routeRes.statusCode).toBe(200);
+
+    // 内容层：metadata.json 写入生成上下文与每个文件的尺寸/提示词/风格
+    const { metadataJson } = await buildZipPack(store, dataDir, payload);
+    const meta = JSON.parse(metadataJson);
+    expect(meta.schema).toBe("easysticker-pack@0.2");
+    expect(meta.generation).toMatchObject({
+      source: "ai-generate",
+      providerId: "mock",
+      prompt: "原始提示词",
+      targetSize: { width: 240, height: 240 }
+    });
+    expect(meta.generation.createdAt).toBeTypeOf("string");
+
+    const stickerFiles = meta.files.filter((f: any) => f.role === "sticker");
+    expect(stickerFiles).toHaveLength(2);
+    expect(stickerFiles[0]).toMatchObject({
+      label: "001",
+      filename: "001.png",
+      zipPath: "assets/001.png",
+      width: 240,
+      height: 240,
+      format: "png",
+      mimeType: "image/png",
+      prompt: "第一张提示词",
+      style: "贴纸",
+      emotion: "开心"
+    });
+    expect(stickerFiles[0].bytes).toBeGreaterThan(0);
+
+    const coverFile = meta.files.find((f: any) => f.role === "cover");
+    expect(coverFile).toMatchObject({
+      filename: "cover.png",
+      zipPath: "meta/cover.png",
+      width: 240,
+      height: 240,
+      prompt: "封面提示词",
+      style: "贴纸"
+    });
+    // 兼容旧格式
+    expect(meta.assets).toHaveLength(2);
+  });
 });

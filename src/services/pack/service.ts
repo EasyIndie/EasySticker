@@ -3,12 +3,61 @@ import path from "node:path";
 import createHttpError from "http-errors";
 import archiver from "archiver";
 import { nanoid } from "nanoid";
+import sharp from "sharp";
 import type { AssetStore } from "../../lib/assets";
+
+/** 包内每个文件的角色。 */
+export type PackFileRole =
+  | "sticker"
+  | "cover"
+  | "icon"
+  | "banner"
+  | "reward-guide"
+  | "reward-thanks";
+
+/** 打包入参中的一张贴纸（可携带它的生成上下文）。 */
+export type PackAssetInput = {
+  label: string;
+  assetId: string;
+  role?: PackFileRole;
+  /** 该张图实际使用的完整提示词（编译后）。 */
+  prompt?: string;
+  /** 该张图使用的风格。 */
+  style?: string;
+  /** 该张图使用的情绪。 */
+  emotion?: string;
+  /** 二次编辑时这张图的来源资源。 */
+  sourceAssetId?: string;
+};
+
+/**
+ * 生成上下文：记录「这套图是怎么生成的」，让 ZIP 重新导入后可以还原提示词、
+ * 风格、尺寸与参考图，从而继续做二次编辑/优化。
+ */
+export type PackGenerationInfo = {
+  source?: "ai-generate" | "import";
+  providerId?: string;
+  model?: string;
+  prompt?: string;
+  negativePrompt?: string;
+  styles?: string[];
+  stickerCount?: number;
+  emotions?: string[];
+  /** 生图模型请求的尺寸。 */
+  imageSize?: { width: number; height: number };
+  /** 落地到平台的最终尺寸（单张贴纸）。 */
+  targetSize?: { width: number; height: number };
+  referenceAssetId?: string | null;
+  referenceMode?: string;
+  /** 本次实际包含的扩展资源。 */
+  include?: { cover?: boolean; icon?: boolean; banner?: boolean; reward?: boolean };
+  createdAt?: string;
+};
 
 export type PackRequest = {
   presetId: string;
   assetIds?: string[];
-  assets?: Array<{ label: string; assetId: string }>;
+  assets?: PackAssetInput[];
   coverAssetId?: string;
   bannerAssetId?: string;
   iconAssetId?: string;
@@ -21,11 +70,34 @@ export type PackRequest = {
     version?: string;
     rewardMessage?: string;
   };
+  generation?: PackGenerationInfo;
+  /** 每张扩展资源（cover/icon/banner/reward-*）的生成细节。 */
+  extraDetails?: Partial<
+    Record<PackFileRole, { prompt?: string; style?: string; sourceAssetId?: string }>
+  >;
 };
 
 export type PackInfo = {
   packId: string;
   downloadFilename: string;
+};
+
+/** metadata.json 中每个文件的完整描述（名称、尺寸、用途、生成信息）。 */
+export type PackFileMetadata = {
+  role: PackFileRole;
+  label?: string;
+  assetId: string;
+  filename: string;
+  zipPath: string;
+  width: number | null;
+  height: number | null;
+  format: string | null;
+  mimeType: string | null;
+  bytes: number | null;
+  prompt?: string;
+  style?: string;
+  emotion?: string;
+  sourceAssetId?: string;
 };
 
 export type PackMetadata = {
@@ -40,6 +112,7 @@ export type PackMetadata = {
     version?: string;
     rewardMessage?: string;
   };
+  generation?: PackGenerationInfo;
   extras: {
     coverAssetId: string | null;
     bannerAssetId: string | null;
@@ -47,7 +120,18 @@ export type PackMetadata = {
     rewardGuideAssetId: string | null;
     rewardThanksAssetId: string | null;
   };
+  /** 包内完整文件清单（贴纸 + 扩展资源），含尺寸与生成信息。 */
+  files: PackFileMetadata[];
+  /** 兼容旧格式：只含贴纸的最简清单。 */
   assets: Array<{ assetId: string; filename: string; zipPath: string }>;
+};
+
+type FileFacts = {
+  width: number | null;
+  height: number | null;
+  format: string | null;
+  mimeType: string | null;
+  bytes: number | null;
 };
 
 function packsDir(dataDir: string) {
@@ -73,31 +157,44 @@ function packInfoPath(dataDir: string, packId: string) {
   return path.join(packsDir(dataDir), `${packId}.json`);
 }
 
-function buildPackMetadata(
-  packId: string,
-  req: PackRequest,
-  entries: Array<{ assetId: string; filename: string; zipPath: string }>,
-  createdAt = new Date().toISOString()
-): PackMetadata {
-  return {
-    schema: "easysticker-pack@0.1",
-    packId,
-    presetId: req.presetId,
-    createdAt,
-    metadata: req.metadata ?? {},
-    extras: {
-      coverAssetId: req.coverAssetId ?? null,
-      bannerAssetId: req.bannerAssetId ?? null,
-      iconAssetId: req.iconAssetId ?? null,
-      rewardGuideAssetId: req.rewardGuideAssetId ?? null,
-      rewardThanksAssetId: req.rewardThanksAssetId ?? null
-    },
-    assets: entries
-  };
+/** 读取图片尺寸/格式/体积；失败时返回 null 而不是中断打包。 */
+async function readFileFacts(filePath: string): Promise<FileFacts> {
+  try {
+    const bytes = fs.statSync(filePath).size;
+    const meta = await sharp(filePath).metadata();
+    const format = meta.format ?? null;
+    return {
+      width: meta.width ?? null,
+      height: meta.height ?? null,
+      format,
+      mimeType: format ? `image/${format === "jpg" ? "jpeg" : format}` : null,
+      bytes
+    };
+  } catch {
+    return { width: null, height: null, format: null, mimeType: null, bytes: null };
+  }
 }
 
+/** 生成侧的 assetId 字段名 → metadata.json 文件 role。 */
+export const EXTRA_ASSET_KEY_TO_ROLE: Record<string, PackFileRole> = {
+  coverAssetId: "cover",
+  iconAssetId: "icon",
+  bannerAssetId: "banner",
+  rewardGuideAssetId: "reward-guide",
+  rewardThanksAssetId: "reward-thanks"
+};
+
+/** 扩展资源在包内的固定命名与顺序。 */
+const EXTRA_FILES: Array<{ role: PackFileRole; field: keyof PackRequest }> = [
+  { role: "cover", field: "coverAssetId" },
+  { role: "banner", field: "bannerAssetId" },
+  { role: "icon", field: "iconAssetId" },
+  { role: "reward-guide", field: "rewardGuideAssetId" },
+  { role: "reward-thanks", field: "rewardThanksAssetId" }
+];
+
 export async function buildZipPack(assetStore: AssetStore, dataDir: string, req: PackRequest) {
-  const normalizedAssets =
+  const normalizedAssets: PackAssetInput[] =
     req.assets && req.assets.length
       ? req.assets
       : (req.assetIds ?? []).map((id, index) => ({
@@ -127,6 +224,7 @@ export async function buildZipPack(assetStore: AssetStore, dataDir: string, req:
   zip.pipe(output);
 
   const entries: Array<{ assetId: string; filename: string; zipPath: string }> = [];
+  const files: PackFileMetadata[] = [];
 
   for (const asset of normalizedAssets) {
     const id = asset.assetId;
@@ -138,40 +236,63 @@ export async function buildZipPack(assetStore: AssetStore, dataDir: string, req:
     const inZip = path.posix.join("assets", name);
     zip.file(file.filePath, { name: inZip });
     entries.push({ assetId: id, filename: name, zipPath: inZip });
+    files.push({
+      role: asset.role ?? "sticker",
+      label: asset.label,
+      assetId: id,
+      filename: name,
+      zipPath: inZip,
+      ...(await readFileFacts(file.filePath)),
+      ...(asset.prompt ? { prompt: asset.prompt } : {}),
+      ...(asset.style ? { style: asset.style } : {}),
+      ...(asset.emotion ? { emotion: asset.emotion } : {}),
+      ...(asset.sourceAssetId ? { sourceAssetId: asset.sourceAssetId } : {})
+    });
   }
 
-  if (req.coverAssetId) {
-    const cover = assetStore.find(req.coverAssetId!);
-    if (!cover) throw createHttpError(404, `asset not found: ${req.coverAssetId}`);
-    const ext = path.extname(cover.filename).toLowerCase();
-    zip.file(cover.filePath, { name: path.posix.join("meta", `cover${ext}`) });
-  }
-  if (req.bannerAssetId) {
-    const banner = assetStore.find(req.bannerAssetId!);
-    if (!banner) throw createHttpError(404, `asset not found: ${req.bannerAssetId}`);
-    const ext = path.extname(banner.filename).toLowerCase();
-    zip.file(banner.filePath, { name: path.posix.join("meta", `banner${ext}`) });
-  }
-  if (req.iconAssetId) {
-    const icon = assetStore.find(req.iconAssetId!);
-    if (!icon) throw createHttpError(404, `asset not found: ${req.iconAssetId}`);
-    const ext = path.extname(icon.filename).toLowerCase();
-    zip.file(icon.filePath, { name: path.posix.join("meta", `icon${ext}`) });
-  }
-  if (req.rewardGuideAssetId) {
-    const rewardGuide = assetStore.find(req.rewardGuideAssetId!);
-    if (!rewardGuide) throw createHttpError(404, `asset not found: ${req.rewardGuideAssetId}`);
-    const ext = path.extname(rewardGuide.filename).toLowerCase();
-    zip.file(rewardGuide.filePath, { name: path.posix.join("meta", `reward-guide${ext}`) });
-  }
-  if (req.rewardThanksAssetId) {
-    const rewardThanks = assetStore.find(req.rewardThanksAssetId!);
-    if (!rewardThanks) throw createHttpError(404, `asset not found: ${req.rewardThanksAssetId}`);
-    const ext = path.extname(rewardThanks.filename).toLowerCase();
-    zip.file(rewardThanks.filePath, { name: path.posix.join("meta", `reward-thanks${ext}`) });
+  for (const extra of EXTRA_FILES) {
+    const assetId = req[extra.field] as string | undefined;
+    if (!assetId) continue;
+    const file = assetStore.find(assetId);
+    if (!file) throw createHttpError(404, `asset not found: ${assetId}`);
+    const ext = path.extname(file.filename).toLowerCase();
+    const name = `${extra.role}${ext}`;
+    const inZip = path.posix.join("meta", name);
+    zip.file(file.filePath, { name: inZip });
+    const detail = req.extraDetails?.[extra.role];
+    files.push({
+      role: extra.role,
+      assetId,
+      filename: name,
+      zipPath: inZip,
+      ...(await readFileFacts(file.filePath)),
+      ...(detail?.prompt ? { prompt: detail.prompt } : {}),
+      ...(detail?.style ? { style: detail.style } : {}),
+      ...(detail?.sourceAssetId ? { sourceAssetId: detail.sourceAssetId } : {})
+    });
   }
 
-  const metadata = buildPackMetadata(packId, req, entries);
+  const createdAt = new Date().toISOString();
+  const metadata: PackMetadata = {
+    schema: "easysticker-pack@0.2",
+    packId,
+    presetId: req.presetId,
+    createdAt,
+    metadata: req.metadata ?? {},
+    ...(req.generation
+      ? { generation: { ...req.generation, createdAt: req.generation.createdAt ?? createdAt } }
+      : {}),
+    extras: {
+      coverAssetId: req.coverAssetId ?? null,
+      bannerAssetId: req.bannerAssetId ?? null,
+      iconAssetId: req.iconAssetId ?? null,
+      rewardGuideAssetId: req.rewardGuideAssetId ?? null,
+      rewardThanksAssetId: req.rewardThanksAssetId ?? null
+    },
+    files,
+    assets: entries
+  };
+
   const metadataJson = JSON.stringify(metadata, null, 2);
   zip.append(metadataJson, { name: "metadata.json" });
 

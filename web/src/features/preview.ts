@@ -64,6 +64,9 @@ export type StickerPreview = {
   url?: string;
   assetId?: string;
   prompt?: string;
+  style?: string;
+  emotion?: string;
+  sourceAssetId?: string;
 };
 
 export type PackResult = {
@@ -72,6 +75,7 @@ export type PackResult = {
   downloadFilename?: string;
   stickers?: StickerPreview[];
   metadataJson?: string;
+  generation?: Record<string, any>;
   meta?: Record<string, any>;
   extras?: Record<string, any>;
 };
@@ -804,8 +808,44 @@ function buildMetadataPreviewText(result: PackResult): string {
   }
 
   const spec = ctx.getSpec();
+  const stickerFiles = Array.isArray(result?.stickers)
+    ? result.stickers.map((item) => {
+        const name = `${item.label ?? "sticker"}.${spec.outputFormat}`;
+        return {
+          role: "sticker" as const,
+          ...(item.label ? { label: item.label } : {}),
+          assetId: item.assetId ?? null,
+          filename: name,
+          zipPath: `assets/${name}`,
+          ...(item.prompt ? { prompt: item.prompt } : {}),
+          ...(item.style ? { style: item.style } : {}),
+          ...(item.emotion ? { emotion: item.emotion } : {})
+        };
+      })
+    : [];
+
+  // 扩展资源固定为 PNG，命名与 ZIP 内一致（meta/<role>.png）。
+  const extraFiles = spec.showsExtraAssets
+    ? (
+        [
+          ["cover", result?.extras?.coverAssetId],
+          ["banner", result?.extras?.bannerAssetId],
+          ["icon", result?.extras?.iconAssetId],
+          ["reward-guide", result?.extras?.rewardGuideAssetId],
+          ["reward-thanks", result?.extras?.rewardThanksAssetId]
+        ] as Array<[string, string | undefined]>
+      )
+        .filter(([, assetId]) => Boolean(assetId))
+        .map(([role, assetId]) => ({
+          role,
+          assetId,
+          filename: `${role}.png`,
+          zipPath: `meta/${role}.png`
+        }))
+    : [];
+
   const metadata = {
-    schema: "easysticker-pack@0.1",
+    schema: "easysticker-pack@0.2",
     packId: result?.packId ?? null,
     presetId: ctx.getPlatformId(),
     createdAt: null,
@@ -816,6 +856,7 @@ function buildMetadataPreviewText(result: PackResult): string {
       ...(spec.showsCopyright && result?.meta?.copyright ? { copyright: result.meta.copyright } : {}),
       ...(spec.showsReward && result?.meta?.rewardMessage ? { rewardMessage: result.meta.rewardMessage } : {})
     },
+    ...(result?.generation ? { generation: result.generation } : {}),
     extras: spec.showsExtraAssets
       ? {
           coverAssetId: result?.extras?.coverAssetId ?? null,
@@ -825,13 +866,8 @@ function buildMetadataPreviewText(result: PackResult): string {
           rewardThanksAssetId: result?.extras?.rewardThanksAssetId ?? null
         }
       : {},
-    assets: Array.isArray(result?.stickers)
-      ? result.stickers.map((item) => ({
-          assetId: item.assetId ?? null,
-          filename: `${item.label ?? "sticker"}.${spec.outputFormat}`,
-          zipPath: `assets/${item.label ?? "sticker"}.${spec.outputFormat}`
-        }))
-      : []
+    files: [...stickerFiles, ...extraFiles],
+    assets: stickerFiles.map((f) => ({ assetId: f.assetId, filename: f.filename, zipPath: f.zipPath }))
   };
 
   return JSON.stringify(metadata, null, 2);
