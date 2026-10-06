@@ -49,7 +49,7 @@ export const PLATFORM_PRESETS: PlatformPreset[] = [
   {
     id: "whatsapp_webp",
     title: "WhatsApp (Sticker WebP)",
-    description: "WhatsApp 贴纸包，512×512 WebP 格式，支持 1–50 张。",
+    description: "WhatsApp 贴纸包，512×512 WebP 格式，支持 1–30 张。",
     allowedExts: [".webp"],
     maxBytes: 100 * 1024,
     requiredSquare: true,
@@ -57,8 +57,9 @@ export const PLATFORM_PRESETS: PlatformPreset[] = [
     exactHeight: 512,
     maxWidth: 512,
     maxHeight: 512,
+    // WhatsApp 单个包最多 30 张（前端 PLATFORM_SPECS 同值）
     minCount: 1,
-    maxCount: 50,
+    maxCount: 30,
     outputFormat: "webp"
   },
   {
