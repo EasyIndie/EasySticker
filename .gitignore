@@ -13,6 +13,9 @@ data
 coverage
 .nyc_output
 
+# pi local dev runtime (PIDs / logs)
+.pi/run/
+
 # TypeScript / tooling caches
 *.tsbuildinfo
 .eslintcache
