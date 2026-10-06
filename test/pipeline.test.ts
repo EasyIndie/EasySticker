@@ -148,6 +148,8 @@ describe("pipeline", () => {
       payload: {
         referenceAssetId: upload.uploadId,
         prompt: "test",
+        promptPreset: "daily",
+        promptCustom: "补充：主角戴一顶帽子",
         stickerCount: 24,
         styles: ["flat"],
         metadata: {
@@ -198,6 +200,9 @@ describe("pipeline", () => {
     expect(packMeta.schema).toBe("easysticker-pack@0.3");
     expect(packMeta.generation.source).toBe("ai-generate");
     expect(packMeta.generation.prompt).toBe("test");
+    // 预设 id 与自定义文本随包导出，供还原生成现场（表单回填）使用
+    expect(packMeta.generation.promptPreset).toBe("daily");
+    expect(packMeta.generation.promptCustom).toBe("补充：主角戴一顶帽子");
     expect(packMeta.generation.styles).toEqual(["flat"]);
     expect(packMeta.generation.stickerCount).toBe(24);
     expect(packMeta.generation.imageSize).toEqual({ width: 1024, height: 1024 });

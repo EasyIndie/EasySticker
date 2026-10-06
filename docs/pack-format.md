@@ -65,6 +65,8 @@ data/packs/<packId>.json         # 包清单（几 KB），含逐张提示词 / 
     "providerId": "seedream",
     "model": "doubao-seedream-5-0-flash-260915",
     "prompt": "一只橘猫在打篮球",
+    "promptPreset": "daily",
+    "promptCustom": "补充：戴一顶帽子",
     "negativePrompt": "文字、水印、二维码、…",
     "styles": ["贴纸"],
     "stickerCount": 8,
@@ -134,10 +136,12 @@ data/packs/<packId>.json         # 包清单（几 KB），含逐张提示词 / 
   - `sourceAssetId`：从哪一张改过来的；
   - `editReferenceAssetId`：用了哪张附加参考图。
 - `role` 取值：`sticker` / `cover` / `icon` / `banner` / `reward-guide` / `reward-thanks` / `reference`。
-- `generation` 记录整套图的生成上下文（提供商、模型、原始提示词、负向提示词、风格、参考图方式与尺寸），
-  `source` 区分 `ai-generate` 与 `import`。
+- `generation` 记录整套图的生成上下文（提供商、模型、原始提示词、**提示词预设 id / 自定义文本**、负向提示词、风格、参考图方式与尺寸），
+  `source` 区分 `ai-generate` 与 `import`。`prompt` 是提交给模型的合并文本；`promptPreset` / `promptCustom`
+  额外记录「预设 + 自定义」的来源，以便还原时**同时回填预设下拉与自定义输入框**
+  （旧包无这两个字段，此时只把 `prompt` 当作自定义文本回填）。
 - 参考图原图存进 `source/reference.*`（不压缩、不改尺寸），配合 `generation` 即可**完整还原**这次生成：
-  参考图 + 原始提示词 + 风格 + 情绪序列 → 可重放出同一套图，也可在此基础上做编辑。
+  参考图 + 提示词预设 + 自定义提示词 + 风格 + 情绪序列 → 可重放出同一套图，也可在此基础上做编辑。
 - `assets` 是旧版最小清单，保留以兼容既有工具；新代码请优先读取 `files`。
 - `owner`（包归属）**只进服务端清单，不进 ZIP 的 `metadata.json`** —— 那个会随表情包分发出去。
 

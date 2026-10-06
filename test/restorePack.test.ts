@@ -78,6 +78,8 @@ describe("导入 ZIP 还原生成现场", () => {
         source: "ai-generate",
         providerId: "seedream",
         prompt: "原始提示词：基于参考图生成一套贴纸",
+        promptPreset: "daily",
+        promptCustom: "自定义补充：主角戴一顶帽子",
         styles: ["贴纸"],
         stickerCount: 3,
         referenceMode: "base64"
@@ -114,6 +116,8 @@ describe("导入 ZIP 还原生成现场", () => {
       source: "ai-generate",
       providerId: "seedream",
       prompt: "原始提示词：基于参考图生成一套贴纸",
+      promptPreset: "daily",
+      promptCustom: "自定义补充：主角戴一顶帽子",
       styles: ["贴纸"],
       stickerCount: 3,
       restoredFrom: originalPackId
@@ -147,6 +151,9 @@ describe("导入 ZIP 还原生成现场", () => {
     const meta = JSON.parse(entries.get("metadata.json")!.toString("utf8"));
     expect(meta.schema).toBe("easysticker-pack@0.3");
     expect(meta.generation.prompt).toBe("原始提示词：基于参考图生成一套贴纸");
+    // 预设 id + 自定义文本随包往返，ZIP 二次导出后仍可完整还原
+    expect(meta.generation.promptPreset).toBe("daily");
+    expect(meta.generation.promptCustom).toBe("自定义补充：主角戴一顶帽子");
     expect(meta.files.filter((f: any) => f.role === "sticker")).toHaveLength(3);
     expect(meta.files.find((f: any) => f.role === "reference").assetId).toBe(restored.meta.referenceAssetId);
 

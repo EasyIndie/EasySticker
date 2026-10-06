@@ -14,6 +14,10 @@ import { generateWechatExtras, type ExtrasResult } from "./extras";
 export type PlatformGenerateRequest = {
   referenceAssetId: string;
   prompt: string;
+  /** 选中的提示词预设 id（可空）；随 metadata.json 一同导出，便于完整还原。 */
+  promptPreset?: string;
+  /** 自定义补充提示词（可空）。 */
+  promptCustom?: string;
   provider?: string;
   styles?: string[];
   stickerCount?: number;
@@ -216,6 +220,8 @@ export async function generateAssetsAndPack(
     providerId,
     model: promptConfig.ai?.providers?.[providerId]?.model,
     prompt: req.prompt,
+    promptPreset: req.promptPreset ?? null,
+    promptCustom: req.promptCustom ?? null,
     negativePrompt: promptConfig.global.negativePrompt,
     styles,
     stickerCount: count,

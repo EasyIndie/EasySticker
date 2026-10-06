@@ -214,6 +214,8 @@
 
 `/api/config` 与 `POST /api/generate/prompt` 都只回传可选项，**不替用户随机选择**。整体替换：在 `prompt-config.json` 写 `promptPresets` 即完全覆盖默认 12 套。
 
+生成时，选中的预设 id 与自定义文本会随包写进 `metadata.json` 的 `generation.promptPreset` / `generation.promptCustom`（风格则在 `generation.styles`），ZIP 还原 / 历史还原时会一并回填到表单。详见 [pack-format.md](pack-format.md)。
+
 ---
 
 ## 5. 环境变量（`.env`）
