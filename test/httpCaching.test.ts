@@ -88,8 +88,22 @@ describe("HTTP 缓存策略", () => {
     const offenders: string[] = [];
     for (const file of htmlFiles) {
       const html = fs.readFileSync(file, "utf-8");
-      for (const m of html.matchAll(/\b(?:src|href)="(\/[^"]+\.(?:js|css|svg|ico|png|webp|woff2))"/g)) {
-        offenders.push(`${path.basename(file)} → ${m[1]}`);
+      for (const m of html.matchAll(/\b(?:src|href)="([^"]+)"/g)) {
+        const ref = m[1];
+        // 跳过外链、锚点、data: 等非本地引用
+        if (/^(?:#|https?:|mailto:|data:|\/\/)/.test(ref)) continue;
+        const clean = ref.split("?")[0];
+        // 只盯静态资源；HTML 互链没有版本号是有意的（页面本身 no-cache）
+        if (!/\.(?:js|css|svg|ico|png|webp|woff2)$/.test(clean)) continue;
+        // 相对路径（如 `admin.css?v=8`）不会被 version-assets 改写，
+        // 却会被服务端当成带版本的 immutable 资源 —— 内容变了老用户也拿不到。
+        if (!/^(?:\/|\.\/)/.test(ref)) {
+          offenders.push(`${path.basename(file)} → ${ref}（相对路径，version-assets 不会改写）`);
+          continue;
+        }
+        if (!/\?v=[0-9a-f]{8}/.test(ref)) {
+          offenders.push(`${path.basename(file)} → ${ref}（缺少内容哈希）`);
+        }
       }
     }
     expect(

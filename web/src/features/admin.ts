@@ -8,6 +8,7 @@
 const API_BASE = "/api";
 import { openMonitoringStream, type MonitoringStream } from "../api/admin-stream";
 import { buildRequestInit } from "../api/request";
+import { renderTimeSeries } from "./charts";
 
 /** 仪表盘实时数据流；只在仪表盘标签页可见时保持连接。 */
 let _dashboardStream: MonitoringStream | null = null;
@@ -53,7 +54,7 @@ function initTheme(): void {
 
 function setStatusMsg(
   el: HTMLElement | null,
-  tone: "success" | "error" | "info",
+  tone: "success" | "error" | "info" | "warning",
   text: string,
   icon: string
 ): void {
@@ -378,29 +379,77 @@ function renderUsers(users: any[]): void {
     const statusBadge = u.disabled ? '<span class="badge badge-disabled">已禁用</span>' : '<span class="badge badge-active">正常</span>';
     const toggleText = u.disabled ? "启用" : "禁用";
     const toggleClass = u.disabled ? "btn-success" : "btn-warning";
-    // 禁用自己会当场把自己锁在后台外面（且没有任何提示），直接不给点。
     const isSelf = u.email === getCurrentUser()?.email;
-    const toggleBtn = isSelf
-      ? '<button class="btn btn-outline btn-sm" disabled title="不能禁用当前登录的账号">' + toggleText + '</button>'
+    // 管理员账号（含当前登录的自己）受后端保护，点禁用/删除只会拿到 400，
+    // 所以这里直接置灰并用 tooltip 说明原因 —— 不隐藏，是为了让人知道这里本可以操作。
+    const lockedReason = isSelf
+      ? "不能操作当前登录的账号"
+      : u.role === "admin"
+        ? "管理员账号受保护，不能被停用或删除"
+        : "";
+    const toggleBtn = lockedReason
+      ? '<button class="btn btn-outline btn-sm" disabled title="' + lockedReason + '">' + toggleText + '</button>'
       : '<button class="btn ' + toggleClass + ' btn-sm" data-action="toggle-user" data-email="' + escHtmlAttr(u.email) + '">' + toggleText + '</button>';
+    const deleteBtn = lockedReason
+      ? '<button class="btn btn-outline btn-sm" disabled title="' + lockedReason + '">删除</button>'
+      : '<button class="btn btn-danger btn-sm" data-action="delete-user" data-email="' + escHtmlAttr(u.email) + '">删除</button>';
     return (
       '<tr class="' + disabled + '">' +
-        '<td>' + escHtml(u.email) + (isSelf ? ' <span class="badge badge-user">当前账号</span>' : '') + '</td>' +
+        '<td>' + escHtml(u.email) + (isSelf ? ' <span class="badge badge-user">当前账号</span>' : '') + (u.role === "admin" && !isSelf ? ' <span class="badge badge-admin" title="管理员账号受保护">受保护</span>' : '') + '</td>' +
         '<td>' + roleBadge + '</td>' +
         '<td>' + formatTime(u.createdAt) + '</td>' +
         '<td>' + (u.lastLogin ? formatTime(u.lastLogin) : "从未") + '</td>' +
         '<td>' + statusBadge + '</td>' +
-        '<td>' + toggleBtn + '</td>' +
-        '<td><button class="btn btn-outline btn-sm" data-action="reset-password" data-email="' + escHtmlAttr(u.email) + '">重置密码</button></td>' +
+        '<td class="row-actions">' + toggleBtn +
+          '<button class="btn btn-outline btn-sm" data-action="reset-password" data-email="' + escHtmlAttr(u.email) + '">重置密码</button>' +
+          deleteBtn +
+        '</td>' +
       '</tr>'
     );
   }).join("");
 
   container.innerHTML =
     '<table class="data-table">' +
-      '<thead><tr><th>邮箱</th><th>角色</th><th>创建时间</th><th>最后登录</th><th>状态</th><th>操作</th><th></th></tr></thead>' +
+      '<thead><tr><th>邮箱</th><th>角色</th><th>创建时间</th><th>最后登录</th><th>状态</th><th>操作</th></tr></thead>' +
       '<tbody>' + rows + '</tbody>' +
     '</table>';
+}
+
+async function deleteUser(email: string): Promise<void> {
+  if (email === getCurrentUser()?.email) {
+    setGlobalAdminNotice("不能删除当前登录的账号。");
+    return;
+  }
+  // 一个输入框同时表达两种强度，避免误触不可恢复的清理。
+  const typed = window.prompt(
+    `删除账号：${email}\n\n` +
+      `· 输入 DELETE      —— 只删除账号，保留其表情包与记录\n` +
+      `· 输入 DELETE ALL  —— 删除账号，并清理全部数据（名下包/素材、用量与监控记录）\n\n` +
+      `此操作不可恢复，请谨慎操作。`
+  );
+  if (typed === null) return;
+  const choice = typed.trim().toUpperCase();
+  const purge = choice === "DELETE ALL";
+  if (choice !== "DELETE" && !purge) return;
+
+  const status = byId("users-status");
+  setStatusMsg(status, "info", "正在删除账号…", ICON_CLOCK);
+  const result = await apiCall<any>(
+    "DELETE",
+    `/admin/users/${encodeURIComponent(email)}?purge=${purge ? "true" : "false"}`
+  );
+  if (!result) {
+    setStatusMsg(status, "error", `删除 ${email} 失败`, ICON_CROSS);
+    return;
+  }
+  const s = result.summary || {};
+  const detail = purge
+    ? `，清理 ${s.packs || 0} 个包、${s.orphanAssets || 0} 张散图` +
+      `${s.reclaimedBytes ? `（回收 ${mbText(s.reclaimedBytes)}）` : ""}` +
+      `、用量 ${s.usageRecords || 0} 条、监控 ${s.monitorRecords || 0} 条`
+    : "（仅删除账号）";
+  setStatusMsg(status, "success", `已删除 ${email}${detail}`, ICON_CHECK);
+  void loadUsers();
 }
 
 async function toggleUser(email: string): Promise<void> {
@@ -424,135 +473,308 @@ function getCurrentUser(): any | null {
 }
 
 // ── Stats ───────────────────────────────────────────────────────────────────
+//
+// 数据来源：/admin/usage（按用户的用量汇总）+ /admin/monitoring/metrics（原始采样）。
+// 与旧版的区别：不再画「最近 100 条原始记录」那种随请求节奏跳动的噪声线，
+// 而是按分钟聚合成吞吐/分位延迟/资源占用，并补齐坐标轴、图例与悬浮读数。
+
 async function loadStats(): Promise<void> {
-  const usage = await apiCall<any>("GET", "/admin/usage");
-  if (usage && usage.summaries) renderStatsOverview(usage.summaries);
-  void loadRequestChart();
-  void loadSystemChart();
+  const from = new Date(Date.now() - 24 * 3600_000).toISOString().slice(0, 10);
+  const [usage, requests, system] = await Promise.all([
+    apiCall<any>("GET", "/admin/usage"),
+    apiCall<any>("GET", `/admin/monitoring/metrics?type=request&from=${from}&limit=2000`),
+    apiCall<any>("GET", `/admin/monitoring/metrics?type=system&from=${from}&limit=2000`)
+  ]);
+  const summaries: any[] = usage?.summaries || [];
+  renderStatsOverview(summaries);
+  renderUserUsage(summaries);
+  renderRequestStats(requests?.records || []);
+  renderSystemStats(system?.records || []);
 }
 
+/**
+ * KPI 概览。
+ * 旧实现把「所有用户的今日生成数」当分母、「所有用户的累计成功数」当分子算成功率，
+ * 两个口径完全不同，得出来的百分比没有意义。这里今日/累计各算各的。
+ */
 function renderStatsOverview(summaries: any[]): void {
-  let totalGenerated = 0;
-  let totalSuccess = 0;
+  let todayGen = 0;
+  let todayOk = 0;
+  let todayFail = 0;
+  let totalGen = 0;
+  let totalOk = 0;
   let totalFail = 0;
+
   for (const s of summaries) {
-    totalGenerated += s.todayGenerated || 0;
-    totalSuccess += s.totalGenerated ? Math.round(s.totalGenerated * (s.successRate || 0)) : 0;
-    totalFail += s.todayGenerated ? s.todayGenerated - Math.round(s.todayGenerated * (s.successRate || 0)) : 0;
+    const tg = s.todayGenerated || 0;
+    const tok = s.todaySuccess ?? roundNum(tg * (s.todaySuccessRate ?? s.successRate ?? 0));
+    const tot = s.totalGenerated || 0;
+    const took = s.totalSuccess ?? roundNum(tot * (s.successRate || 0));
+    todayGen += tg;
+    todayOk += Math.min(tok, tg);
+    todayFail += Math.max(tg - tok, 0);
+    totalGen += tot;
+    totalOk += Math.min(took, tot);
+    totalFail += Math.max(tot - took, 0);
   }
-  const rate = totalGenerated > 0 ? ((totalSuccess / totalGenerated) * 100).toFixed(1) + "%" : "N/A";
-  req("stat-total-generated").textContent = String(totalGenerated);
-  req("stat-total-success").textContent = String(totalSuccess);
-  req("stat-total-fail").textContent = String(totalFail);
-  req("stat-total-rate").textContent = rate;
+
+  const todayRate = todayGen > 0 ? (todayOk / todayGen) * 100 : null;
+  const totalRate = totalGen > 0 ? (totalOk / totalGen) * 100 : null;
+
+  setText("stat-today-generated", fmtInt(todayGen));
+  setText("stat-today-sub", `成功 ${fmtInt(todayOk)} · 失败 ${fmtInt(todayFail)}`);
+  setText("stat-total-generated", fmtInt(totalGen));
+  setText("stat-total-sub", `成功 ${fmtInt(totalOk)} · 失败 ${fmtInt(totalFail)}`);
+  setText("stat-today-rate", todayRate === null ? "—" : todayRate.toFixed(1) + "%");
+  setRateBar("stat-today-rate-bar", todayRate);
+  setText("stat-total-rate", totalRate === null ? "—" : totalRate.toFixed(1) + "%");
+  setRateBar("stat-total-rate-bar", totalRate);
 }
 
-async function loadRequestChart(): Promise<void> {
-  const result = await apiCall<any>("GET", "/admin/monitoring/metrics?type=request&limit=100");
-  if (!result || !result.records || result.records.length === 0) {
-    req("chart-requests-empty").style.display = "block";
-    req("chart-requests").innerHTML = "";
+/** 按用户的用量明细：累计用量、成功数、成功率条。 */
+function renderUserUsage(summaries: any[]): void {
+  const el = byId("stats-users");
+  if (!el) return;
+  if (!summaries.length) {
+    el.innerHTML = '<p class="empty-text">暂无用量数据</p>';
     return;
   }
-  req("chart-requests-empty").style.display = "none";
-  const points = result.records.map((r: any) => ({ ts: new Date(r.timestamp).getTime(), value: r.data.durationMs || 0 }));
-  renderLineChart("chart-requests", points, 700, 200, "#4A90D9");
+  const rows = [...summaries]
+    .sort((a, b) => (b.totalGenerated || 0) - (a.totalGenerated || 0))
+    .map((s) => {
+      const total = s.totalGenerated || 0;
+      const ok = s.totalSuccess ?? roundNum(total * (s.successRate || 0));
+      const rate = total > 0 ? (ok / total) * 100 : null;
+      return (
+        "<tr>" +
+        `<td>${escHtml(s.email)}</td>` +
+        `<td class="num">${fmtInt(s.todayGenerated || 0)}</td>` +
+        `<td class="num">${fmtInt(total)}</td>` +
+        `<td class="num">${fmtInt(ok)}</td>` +
+        `<td>${rateBarCell(rate)}</td>` +
+        "</tr>"
+      );
+    })
+    .join("");
+  el.innerHTML =
+    '<table class="data-table"><thead><tr><th>用户</th><th class="num">今日</th><th class="num">累计</th><th class="num">成功</th><th>成功率</th></tr></thead>' +
+    `<tbody>${rows}</tbody></table>`;
 }
 
-async function loadSystemChart(): Promise<void> {
-  const result = await apiCall<any>("GET", "/admin/monitoring/metrics?type=system&limit=100");
-  if (!result || !result.records || result.records.length === 0) {
-    req("chart-system-empty").style.display = "block";
-    req("chart-system").innerHTML = "";
+function renderRequestStats(records: any[]): void {
+  const reqEl = byId<HTMLElement>("chart-requests");
+  const latEl = byId<HTMLElement>("chart-latency");
+  if (!reqEl || !latEl) return;
+
+  if (!records.length) {
+    reqEl.innerHTML = '<p class="empty-text">近 24 小时暂无请求数据</p>';
+    latEl.innerHTML = '<p class="empty-text">近 24 小时暂无请求数据</p>';
+    renderRouteStats([]);
+    setText("chart-requests-meta", "");
+    setText("chart-latency-meta", "");
     return;
   }
-  req("chart-system-empty").style.display = "none";
-  const records = result.records;
-  const cpuPoints = records.map((r: any) => ({ ts: new Date(r.timestamp).getTime(), value: r.data.cpuPercent || 0 }));
-  const memPoints = records.map((r: any) => ({ ts: new Date(r.timestamp).getTime(), value: r.data.memPercent || 0 }));
-  renderMultiLineChart("chart-system", [cpuPoints, memPoints], 700, 200, ["#4A90D9", "#52C41A"]);
-}
 
-// ── SVG charts ──────────────────────────────────────────────────────────────
-type Point = { ts: number; value: number };
-
-function renderLineChart(svgId: string, dataPoints: Point[], width: number, height: number, color: string): void {
-  if (!dataPoints || dataPoints.length < 2) { req(svgId).innerHTML = ""; return; }
-  const pts = normalizePoints(dataPoints, width, height);
-  const pointsStr = pts.map((p) => p.x + "," + p.y).join(" ");
-  const areaStr = "0," + height + " " + pointsStr + " " + (pts.length > 0 ? pts[pts.length - 1].x + "," + height : "");
-  const svg =
-    '<svg viewBox="0 0 ' + width + ' ' + height + '" width="100%" height="' + height + '">' +
-      '<defs><linearGradient id="area-' + svgId + '" x1="0" y1="0" x2="0" y2="1">' +
-        '<stop offset="0%" stop-color="' + color + '" stop-opacity="0.2"/>' +
-        '<stop offset="100%" stop-color="' + color + '" stop-opacity="0.02"/>' +
-      '</linearGradient></defs>' +
-      '<line x1="0" y1="0" x2="' + width + '" y2="0" stroke="#eee" stroke-width="1"/>' +
-      '<line x1="0" y1="' + (height / 2) + '" x2="' + width + '" y2="' + (height / 2) + '" stroke="#eee" stroke-width="1"/>' +
-      '<line x1="0" y1="' + height + '" x2="' + width + '" y2="' + height + '" stroke="#eee" stroke-width="1"/>' +
-      '<polygon points="' + areaStr + '" fill="url(#area-' + svgId + ')"/>' +
-      '<polyline points="' + pointsStr + '" fill="none" stroke="' + color + '" stroke-width="2" stroke-linejoin="round"/>' +
-      pts.map((p) => '<circle cx="' + p.x + '" cy="' + p.y + '" r="2.5" fill="' + color + '"/>').join(" ") +
-    '</svg>';
-  req(svgId).innerHTML = svg;
-}
-
-function renderMultiLineChart(svgId: string, series: Point[][], width: number, height: number, colors: string[]): void {
-  if (!series || series.length === 0 || series.every((s) => s.length < 2)) { req(svgId).innerHTML = ""; return; }
-  const allTimestamps: number[] = [];
-  const allValues: number[] = [];
-  for (const s of series) for (const p of s) { allTimestamps.push(p.ts); allValues.push(p.value); }
-  if (allTimestamps.length === 0) { req(svgId).innerHTML = ""; return; }
-
-  const minTs = Math.min(...allTimestamps);
-  const maxTs = Math.max(...allTimestamps);
-  const tsRange = maxTs - minTs || 1;
-  const maxVal = Math.max(...allValues, 1);
-
-  const lines: string[] = [];
-  for (let si = 0; si < series.length; si++) {
-    const dataPoints = series[si];
-    if (dataPoints.length < 2) continue;
-    const pts = dataPoints.map((p) => ({
-      x: ((p.ts - minTs) / tsRange) * (width - 40) + 40,
-      y: height - (p.value / maxVal) * (height - 20) - 10
-    }));
-    const pointsStr = pts.map((p) => p.x + "," + p.y).join(" ");
-    const color = colors[si] || "#4A90D9";
-    const areaStr = "40," + height + " " + pointsStr + " " + (pts.length > 0 ? pts[pts.length - 1].x + "," + height : "");
-    lines.push(
-      '<defs><linearGradient id="area-' + svgId + '-' + si + '" x1="0" y1="0" x2="0" y2="1">' +
-        '<stop offset="0%" stop-color="' + color + '" stop-opacity="0.15"/>' +
-        '<stop offset="100%" stop-color="' + color + '" stop-opacity="0.02"/>' +
-      '</linearGradient></defs>' +
-      '<polygon points="' + areaStr + '" fill="url(#area-' + svgId + '-' + si + ')"/>' +
-      '<polyline points="' + pointsStr + '" fill="none" stroke="' + color + '" stroke-width="2" stroke-linejoin="round"/>' +
-      pts.map((p) => '<circle cx="' + p.x + '" cy="' + p.y + '" r="2.5" fill="' + color + '"/>').join(" ")
-    );
+  const buckets = new Map<number, { count: number; errors: number; durations: number[] }>();
+  for (const r of records) {
+    const t = new Date(r.timestamp).getTime();
+    if (!Number.isFinite(t)) continue;
+    const key = Math.floor(t / 60_000) * 60_000;
+    let b = buckets.get(key);
+    if (!b) {
+      b = { count: 0, errors: 0, durations: [] };
+      buckets.set(key, b);
+    }
+    b.count += 1;
+    b.durations.push(Number(r.data?.durationMs) || 0);
+    if ((Number(r.data?.status) || 0) >= 400) b.errors += 1;
   }
+  const keys = [...buckets.keys()].sort((a, b) => a - b);
+  const reqPoints = keys.map((k) => ({ ts: k, value: buckets.get(k)!.count }));
+  const errPoints = keys.map((k) => ({ ts: k, value: buckets.get(k)!.errors }));
+  const p50 = keys.map((k) => ({ ts: k, value: percentile(buckets.get(k)!.durations, 0.5) }));
+  const p95 = keys.map((k) => ({ ts: k, value: percentile(buckets.get(k)!.durations, 0.95) }));
 
-  const svg =
-    '<svg viewBox="0 0 ' + width + ' ' + height + '" width="100%" height="' + height + '">' +
-      '<line x1="40" y1="10" x2="' + width + '" y2="10" stroke="#eee" stroke-width="1"/>' +
-      '<line x1="40" y1="' + (height / 2 + 5) + '" x2="' + width + '" y2="' + (height / 2 + 5) + '" stroke="#eee" stroke-width="1"/>' +
-      '<line x1="40" y1="' + (height - 10) + '" x2="' + width + '" y2="' + (height - 10) + '" stroke="#eee" stroke-width="1"/>' +
-      lines.join("") +
-      '<text x="12" y="' + (height / 2) + '" fill="#999" font-size="11" text-anchor="middle" transform="rotate(-90,12,' + (height / 2) + ')">%</text>' +
-    '</svg>';
-  req(svgId).innerHTML = svg;
+  renderTimeSeries(
+    reqEl,
+    [
+      { name: "请求数", color: "var(--c-chart-1)", points: reqPoints, area: true },
+      { name: "错误数", color: "var(--c-chart-5)", points: errPoints, dashed: true }
+    ],
+    { height: 220, yFormat: (v) => fmtInt(v) }
+  );
+  renderTimeSeries(
+    latEl,
+    [
+      { name: "P50", color: "var(--c-chart-2)", points: p50 },
+      { name: "P95", color: "var(--c-chart-3)", points: p95, area: true }
+    ],
+    { height: 220, yFormat: (v) => `${Math.round(v)} ms` }
+  );
+
+  const peak = reqPoints.reduce((m, p) => Math.max(m, p.value), 0);
+  setText("chart-requests-meta", `${keys.length} 分钟 · 峰值 ${fmtInt(peak)} 请求/分`);
+  const avgP95 = p95.length ? p95.reduce((a, b) => a + b.value, 0) / p95.length : 0;
+  const maxP95 = p95.reduce((m, p) => Math.max(m, p.value), 0);
+  setText("chart-latency-meta", `P95 均值 ${Math.round(avgP95)} ms · 峰值 ${Math.round(maxP95)} ms`);
+
+  renderRouteStats(records);
 }
 
-function normalizePoints(dataPoints: Point[], width: number, height: number): Array<{ x: number; y: number }> {
-  const timestamps = dataPoints.map((p) => p.ts);
-  const values = dataPoints.map((p) => p.value);
-  const minTs = Math.min(...timestamps);
-  const maxTs = Math.max(...timestamps);
-  const tsRange = maxTs - minTs || 1;
-  const maxVal = Math.max(...values, 1);
-  return dataPoints.map((p) => ({
-    x: ((p.ts - minTs) / tsRange) * (width - 40) + 40,
-    y: height - (p.value / maxVal) * (height - 20) - 10
-  }));
+/** 接口热点表：请求数、占比、平均/P95 延迟、错误数。 */
+function renderRouteStats(records: any[]): void {
+  const el = byId("stats-routes");
+  if (!el) return;
+  if (!records.length) {
+    el.innerHTML = '<p class="empty-text">暂无接口数据</p>';
+    return;
+  }
+  const map = new Map<string, { count: number; errors: number; durations: number[] }>();
+  for (const r of records) {
+    const route = `${r.data?.method || ""} ${r.data?.route || ""}`.trim() || "unknown";
+    let m = map.get(route);
+    if (!m) {
+      m = { count: 0, errors: 0, durations: [] };
+      map.set(route, m);
+    }
+    m.count += 1;
+    m.durations.push(Number(r.data?.durationMs) || 0);
+    if ((Number(r.data?.status) || 0) >= 400) m.errors += 1;
+  }
+  const total = records.length || 1;
+  const rows = [...map.entries()]
+    .sort((a, b) => b[1].count - a[1].count)
+    .slice(0, 10)
+    .map(([route, m]) => {
+      const share = (m.count / total) * 100;
+      const avg = m.durations.reduce((a, b) => a + b, 0) / m.count;
+      const p95 = percentile(m.durations, 0.95);
+      return (
+        "<tr>" +
+        `<td class="mono">${escHtml(route)}</td>` +
+        `<td class="num">${fmtInt(m.count)}</td>` +
+        `<td>${shareBarCell(share)}</td>` +
+        `<td class="num">${Math.round(avg)} ms</td>` +
+        `<td class="num${p95 > 1000 ? " warn" : ""}">${Math.round(p95)} ms</td>` +
+        `<td class="num${m.errors > 0 ? " danger" : ""}">${fmtInt(m.errors)}</td>` +
+        "</tr>"
+      );
+    })
+    .join("");
+  el.innerHTML =
+    '<table class="data-table"><thead><tr><th>接口</th><th class="num">请求数</th><th>占比</th><th class="num">平均</th><th class="num">P95</th><th class="num">错误</th></tr></thead>' +
+    `<tbody>${rows}</tbody></table>`;
+}
+
+function renderSystemStats(records: any[]): void {
+  const el = byId<HTMLElement>("chart-system");
+  if (!el) return;
+  if (!records.length) {
+    el.innerHTML = '<p class="empty-text">近 24 小时暂无系统采样</p>';
+    setText("chart-system-meta", "");
+    return;
+  }
+  const buckets = new Map<number, { cpu: number[]; mem: number[] }>();
+  for (const r of records) {
+    const t = new Date(r.timestamp).getTime();
+    if (!Number.isFinite(t)) continue;
+    const key = Math.floor(t / 60_000) * 60_000;
+    let b = buckets.get(key);
+    if (!b) {
+      b = { cpu: [], mem: [] };
+      buckets.set(key, b);
+    }
+    b.cpu.push(Number(r.data?.cpuPercent) || 0);
+    b.mem.push(Number(r.data?.memPercent) || 0);
+  }
+  const keys = [...buckets.keys()].sort((a, b) => a - b);
+  const cpu = keys.map((k) => ({ ts: k, value: avgNum(buckets.get(k)!.cpu) }));
+  const mem = keys.map((k) => ({ ts: k, value: avgNum(buckets.get(k)!.mem) }));
+
+  renderTimeSeries(
+    el,
+    [
+      { name: "CPU", color: "var(--c-chart-1)", points: cpu, area: true },
+      { name: "内存", color: "var(--c-chart-4)", points: mem, area: true }
+    ],
+    { height: 220, yMin: 0, yMax: 100, yFormat: (v) => `${Math.round(v)}%` }
+  );
+
+  const lastCpu = cpu.length ? cpu[cpu.length - 1].value : 0;
+  const lastMem = mem.length ? mem[mem.length - 1].value : 0;
+  const maxCpu = cpu.reduce((m, p) => Math.max(m, p.value), 0);
+  setText(
+    "chart-system-meta",
+    `当前 CPU ${Math.round(lastCpu)}% · 内存 ${Math.round(lastMem)}% · CPU 峰值 ${Math.round(maxCpu)}%`
+  );
+}
+
+// ── 统计页小工具 ─────────────────────────────────────────────
+function setText(id: string, text: string): void {
+  const el = byId(id);
+  if (el) el.textContent = text;
+}
+
+function setRateBar(id: string, rate: number | null): void {
+  const el = byId<HTMLElement>(id);
+  if (!el) return;
+  if (rate === null) {
+    el.style.width = "0%";
+    return;
+  }
+  el.style.width = `${Math.min(Math.max(rate, 0), 100)}%`;
+  el.style.background = rateColor(rate);
+}
+
+function rateColor(rate: number): string {
+  if (rate >= 95) return "var(--c-success)";
+  if (rate >= 85) return "var(--c-warning)";
+  return "var(--c-danger)";
+}
+
+function rateBarCell(rate: number | null): string {
+  if (rate === null) return '<span class="muted">—</span>';
+  const clamped = Math.min(Math.max(rate, 0), 100);
+  return (
+    '<div class="rate-cell">' +
+    `<span class="stat-bar sm"><i style="width:${clamped}%;background:${rateColor(rate)}"></i></span>` +
+    `<span class="rate-num">${rate.toFixed(1)}%</span>` +
+    "</div>"
+  );
+}
+
+function shareBarCell(share: number): string {
+  const clamped = Math.min(Math.max(share, 0), 100);
+  return (
+    '<div class="rate-cell">' +
+    `<span class="stat-bar sm"><i style="width:${clamped}%;background:var(--c-chart-1)"></i></span>` +
+    `<span class="rate-num">${share.toFixed(1)}%</span>` +
+    "</div>"
+  );
+}
+
+/** 分位数（线性插值），用于 P50 / P95。 */
+function percentile(values: number[], p: number): number {
+  if (!values.length) return 0;
+  const sorted = [...values].sort((a, b) => a - b);
+  const idx = (sorted.length - 1) * p;
+  const lo = Math.floor(idx);
+  const hi = Math.ceil(idx);
+  if (lo === hi) return sorted[lo];
+  return sorted[lo] + (sorted[hi] - sorted[lo]) * (idx - lo);
+}
+
+function avgNum(values: number[]): number {
+  if (!values.length) return 0;
+  return values.reduce((a, b) => a + b, 0) / values.length;
+}
+
+function fmtInt(v: number): string {
+  return Math.round(v).toLocaleString("en-US");
+}
+
+function roundNum(v: number): number {
+  return Math.round(v);
 }
 
 // ── Settings ────────────────────────────────────────────────────────────────
@@ -772,10 +994,51 @@ function formatTime(isoStr: string): string {
 const MB = 1024 * 1024;
 const mbText = (bytes: number) => `${(Number(bytes || 0) / MB).toFixed(2)} MB`;
 
-async function loadStorage(): Promise<void> {
-  const data = await apiCall<any>("GET", "/admin/storage");
-  if (!data?.report) return;
-  renderStorage(data.report, data.packs || [], data.retentionDays || 0, data.retentionStartedAt || null);
+async function loadStorage(withFeedback = false): Promise<void> {
+  const status = byId("storage-status");
+  const btn = byId<HTMLButtonElement>("storage-refresh-btn");
+  if (withFeedback) {
+    setStatusMsg(status, "info", "正在体检…", ICON_CLOCK);
+    if (btn) btn.disabled = true;
+  }
+  try {
+    const data = await apiCall<any>("GET", "/admin/storage");
+    if (!data?.report) {
+      // 以前这里直接 return，体检失败时界面毫无反应，这也是「点了没效果」的来源之一。
+      if (withFeedback) setStatusMsg(status, "error", "体检失败，请查看顶部提示后重试", ICON_CROSS);
+      return;
+    }
+    renderStorage(data.report, data.packs || [], data.retentionDays || 0, data.retentionStartedAt || null);
+    if (withFeedback) {
+      setStatusMsg(status, "success", `体检完成 · ${new Date().toLocaleTimeString()}`, ICON_CHECK);
+    }
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+}
+
+function selectedPackIds(): string[] {
+  return Array.from(document.querySelectorAll<HTMLInputElement>("#storage-packs .pack-check:checked"))
+    .map((el) => el.dataset.packId || "")
+    .filter(Boolean);
+}
+
+/** 同步「全选」勾选态、批量按钮与已选计数。表格每次重建后都要调一次。 */
+function updateSelectionUi(): void {
+  const boxes = Array.from(document.querySelectorAll<HTMLInputElement>("#storage-packs .pack-check"));
+  const checked = boxes.filter((box) => box.checked);
+  const selectAll = byId<HTMLInputElement>("storage-select-all");
+  if (selectAll) {
+    selectAll.checked = boxes.length > 0 && checked.length === boxes.length;
+    selectAll.indeterminate = checked.length > 0 && checked.length < boxes.length;
+  }
+  const btn = byId<HTMLButtonElement>("storage-delete-selected-btn");
+  if (btn) {
+    btn.disabled = checked.length === 0;
+    btn.textContent = checked.length ? `删除选中（${checked.length}）` : "删除选中";
+  }
+  const info = byId("storage-selection-info");
+  if (info) info.textContent = checked.length ? `已选 ${checked.length} / ${boxes.length} 个` : "";
 }
 
 function renderStorage(report: any, packs: any[], retentionDays = 0, retentionStartedAt: string | null = null): void {
@@ -817,15 +1080,20 @@ function renderStorage(report: any, packs: any[], retentionDays = 0, retentionSt
   if (!list) return;
   if (!packs.length) {
     list.innerHTML = '<p class="empty-text">还没有任何包</p>';
+    updateSelectionUi();
     return;
   }
   list.innerHTML = `
     <table class="data-table">
-      <thead><tr><th>标题</th><th>贴纸</th><th>占用</th><th>创建时间</th><th>保存方式</th><th></th></tr></thead>
+      <thead><tr>
+        <th class="col-check"><input type="checkbox" id="storage-select-all" aria-label="全选" /></th>
+        <th>标题</th><th>贴纸</th><th>占用</th><th>创建时间</th><th>保存方式</th><th>操作</th>
+      </tr></thead>
       <tbody>
         ${packs
           .map(
             (p) => `<tr>
+          <td class="col-check"><input type="checkbox" class="pack-check" data-pack-id="${escHtml(p.packId)}" aria-label="选择 ${escHtml(p.title || p.packId)}" /></td>
           <td>${escHtml(p.title || p.packId)}</td>
           <td>${p.stickerCount || "-"}</td>
           <td>${mbText(p.bytes)}</td>
@@ -837,28 +1105,105 @@ function renderStorage(report: any, packs: any[], retentionDays = 0, retentionSt
           .join("")}
       </tbody>
     </table>`;
+  updateSelectionUi();
 }
 
 async function runStorageGc(): Promise<void> {
   const status = byId("storage-status");
-  if (status) status.textContent = "正在清理…";
-  const res = await apiCall<any>("POST", "/admin/storage/gc", { dryRun: false });
-  if (!res?.report) {
-    if (status) status.textContent = "清理失败";
-    return;
+  const btn = byId<HTMLButtonElement>("storage-gc-btn");
+  setStatusMsg(status, "info", "正在清理…", ICON_CLOCK);
+  if (btn) btn.disabled = true;
+  try {
+    const res = await apiCall<any>("POST", "/admin/storage/gc", { dryRun: false });
+    if (!res?.report) {
+      setStatusMsg(status, "error", "清理失败，请查看顶部提示后重试", ICON_CROSS);
+      return;
+    }
+    const r = res.report;
+    const reclaimed = (r.compacted?.count ?? 0) + (r.orphanAssets?.count ?? 0) + (r.origBackups?.count ?? 0);
+    if (reclaimed === 0) {
+      // 没有可回收内容时给出明确结论，避免被误认为「点了没反应」。
+      setStatusMsg(status, "info", "没有可回收的内容（无需清理）", ICON_CHECK_CIRCLE);
+    } else {
+      setStatusMsg(
+        status,
+        "success",
+        `已清理：压缩旧包 ${r.compacted.count} 个、孤儿素材 ${r.orphanAssets.count} 个、备份 ${r.origBackups.count} 个，回收 ${mbText(r.reclaimedBytes)}`,
+        ICON_CHECK
+      );
+    }
+    await loadStorage();
+  } finally {
+    if (btn) btn.disabled = false;
   }
-  const r = res.report;
-  if (status) {
-    status.textContent = `已清理：压缩旧包 ${r.compacted.count} 个、孤儿素材 ${r.orphanAssets.count} 个、备份 ${r.origBackups.count} 个，回收 ${mbText(r.reclaimedBytes)}`;
-  }
-  await loadStorage();
 }
 
 async function deletePack(packId: string): Promise<void> {
+  const confirmed = window.confirm(
+    `确定删除包 ${packId}？\n\n会删除它的清单（及残留 ZIP），并回收不再被引用的素材。此操作不可恢复。`
+  );
+  if (!confirmed) return;
+
   const status = byId("storage-status");
+  setStatusMsg(status, "info", "正在删除…", ICON_CLOCK);
   const res = await apiCall<any>("DELETE", `/admin/packs/${encodeURIComponent(packId)}`);
-  if (status) status.textContent = res ? `已删除 ${packId}` : "删除失败";
+  if (!res) {
+    setStatusMsg(status, "error", `删除 ${packId} 失败`, ICON_CROSS);
+    return;
+  }
+  const reclaimed = Number(res.reclaimedBytes) || 0;
+  setStatusMsg(
+    status,
+    "success",
+    `已删除 ${packId}${reclaimed > 0 ? `，回收 ${mbText(reclaimed)}` : ""}`,
+    ICON_CHECK
+  );
   await loadStorage();
+}
+
+async function deleteSelectedPacks(): Promise<void> {
+  const ids = selectedPackIds();
+  if (!ids.length) return;
+
+  const total = document.querySelectorAll("#storage-packs .pack-check").length;
+  const deletingAll = total > 0 && ids.length === total;
+
+  // 选满即等于「删除全部」，要求手动输入关键字，避免误点。
+  if (deletingAll) {
+    const typed = window.prompt(
+      `你正在删除全部 ${ids.length} 个包，此操作不可恢复。\n请输入 DELETE 确认：`
+    );
+    if (typed?.trim().toUpperCase() !== "DELETE") return;
+  } else if (
+    !window.confirm(
+      `确定删除选中的 ${ids.length} 个包？\n\n会删除它们的清单（及残留 ZIP），并回收不再被引用的素材。此操作不可恢复。`
+    )
+  ) {
+    return;
+  }
+
+  const status = byId("storage-status");
+  const btn = byId<HTMLButtonElement>("storage-delete-selected-btn");
+  setStatusMsg(status, "info", `正在删除 ${ids.length} 个包…`, ICON_CLOCK);
+  if (btn) btn.disabled = true;
+  try {
+    const res = await apiCall<any>("POST", "/admin/packs/bulk-delete", { packIds: ids });
+    if (!res?.deleted) {
+      setStatusMsg(status, "error", "批量删除失败，请查看顶部提示后重试", ICON_CROSS);
+      return;
+    }
+    const failed = (res.missing?.length ?? 0) + (res.errors?.length ?? 0);
+    const reclaimed = Number(res.reclaimedBytes) || 0;
+    setStatusMsg(
+      status,
+      failed ? "warning" : "success",
+      `已删除 ${res.deleted.length} 个包${reclaimed > 0 ? `，回收 ${mbText(reclaimed)}` : ""}${failed ? `，${failed} 个未删除` : ""}`,
+      failed ? ICON_WARN : ICON_CHECK
+    );
+    await loadStorage();
+  } finally {
+    if (btn) btn.disabled = false;
+  }
 }
 
 // ── Mount / event binding ───────────────────────────────────────────────────
@@ -873,12 +1218,27 @@ export function mountAdmin(): void {
   req("save-settings-btn").addEventListener("click", () => void saveSettings());
   req("save-rules-btn").addEventListener("click", () => void saveAlertRules());
   req("save-ai-btn").addEventListener("click", () => void saveAiProviders());
-  byId("storage-refresh-btn")?.addEventListener("click", () => void loadStorage());
+  byId("storage-refresh-btn")?.addEventListener("click", () => void loadStorage(true));
   byId("storage-gc-btn")?.addEventListener("click", () => void runStorageGc());
   byId("storage-packs")?.addEventListener("click", (e) => {
     const btn = (e.target as HTMLElement | null)?.closest?.("[data-action='delete-pack']") as HTMLElement | null;
     if (btn?.dataset.packId) void deletePack(btn.dataset.packId);
   });
+  // 全选框与行内复选框都用 change 事件冒泡到容器上委派：
+  // 表格每次 renderStorage 都会重建，直接绑在元素上的监听会丢。
+  byId("storage-packs")?.addEventListener("change", (e) => {
+    const target = e.target as HTMLInputElement | null;
+    if (!target) return;
+    if (target.id === "storage-select-all") {
+      document
+        .querySelectorAll<HTMLInputElement>("#storage-packs .pack-check")
+        .forEach((box) => { box.checked = target.checked; });
+    }
+    if (target.id === "storage-select-all" || target.classList.contains("pack-check")) {
+      updateSelectionUi();
+    }
+  });
+  byId("storage-delete-selected-btn")?.addEventListener("click", () => void deleteSelectedPacks());
   req("ai-providers-container").addEventListener("click", (e) => {
     const target = (e.target as HTMLElement | null)?.closest?.("[data-action]") as HTMLElement | null;
     if (!target) return;
@@ -919,5 +1279,6 @@ export function mountAdmin(): void {
     const email = target.dataset.email || "";
     if (target.dataset.action === "toggle-user") void toggleUser(email);
     else if (target.dataset.action === "reset-password") showResetPassword(email);
+    else if (target.dataset.action === "delete-user") void deleteUser(email);
   });
 }

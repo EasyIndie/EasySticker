@@ -12,7 +12,12 @@ interface UsageRecord {
 interface UsageSummary {
   email: string;
   todayGenerated: number;
+  /** 今日成功次数（后台统计页用来算「今日成功率」，避免再拿全量比率去乘）。 */
+  todaySuccess: number;
+  todaySuccessRate: number;
   totalGenerated: number;
+  /** 累计成功次数。 */
+  totalSuccess: number;
   successRate: number;
   lastActive: string | null;
 }
@@ -115,10 +120,15 @@ export function createUsageStore(dataPath: string, logDir?: string) {
     getSummary(email: string): UsageSummary {
       const total = totalCounts.get(email) || 0;
       const successes = totalSuccess.get(email) || 0;
+      const today = dailyCounts.get(email) || 0;
+      const todayOk = dailySuccess.get(email) || 0;
       return {
         email,
-        todayGenerated: dailyCounts.get(email) || 0,
+        todayGenerated: today,
+        todaySuccess: todayOk,
+        todaySuccessRate: today > 0 ? todayOk / today : 1,
         totalGenerated: total,
+        totalSuccess: successes,
         successRate: total > 0 ? successes / total : 1,
         lastActive: null // could be tracked separately
       };
@@ -137,6 +147,38 @@ export function createUsageStore(dataPath: string, logDir?: string) {
         today = newToday;
         loadDailyLog(today);
       }
+    },
+
+    /** 硬删账号时抹掉该用户的全部用量记录，返回删除条数。 */
+    purgeUser(email: string): number {
+      const target = email.toLowerCase().trim();
+      let removed = 0;
+      try {
+        if (fs.existsSync(logPath)) {
+          for (const file of fs.readdirSync(logPath).filter(f => f.endsWith(".jsonl"))) {
+            const full = path.join(logPath, file);
+            const lines = fs.readFileSync(full, "utf-8").split("\n");
+            const kept: string[] = [];
+            for (const line of lines) {
+              if (!line) continue;
+              try {
+                const rec = JSON.parse(line);
+                if (String(rec.email ?? "").toLowerCase().trim() === target) {
+                  removed += 1;
+                  continue;
+                }
+              } catch { /* 保留无法解析的行，不因清理而丢数据 */ }
+              kept.push(line);
+            }
+            fs.writeFileSync(full, kept.length ? kept.join("\n") + "\n" : "", "utf-8");
+          }
+        }
+      } catch (err) {
+        console.error("Failed to purge usage records:", err);
+      }
+      loadTotalCounts();
+      loadDailyLog(today);
+      return removed;
     }
   };
 }

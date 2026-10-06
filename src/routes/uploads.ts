@@ -5,6 +5,8 @@ import { type FastifyInstance, type FastifyReply, type FastifyRequest } from "fa
 import { nanoid } from "nanoid";
 import createHttpError from "http-errors";
 import { uploadsDir } from "../lib/paths";
+import { recordAssetOwner } from "../lib/assetOwners";
+import { resolveRequester } from "../lib/owner";
 import type { AppDeps } from "../lib/deps";
 
 function extFromMime(mime: string): string {
@@ -29,15 +31,18 @@ export function registerUploadRoutes(deps: AppDeps) {
       const filePath = path.join(dir, `${id}${ext}`);
       await pipeline(part.file, fs.createWriteStream(filePath));
 
+      // 记下归属：硬删账号时据此清理「传了但没进任何包」的散图。
+      // owner 已登录是邮箱，未登录是 client:<id>。
+      const { owner } = await resolveRequester(req);
+      recordAssetOwner(deps.dataDir, id, owner);
+
       // Log usage for authenticated users
-      try {
-        await req.jwtVerify().catch(() => {});
-        const user = req.user as any;
-        if (user && user.email) {
+      if (owner && !owner.startsWith("client:")) {
+        try {
           deps.usageStore.maybeRotate();
-          deps.usageStore.log({ email: user.email, action: "upload", success: true });
-        }
-      } catch {}
+          deps.usageStore.log({ email: owner, action: "upload", success: true });
+        } catch {}
+      }
 
       reply.send({
         uploadId: id,

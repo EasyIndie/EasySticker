@@ -3043,3 +3043,41 @@ textarea:focus-visible {
 .checkbox-row input[type="checkbox"]:disabled + span {
   opacity: 0.5;
 }
+
+/* ── AI 生成参考图 ─────────────────────────────────────────── */
+.reference-generator {
+  margin-top: var(--space-3);
+  padding: var(--space-3);
+  border: 1px dashed var(--color-border-default);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-secondary);
+}
+
+.reference-generator-head {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: var(--space-2);
+}
+
+.reference-generator-row {
+  display: flex;
+  gap: var(--space-2);
+  align-items: stretch;
+}
+
+.reference-generator-row input {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.reference-generator-row button {
+  flex: none;
+  white-space: nowrap;
+}
+
+@media (max-width: 560px) {
+  .reference-generator-row {
+    flex-direction: column;
+  }
+}
