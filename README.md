@@ -7,23 +7,27 @@
 <p align="center">
   <strong>表情包 AI 自动化生产线</strong>
   <br />
-  参考图 → AI 生成/批量导入 → 自动标准化 → 一键下载 ZIP
+  参考图 → AI 生成 / 批量导入 → 自动标准化 → 一键下载 ZIP
 </p>
 
 <p align="center">
   <a href="#-quick-start">快速开始</a> •
+  <a href="#-docker-部署">Docker 部署</a> •
   <a href="#-features">功能</a> •
-  <a href="#-configuration">配置</a> •
   <a href="#-faq">FAQ</a> •
   <a href="docs/README.md">文档</a>
 </p>
 
 <p align="center">
-  <span style="color: #07c160;">⚡ 开源 · 自托管 · Node.js</span>
-  <br />
-  <span>微信 · Telegram · WhatsApp 三平台支持</span>
-  <br />
-  <span>OpenAI 兼容 API · 任意兼容端点</span>
+  <a href="https://github.com/EasyIndie/EasySticker/actions/workflows/ci.yml"><img src="https://github.com/EasyIndie/EasySticker/actions/workflows/ci.yml/badge.svg" alt="CI" /></a>
+  <a href="https://github.com/EasyIndie/EasySticker/pkgs/container/easysticker"><img src="https://img.shields.io/badge/ghcr.io-easysticker-2496ED?logo=docker&logoColor=white" alt="GHCR" /></a>
+  <a href="https://github.com/EasyIndie/EasySticker/releases"><img src="https://img.shields.io/github/v/release/EasyIndie/EasySticker" alt="Release" /></a>
+  <img src="https://img.shields.io/badge/node-%3E%3D20-339933?logo=node.js&logoColor=white" alt="Node" />
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache--2.0-blue" alt="License" /></a>
+</p>
+
+<p align="center">
+  <span>⚡ 开源 · 自托管 · Node.js · 微信 / Telegram / WhatsApp</span>
 </p>
 
 ---
@@ -45,19 +49,21 @@
 <p align="center">
   <img src="docs/screenshots/preview.png" width="880" alt="预览与下载" />
   <br />
-  <sub>预览会逐张标注实际使用的提示词 / 情绪 / 风格，每张都能单独重新生成或编辑图片</sub>
+  <sub>预览逐张标注实际使用的提示词 / 情绪 / 风格，每张都能单独重新生成或编辑</sub>
 </p>
 
 ---
 
 ## 🎯 解决的问题
 
-制作一套表情包需要经历「设计→切图→调尺寸→补封面/图标/横幅→写元数据→校验→打包」一系列繁琐步骤。EasySticker 把整个过程压缩为 **选择平台 → 上传素材 → 配置与生成 → 预览与下载** 几步。
+制作一套表情包要经历「设计 → 切图 → 调尺寸 → 补封面/图标/横幅 → 写元数据 → 校验 → 打包」。
+EasySticker 把整个过程压缩为 **选择平台 → 准备参考图 → 配置与生成 → 预览与下载**。
 
 **核心价值：**
+
 - ⏱ **从 2-3 小时 → 5 分钟**：手工做一套 24 张表情包至少 2 小时，AI 生成只需几分钟
 - 📐 **自动平台合规**：微信 240×240 PNG、Telegram 512×512 PNG、WhatsApp 512×512 WebP，全部自动处理
-- 🧩 **配套资源一站式补齐**：封面图、聊天面板图标、详情页横幅、赞赏引导图/答谢图，一次生成全齐
+- 🧩 **配套资源一站式补齐**：封面图、聊天面板图标、详情页横幅、赞赏引导图/答谢图
 - 🔐 **数据不外传**：自托管部署，参考图和生成结果全部留在你自己的服务器
 
 ---
@@ -65,171 +71,58 @@
 ## ✨ Features
 
 ### 🎨 AI 生成流程
+
 | 功能 | 说明 |
 |------|------|
 | **图生图** | 上传参考人物/角色，AI 基于角色生成多组情绪表情 |
-| **多风格** | 支持扁平插画、贴纸、3D 卡通、日系 Q 版、像素风、国潮风等多种风格（可自定义） |
-| **多 AI 后端** | 统一 OpenAI 兼容接口，可对接 OpenAI 或任意 OpenAI 兼容网关，自由切换 |
+| **AI 生成参考图** | 没有现成图片？用文字描述让 AI 先生成一张参考图（文生图），再据此生成整套 |
+| **多风格** | 扁平插画、贴纸、3D 卡通、日系 Q 版、像素风、国潮风等（可自定义） |
+| **多 AI 后端** | 统一 OpenAI 兼容接口，可对接 OpenAI 或任意兼容网关，自由切换 |
 | **SSE 实时推送** | 生成进度逐张展示，含进度条和百分比 |
-| **智能提示词** | 上传参考图后自动生成推荐提示词 |
+| **智能提示词** | 参考图就绪后自动生成推荐提示词 |
 | **赞赏图** | 可选开启赞赏，自动生成引导图和答谢图 |
-| **单资源重生成** | 某张图失败时点该卡片只重生成这一张（`POST /api/generate/resource`），不重跑整包；单张扩展资源失败不会中断整包 |
-| **单图编辑** | 任一已生成的图都能「编辑图片」：填一句修改要求（如「背景换成浅蓝色」）只重做这一张，其余不动；还可**再附一张参考图**（如「换成这张图里的角色」）。卡片会标「已编辑」，metadata 记录 `sourceAssetId` / `editReferenceAssetId` 便于追溯 |
+| **单资源重生成** | 某张失败时只重生成这一张，不重跑整包 |
+| **单图二次编辑** | 任一已生成的图都能「编辑图片」：填一句要求只重做这一张，还可再附一张参考图 |
 
 ### 📦 导入已有图片
+
 | 功能 | 说明 |
 |------|------|
 | **批量导入** | PNG/JPG/WebP/GIF 批量导入，自动缩放 |
 | **自动补齐** | 补全封面、图标、横幅、赞赏图 |
 | **元数据编辑** | 标题、作者、版权、版本号、赞赏语，完整可编辑 |
-| **导入 ZIP 还原** | 直接导入本站下载的 ZIP 包，读回提示词 / 风格 / 情绪 / 参考图，可接着单张重生成或编辑图片 |
-| **历史一键还原** | 历史记录每条都带「还原现场」，直接按 `packId` 从服务端还原，不用再翻本地文件 |
-| **记录可删除** | 历史记录每条都能删，同时删掉服务端的包，立刻释放磁盘 |
-| **历史跟着账号走** | 已登录用户的历史存在服务端（按邮箱归属），清浏览器缓存也不会丢；未登录用户按设备标识尽力保留 |
+| **导入 ZIP 还原** | 选择本站下载的 ZIP 即可读回提示词 / 风格 / 情绪 / 参考图，接着单张重生成或编辑 |
+| **历史一键还原** | 历史记录每条都带「还原现场」，按 `packId` 从服务端还原 |
+| **历史跟着账号走** | 已登录用户的历史存服务端（按邮箱归属）；未登录按设备标识尽力保留 |
 
 ### 🔧 导出与校验
+
 | 功能 | 说明 |
 |------|------|
 | **多平台校验** | 微信 240×240 PNG、Telegram 512×512 PNG、WhatsApp 512×512 WebP |
-| **结构化 ZIP** | 主表情 + 封面图标 + 横幅 + 参考图 + metadata.json，开箱即提交 |
-| **文件尺寸自动控制** | WebP 质量递减至 ≤100KB，PNG 超限自动 palette 量化 |
+| **结构化 ZIP** | 主表情 + 封面/图标/横幅 + 参考图 + `metadata.json`，开箱即提交 |
+| **尺寸自动控制** | WebP 质量递减至 ≤100KB，PNG 超限自动 palette 量化 |
 | **Swagger API** | 完整的 OpenAPI 文档（`/docs`） |
 
-### 💾 存储与清理
+### 💾 存储与管理后台
 
-**素材只存一份、ZIP 不落盘**，所以磁盘占用约等于素材本身：
+**素材只存一份、ZIP 不落盘**：包只存几 KB 的清单，用户点下载时才现场打包。
+服务端每 6 小时自动巡检（压缩旧包 / 清孤儿素材 / 清备份 / 按保留期删包，保留期默认 30 天且**不追溯既往**）。
+后台提供实时仪表盘（SSE）、统计图表、用户与存储管理，并支持批量删包 + 立即回收素材。
 
-```
-data/uploads/<assetId>.<ext>     # 所有素材，只存一份
-data/packs/<packId>.json         # 包清单（几 KB），含逐张提示词/尺寸/角色
-```
-
-用户点「下载 ZIP」时才按清单现场打包，边打边发。因此单资源重生成、重建 ZIP
-都只是写几 KB 清单，不会把整包图片再复制一遍。
-
-服务端每 6 小时自动巡检一次，做四件「可证明安全」的事：
-
-| 动作 | 说明 |
-|------|------|
-| 压缩旧包 | 早期版本留下的整包 `.zip` 转成清单（素材本来就在 uploads 里） |
-| 清孤儿素材 | 不再被任何包引用的 uploads 文件，且落盘超过 6 小时 |
-| 清 `.orig` 备份 | `repair-pack` 的中间产物 |
-| 按保留期删包 | 默认 **30 天**。**不追溯既往** —— 过期时间按 `max(包创建时间, 策略生效时间) + 30 天` 计算，所以开启当天不会清掉旧数据 |
-
-历史记录区块会显示「服务端保留 N 天」，快过期的条目会标出「剩余 N 天」。
-
-手动体检 / 清理：
-
-```bash
-npm run gc                                        # 只体检，不删任何东西
-npm run gc -- --apply                             # 执行
-npm run gc -- --apply --retention-days 30         # 顺带清掉 30 天前的包
-npm run gc -- --apply --keep-orig                 # 保留 .orig 备份
-```
-
-后台「存储」标签页也能看到占用、待回收量、全部包列表，并手动清理或逐个删除。
-
-### 🧾 metadata.json 结构
-
-导出的 ZIP 内附带 `metadata.json`，记录**每个文件的名称与尺寸**，以及**生成时使用的提示词、要求与风格**，
-便于把包重新导入后继续做编辑 / 优化。
-
-> 在页面的「导入已有图片」步骤里选择这个 ZIP，即可**还原生成现场**：
-> 提示词、风格、情绪、参考图都会被读回，之后可以单张重新生成、导出，或在此基础上改提示词重做。
-
-```json
-{
-  "schema": "easysticker-pack@0.3",
-  "packId": "…",
-  "presetId": "wechat_stickers",
-  "createdAt": "2026-10-05T10:51:49.901Z",
-  "metadata": { "title": "…", "author": "…", "version": "v1.0", "copyright": "…" },
-  "generation": {
-    "source": "ai-generate",
-    "providerId": "seedream",
-    "model": "doubao-seedream-5-0-flash-260915",
-    "prompt": "一只橘猫在打篮球",
-    "negativePrompt": "文字、水印、二维码、…",
-    "styles": ["贴纸"],
-    "stickerCount": 8,
-    "imageSize": { "width": 1024, "height": 1024 },
-    "targetSize": { "width": 240, "height": 240 },
-    "referenceAssetId": "…",
-    "referenceMode": "base64",
-    "include": { "cover": true, "icon": true, "banner": true, "reward": false }
-  },
-  "extras": {
-    "coverAssetId": "…",
-    "bannerAssetId": "…",
-    "iconAssetId": "…",
-    "rewardGuideAssetId": null,
-    "rewardThanksAssetId": null
-  },
-  "files": [
-    {
-      "role": "sticker",
-      "label": "001",
-      "assetId": "…",
-      "filename": "001.png",
-      "zipPath": "assets/001.png",
-      "width": 240,
-      "height": 240,
-      "format": "png",
-      "mimeType": "image/png",
-      "bytes": 23187,
-      "prompt": "一只橘猫在打篮球\n当前表情主题与动作：开心，大笑，挥手打招呼\n风格：贴纸\n画面要求：…",
-      "style": "贴纸",
-      "emotion": "开心，大笑，挥手打招呼"
-    },
-    {
-      "role": "cover",
-      "assetId": "…",
-      "filename": "cover.png",
-      "zipPath": "meta/cover.png",
-      "width": 240,
-      "height": 240,
-      "format": "png",
-      "mimeType": "image/png",
-      "bytes": 21447,
-      "prompt": "…实际使用的完整提示词…",
-      "style": "贴纸"
-    },
-    {
-      "role": "reference",
-      "assetId": "…",
-      "filename": "reference.png",
-      "zipPath": "source/reference.png",
-      "width": 1254,
-      "height": 1254,
-      "format": "png",
-      "mimeType": "image/png",
-      "bytes": 1088103
-    }
-  ],
-  "assets": [{ "assetId": "…", "filename": "001.png", "zipPath": "assets/001.png" }]
-}
-```
-
-- `files` 覆盖包内**所有**图片（贴纸 + 封面 / 图标 / 横幅 / 赞赏图 + 参考图），每条都带 `width`/`height`/`format`/`mimeType`/`bytes`；
-  贴纸与扩展资源还会带上各自实际使用的 `prompt` / `style`（贴纸另有 `emotion`）；
-  编辑过的图会多出 `sourceAssetId`（从哪一张改过来的）与 `editReferenceAssetId`（用了哪张附加参考图）。
-- 参考图会原图存进 `source/reference.*`（不压缩、不改尺寸），配合 `generation` 即可**完整还原**这次生成：
-  参考图 + 原始提示词 + 风格 + 情绪序列 → 可重放出同一套图，也可在此基础上做编辑。
-- `generation` 记录整套图的生成上下文（提供商、模型、原始提示词、负向提示词、风格、参考图方式与尺寸），
-  `source` 区分 `ai-generate` 与 `import`。
-- `assets` 是旧版最小清单，保留以兼容既有工具；新代码请优先读取 `files`。
-
-历史包（旧 schema）可用 `npm run repair-pack` 补全，见下方 FAQ。
+> 详细存储模型、ZIP 结构与 `metadata.json` 字段见 [docs/pack-format.md](docs/pack-format.md)。
 
 ---
 
 ## 🚀 Quick Start
 
 ### 前置条件
-- Node.js 20+
+
+- Node.js 20+（或直接用 [Docker](#-docker-部署)）
 - npm
 
 ### 1. 克隆并安装
+
 ```bash
 git clone https://github.com/EasyIndie/EasySticker.git
 cd EasySticker
@@ -242,13 +135,13 @@ npm install
 cp .env.example .env
 ```
 
-本地开发无需修改（默认 `development` + Mock 模式，可直接跑起来）。要用真实模型，见下一步。
+本地开发无需修改（默认 `development` + Mock 模式，可直接跑起来）。
 
 ### 3. 配置 AI 提供商（可选）
 
-不配置也能以 Mock 模式启动。默认模板 `prompt-config.default.json` 已内置 `mock` / `seedream` / `openai` 三个 provider。
+不配置也能以 Mock 模式启动。默认模板已内置 `mock` / `seedream` / `openai` 三个 provider。
 
-`prompt-config.json` **只需写要覆盖的字段**，其余自动继承默认值（无需复制整份模板）。例如把默认生图切到豆包 Seedream：
+`prompt-config.json` **只需写要覆盖的字段**，其余自动继承默认值：
 
 ```json
 {
@@ -256,7 +149,7 @@ cp .env.example .env
 }
 ```
 
-要自定义模型/端点（如换 Seedream 版本），只覆盖对应 provider 的字段即可（其余字段仍继承默认）：
+要自定义模型/端点，只覆盖对应字段即可：
 
 ```json
 {
@@ -275,45 +168,78 @@ cp .env.example .env
 }
 ```
 
-> 🔐 **推荐**：API Key 不要写进 `prompt-config.json`，而是放到 `.env`（已在 `.gitignore` 中）：
+> 🔐 **推荐**：API Key 不要写进 `prompt-config.json`，而是放到 `.env`：
 > ```bash
 > AI_SEEDREAM_API_KEY=你的火山方舟KEY
 > ```
-> 命名规则 `AI_<PROVIDER_ID>_API_KEY`（provider id 见 `ai.providers` 的键名）。环境变量优先于配置文件，`apiKey` 字段留空即可，密钥不会随配置文件分享/备份/Docker 镜像而泄露。
+> 命名规则 `AI_<PROVIDER_ID>_API_KEY`，环境变量优先于配置文件，密钥不会随配置分享/备份/镜像泄露。
 
-> 💡 **不想手改文件？** 两种懒人方式：
-> - 命令行向导：`npm run setup`（交互式选择模型并填入 Key）
-> - 网页配置：启动后进管理后台 →「设置 → AI 提供商」，可视化编辑并**一键测试连通**
+> 💡 **不想手改文件？** 命令行向导 `npm run setup`，或启动后进管理后台 →「设置 → AI 提供商」可视化编辑并一键测试连通。
 
 ### 4. 启动
-```bash
-# 开发模式（热更新）
-npm run dev
 
-# 生产模式
-npm run prod
+```bash
+npm run dev      # 开发模式（热更新）
+npm run prod     # 生产模式（先 npm run build && npm run web:build）
 ```
 
-打开 http://localhost:3000/ 即可使用。
+打开 http://localhost:3000/ 即可使用。完整开发命令见 [docs/development.md](docs/development.md)。
 
-### Docker 部署
+---
+
+## 🐳 Docker 部署
+
+### 方式 A：免源码（推荐）
+
+直接拉取预构建镜像，**不需要克隆仓库、不需要 Node 环境**：
+
+```bash
+# 1. 准备两个文件
+curl -O https://raw.githubusercontent.com/EasyIndie/EasySticker/main/docker-compose.image.yml
+curl -o .env https://raw.githubusercontent.com/EasyIndie/EasySticker/main/.env.example
+
+# 2. 编辑 .env，至少填写 API_TOKEN / JWT_SECRET / ADMIN_PASSWORD
+
+# 3. 启动
+docker compose -f docker-compose.image.yml up -d
+```
+
+镜像 `ghcr.io/easyindie/easysticker` 同时提供 `linux/amd64` 与 `linux/arm64`，
+含 `:latest` 与版本 tag（如 `:0.2.0`）。数据落在 `./data`。
+
+升级 / 锁版本：
+
+```bash
+# 升级到最新
+docker compose -f docker-compose.image.yml pull && docker compose -f docker-compose.image.yml up -d
+# 锁定版本：在 .env 里设 EASYSTICKER_TAG=0.2.0
+```
+
+不想用 compose，一条 `docker run` 也可以：
+
+```bash
+docker run -d --name easysticker -p 3000:3000 \
+  -v "$PWD/data:/app/data" \
+  -e API_TOKEN=换成随机串 -e JWT_SECRET=换成随机串 -e ADMIN_PASSWORD=你的密码 \
+  ghcr.io/easyindie/easysticker:latest
+```
+
+### 方式 B：从源码构建
+
 ```bash
 docker compose build
 docker compose up -d
 ```
 
-环境变量（可选）：
-- `ADMIN_PASSWORD` — 管理员密码
-- `API_TOKEN` — API 认证密钥
-- `SMTP_HOST` / `SMTP_PORT` / `SMTP_USER` / `SMTP_PASS` / `SMTP_FROM` — 邮件服务
-- `BASE_URL` — 外部访问地址（用于密码重置链接）
-- `PORT` — 服务端口（默认 3000）
+> 面向公网部署时，**不要直接暴露 3000 端口**，请在前面加一层 HTTPS 反向代理（Nginx/Caddy 示例见
+> [docs/operations.md](docs/operations.md)），并设置 `server.security.trustProxy`。
 
 ---
 
 ## 🔧 支持的 AI 提供商
 
-所有真实生图统一走 **OpenAI 兼容 Images API**（`/images/generations`），`baseUrl` 可指向任意兼容端点，通过 `variant` 切换参数画像：
+所有真实生图统一走 **OpenAI 兼容 Images API**（`/images/generations`），`baseUrl` 可指向任意兼容端点，
+通过 `variant` 切换参数画像：
 
 | 提供商 | 类型 / variant | 说明 | 透明底 |
 |--------|---------------|------|--------|
@@ -324,95 +250,71 @@ docker compose up -d
 
 ---
 
-## 🏗 Architecture
+## 🏗 架构
 
 ```
 ┌─────────────┐    ┌──────────────────┐    ┌──────────────────────┐
 │   Web UI    │    │   Fastify API    │    │     AI Provider      │
 │ (TS + Vite) │───▶│  (Node.js + TS)  │────│      (插件化)        │
 │             │    │                  │    │ ┌──────────────────┐ │
-│  · 上传参考图 │    │  · 图生图流水线   │    │ │ OpenAI 兼容 API  │ │
-│  · 编辑信息  │    │  · 表情校验      │    │ │ (任意兼容端点)    │ │
-│  · 预览下载  │    │  · ZIP 打包     │    │ │ Mock (本地模拟)   │ │
-│  · 历史记录  │    │  · SSE 流推送   │    │ └──────────────────┘ │
+│  · 参考图    │    │  · 图生图流水线   │    │ │ OpenAI 兼容 API  │ │
+│  · 预览下载  │    │  · 表情校验      │    │ │ (任意兼容端点)    │ │
+│  · 历史记录  │    │  · ZIP 打包     │    │ │ Mock (本地模拟)   │ │
+│  · 管理后台  │    │  · SSE 流推送   │    │ └──────────────────┘ │
 └─────────────┘    │  · 元数据注入    │    └──────────────────────┘
                    └───────┬──────────┘
                            ▼
                    ┌──────────────┐
                    │  Sharp 图片   │
                    │  处理引擎     │
-                   │  缩放/格式    │
-                   │  转换/量化    │
                    └──────────────┘
 ```
 
-**技术栈：** Node.js 20 · TypeScript · Fastify · Sharp · SSE · Docker
+**技术栈：** Node.js 20 · TypeScript · Fastify · Sharp · SSE · Vite · Docker
+
+设计取舍与模块边界见 [docs/architecture.md](docs/architecture.md)。
 
 ---
 
-## 📋 配置参考
+## 📋 配置
 
-所有系统参数通过 `prompt-config.json` 集中管理。如果该文件不存在，系统自动使用 `prompt-config.default.json` 默认配置。
+所有系统参数通过 `prompt-config.json` 集中管理（不存在则用 `prompt-config.default.json`），
+密钥等敏感项通过 `.env` 覆盖。完整清单见
+[docs/configuration-reference.md](docs/configuration-reference.md)。
 
-### 关键配置
-- **server.port / host**：服务监听地址
-- **server.dataDir**：数据存储目录（默认 `data`）
-- **ai.defaultProvider**：默认 AI 提供商 ID
-- **ai.providers**：各 AI 提供商的 endpoint、apiKey、model 等
-- **ai.imageSize**：生成图的宽高（默认 1024×1024）
-- **emotions**：情绪词列表，按顺序分配给每张贴纸
-- **templates.sticker / templates.extra**：提示词模板
+常用项：
 
-完整配置说明见 **[prompt-config.default.json](prompt-config.default.json)**。
+- `server.port` / `server.host`：监听地址
+- `server.dataDir`：数据目录（默认 `data`）
+- `ai.defaultProvider` / `ai.providers`：默认提供商与端点 / 模型
+- `ai.imageSize`：生成图宽高（默认 1024×1024）
+- `emotions`：情绪词列表，按序分配给每张贴纸
 
 ---
 
 ## 🤔 FAQ
 
 **Q: 需要自己的 AI API Key 吗？**
-A: 不需要也能启动（本地模拟 Mock 模式）。但想要真正的 AI 生成能力，需要配置一个 OpenAI 兼容的 AI 提供商并填入 `apiKey`。
+A: 不需要也能启动（Mock 模式）。想要真正的 AI 生成能力，配置一个 OpenAI 兼容提供商并填入密钥即可。
 
-**Q: 生成的图片存储在哪里？**
-A: 全部在服务器的 `data/` 目录下：`data/uploads/` 是**所有素材**（只存一份），
-`data/packs/` 是每个包的清单（几 KB，含逐张提示词/尺寸/归属）。生成的 ZIP **不落盘**，用户点下载时才现场打包。
-
-磁盘回收是自动的：服务端每 6 小时巡检一次，清孤儿素材与旧备份，并按保留期（默认 30 天）删包。
-也可以手动跑 `npm run gc`（默认只体检不删，`--apply` 才执行）。详见
-[运维手册](docs/operations.md#3-存储清理与回收)。
-
-> ⚠️ 不要用 `find data -mtime +N -delete` 这类按修改时间的清理方式。素材的 mtime 与
-> 「是否仍被包引用」无关，直接删会把包打坏。
+**Q: 生成的图片存在哪里？怎么清理？**
+A: 全部在服务器 `data/` 目录（素材只存一份，ZIP 不落盘）。服务端每 6 小时自动巡检，
+也可手动 `npm run gc`（默认只体检，`--apply` 才执行）。⚠️ **不要**用 `find data -mtime +N -delete`
+这类按 mtime 的清理方式——素材 mtime 与「是否仍被引用」无关，会删坏包。
+详见 [docs/operations.md §3](docs/operations.md#3-存储清理与回收)。
 
 **Q: 支持微信表情开放平台提审吗？**
-A: 输出 ZIP 包完全符合微信表情开放平台的上架规范，可以直接用该 ZIP 提交审核。目前不支持通过 API 自动提审。
+A: 输出 ZIP 完全符合上架规范，可直接提交审核；目前不支持自动提审。
 
 **Q: 支持商用吗？**
-A: 项目采用 Apache-2.0 许可证，可自由使用和修改。注意生成的图片版权取决于底层的 AI 模型服务条款。
+A: 采用 Apache-2.0，可自由使用和修改。生成图片的版权取决于底层 AI 模型服务条款。
 
 **Q: 生图质量不满意怎么办？**
-A: 可调整提示词、更换风格、切换 AI 提供商；也可在 `prompt-config.json` 里调整 provider 的 `quality` / `outputFormat` / `size`（generic 变体）以及全局 `ai.imageSize`。某张图不满意时，直接点击该预览卡片即可单张重生成，无需整包重跑。
+A: 调整提示词 / 风格 / 提供商；某张不满意就点该预览卡片单张重生成或编辑，无需整包重跑。
 
-**Q: 早期导出的 ZIP 里 metadata.json 没有尺寸 / 提示词，能补回来吗？**
-A: 图片本身不会丢（素材都在 `data/uploads/`，旧包的整包 ZIP 与素材内容重复）。用 `npm run repair-pack` 可以把旧包就地升级到最新 schema，用 `sharp` 重新测量每张图的尺寸并补齐角色、`files` 等字段；若 `uploads/` 里还留着参考图，也会一并收进 `source/reference.*`（原包备份成 `<packId>.zip.orig`，下载链接不变）：
-
-```bash
-npm run repair-pack -- <packId>          # 修复单个包
-npm run repair-pack -- --all             # 修复所有旧 schema 的包
-npm run repair-pack -- --all --dry-run   # 只看会改什么，不写盘
-```
-
-生成上下文（原始提示词 / 风格 / 提供商 / 参考图）旧版本没有落盘，只能从浏览器 localStorage 找回：
-
-```js
-// 在项目页面按 F12，console 里执行
-copy(localStorage.getItem('easysticker:last-wechat-pack'))
-```
-
-把结果存成 `context.json` 后带 `--context` 重跑，即可把 `generation` 与逐张 `prompt`/`style`/`emotion` 一并写回：
-
-```bash
-npm run repair-pack -- <packId> --context context.json
-```
+**Q: 早期导出的 ZIP 缺尺寸 / 提示词，能补回来吗？**
+A: 用 `npm run repair-pack` 就地升级到最新 schema。详见
+[docs/operations.md §3.4](docs/operations.md#34-修复历史包)。
 
 ---
 
@@ -420,13 +322,16 @@ npm run repair-pack -- <packId> --context context.json
 
 | 文档 | 内容 |
 |------|------|
-| [docs/architecture.md](docs/architecture.md) | 架构分层、模块边界、已落地的设计决策与取舍 |
+| [docs/README.md](docs/README.md) | 文档索引与维护规则（先看这个） |
+| [docs/development.md](docs/development.md) | 本地开发：环境、命令、目录、测试 |
 | [docs/configuration-reference.md](docs/configuration-reference.md) | 全部配置项、提示词模板、环境变量 |
+| [docs/pack-format.md](docs/pack-format.md) | 存储模型、ZIP 结构、`metadata.json` 字段 |
 | [docs/operations.md](docs/operations.md) | 部署、反向代理、日志、存储回收、备份、压测、排障 |
-| [docs/HANDOFF.md](docs/HANDOFF.md) | 会话交接与下一步计划 |
-| [docs/history.md](docs/history.md) | 改造历史与关键决策（含后来被推翻的做法） |
-| [docs/business/](docs/business/) | 市场调研与运营策略 |
-| [docs/README.md](docs/README.md) | 文档索引与维护规则 |
+| [docs/architecture.md](docs/architecture.md) | 架构分层、模块边界、设计决策与待办 |
+| [docs/history.md](docs/history.md) | 改造历史与关键决策（只读） |
+| [CHANGELOG.md](CHANGELOG.md) | 版本更新日志 |
+| [CONTRIBUTING.md](CONTRIBUTING.md) | 如何贡献 |
+| [SECURITY.md](SECURITY.md) | 安全策略与漏洞上报 |
 
 ---
 

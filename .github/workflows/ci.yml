@@ -1,0 +1,63 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# 同一分支的旧运行自动取消，省资源也避免噪音
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: 类型 / 单测 / 构建 / 文档
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci
+
+      # 文档内部链接与锚点校验（零依赖，见 scripts/check-docs.mjs）
+      - run: npm run docs:check
+
+      # typecheck + web typecheck + 后端构建 + vitest
+      - run: npm test
+
+      # 前端切片构建 + 刷新 HTML 内容哈希
+      - run: npm run web:build
+
+  e2e:
+    name: 端到端（Playwright）
+    runs-on: ubuntu-latest
+    needs: test
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci
+      - run: npm run web:build
+      - run: npx playwright install --with-deps chromium
+
+      # playwright.config.ts 会自动起服务端并放宽限流 / 配额
+      - run: npm run test:e2e
+
+      - name: 上传失败截图 / 报告
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: |
+            playwright-report/
+            test-results/
+          retention-days: 7
