@@ -41,9 +41,9 @@ describe("/generate/prompt 提示词模板预设", () => {
     expect(res.promptPresets).toEqual([]);
   });
 
-  it("默认配置内置 6 套预设，字段完整", () => {
+  it("默认配置内置至少 12 套预设，字段完整且 id 唯一", () => {
     const presets = baseConfig().promptPresets ?? [];
-    expect(presets.length).toBeGreaterThanOrEqual(6);
+    expect(presets.length).toBeGreaterThanOrEqual(12);
     const ids = new Set(presets.map((p) => p.id));
     expect(ids.size).toBe(presets.length);
     for (const preset of presets) {
@@ -51,5 +51,9 @@ describe("/generate/prompt 提示词模板预设", () => {
       expect(preset.name).toBeTruthy();
       expect(preset.prompt.length).toBeGreaterThan(10);
     }
+  });
+
+  it("默认提供至少 12 种风格", () => {
+    expect(baseConfig().global.styles.length).toBeGreaterThanOrEqual(12);
   });
 });
