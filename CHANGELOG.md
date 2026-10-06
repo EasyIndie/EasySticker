@@ -26,6 +26,14 @@
 
 ### 修复
 
+- **非微信平台（Telegram / WhatsApp）导入失效**：导入接口从 `req.body` 取 `presetId`，
+  但 multipart 下 `req.body` 为空，导致总是回落到微信、以「至少 8 张」拒绝。现改为从 URL
+  query 读取（前端已带上 `?presetId=`）。此前这两个平台导入完全不可用。
+- **非微信平台导入放宽输入格式**：Telegram / WhatsApp 此前只允许选择 PNG / WebP；现与微信一致
+  支持 PNG / JPG / WebP / GIF，服务端统一转为平台格式。
+- **WhatsApp 数量上限对齐**：由 50 改为 30（与前端及 WhatsApp 实际限制一致）。
+- **提示词去掉写死的「微信」「240px」**：`global.prompt` 与 `templates.sticker` 改为平台中立，
+  为 Telegram / WhatsApp 生成时不再带微信语境。
 - **导出包完整记录生成现场**：`metadata.json` 的 `generation` 新增 `promptPreset`（预设 id）与
   `promptCustom`（自定义文本），风格仍记在 `generation.styles`；修正此前从 ZIP / 历史还原时**提示词
   不会回填到输入框**、预设下拉也无法恢复的问题。旧包（无这两个字段）仍能还原，只是把 `prompt` 当
