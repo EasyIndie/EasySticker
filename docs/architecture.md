@@ -51,7 +51,7 @@ infrastructure（适配器）  providers 实现、fileAssetStore、mailer、moni
 - **领域层去 Fastify 化**：`findAssetFile` / `createPackArchive` / 生成流水线都不接收 `FastifyInstance`。
 - **单资源重生成**（`generate/single.ts` + `POST /api/generate/resource`）：按 `target`（`sticker.index` 或 `extra.key`）只重做一张，复用同一套提示词模板/尺寸/平台校验。前端「编辑图片」用 `mode="edit"`：以**当前这张图**为参考图，把 `instruction` 以「编辑要求：…」追加进提示词，只重做这一张，并把 `sourceAssetId` 写回 metadata 供追溯；还可再附一张参考图（`editReferenceAssetId`，同时记入 metadata 并纳入 GC 引用，避免刚上传就被当孤儿回收）。多图经 `AiGenerateInput.additionalReferenceImages` 下传：generic 变体把 `image` 传数组（实测豆包 Seedream 接受），gpt-image 变体用 `image[]`；**只有一张时不走数组**，单图路径行为不变。
 - **扩展资源单张失败不中断整包**：`extras.ts` 记录 `failures` 并照常发带 `error` 的 `extra` 事件，前端把该卡片渲染成可点击重试的错误态。
-- **多套提示词模板 + 情绪打乱**（`flow.ts` + `prompt-config.default.json`）：`promptPresets` 内置 6 套基础提示词，`POST /api/generate/prompt` 每次**随机**推荐一套并回传全部预设，前端用胶囊让用户一键套用 —— 解决「每次上传参考图都拿到同一段推荐词、连续多次生成结果雷同」。同时每次生成对 `emotions` 做 Fisher–Yates **洗牌**后再逐张分配，即使复用同一套提示词，情绪排布也不同（`generation.emotions` 仍记录原始全集，metadata 仍逐张记录实际情绪）。
+- **多套提示词预设，与自定义互补**（`flow.ts` + `prompt-config.default.json`）：`promptPresets` 内置 6 套基础提示词，`/api/config` 与 `POST /api/generate/prompt` 只回传可选项（**不替用户随机选**）；前端用「提示词预设」下拉 + 「提示词自定义」textarea，最终提示词 = 预设 + 自定义（可只填其一），提交前拼接 —— 解决「只能拿到同一段默认提示词、连续多次生成结果雷同」。情绪仍按顺序逐张分配，不做随机。
 - **素材查找 O(1)**：`lib/assets.ts` 按已知扩展名 `statSync` 探测，而不是 `readdirSync` 扫目录。后者是 O(目录大小) 的**同步** I/O，挂在 `GET /api/assets/:id`（结果页每张图一个请求）和打包（每包约 30 次）热路径上；实测 333 文件时 0.699ms → 0.023ms，且不随规模退化。同时用 `ASSET_ID_PATTERN` 白名单挡路径穿越。
 - **包只存清单，ZIP 按需现打**：`packs/<packId>.json` 存 `PackManifest`（逐张提示词/尺寸/角色），下载时 `createPackArchive` 现场打包、边打边发。消除了「uploads 一份 + ZIP 一份」的双倍占用，也让「单资源重生成 → 重建整包」从搬几 MB 变成写几 KB。旧包（仅 `.zip`）仍可直接流式下载，无需迁移。
 - **包归属（owner）**：清单记录 `owner`（已登录 = 邮箱，未登录 = 前端持久化的 `x-client-id`）。注意它与**匿名日配额**用的是不同键：配额按 `ip:<req.ip>` 防刷，归属按 `client:<id>` 让未登录用户找回历史，见 `lib/owner.ts`。`GET /api/packs` 只返回请求者自己的包 —— 无归属的旧包不出现在任何人列表里，避免列出别人的包。`owner` **只进清单，不进 ZIP 的 `metadata.json`**（那个会随表情包分发出去）。删包/还原要求 owner 匹配或管理员。
@@ -102,7 +102,7 @@ infrastructure（适配器）  providers 实现、fileAssetStore、mailer、moni
 - **统计页用独立图表模块**（`web/src/features/charts.ts`）：零依赖 SVG，按容器真实宽度绘制 +
   `ResizeObserver` 自适应（不再用 `preserveAspectRatio="none"` 拉伸），带坐标轴/网格/图例/悬浮读数；
   曲线用单调三次插值避免过冲。颜色走 CSS 变量，自动适配亮/暗主题。
-- **AI 提供商选择器放在第 1 步**（`#aiProviderField`）：参考图支持 AI 生成后，提供商同时决定「参考图」和「整包表情」的生成，而它原来在第 3 步「配置与信息」里，用户在第 2 步点「AI 生成参考图」时看不到用的哪个模型。现在第 1 步依次是「创建方式 → AI 提供商（仅 AI 模式）→ 目标平台」，选 AI 模式即可确认提供商；「配置与信息」只剩提示词/风格/数量/元数据。提示词模板胶囊（`#promptPresetOptions`）复用风格胶囊的 `.style-chip` 样式，手动改提示词会自动取消高亮。
+- **AI 提供商选择器放在第 1 步**（`#aiProviderField`）：参考图支持 AI 生成后，提供商同时决定「参考图」和「整包表情」的生成，而它原来在第 3 步「配置与信息」里，用户在第 2 步点「AI 生成参考图」时看不到用的哪个模型。现在第 1 步依次是「创建方式 → AI 提供商（仅 AI 模式）→ 目标平台」，选 AI 模式即可确认提供商；「配置与信息」只剩 提示词预设/自定义、风格、数量、元数据。提示词不再「上传后自动填一整套」，而是「提示词预设（下拉，可留空）+ 提示词自定义」，两者拼接后提交。
 
 ### 3.4 实时通信（SSE，两处）
 

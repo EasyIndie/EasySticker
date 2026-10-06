@@ -131,7 +131,8 @@ const wechatAiCountInc = byId<HTMLButtonElement>("wechatAiCountInc");
 const wechatAiProvider = byId<HTMLSelectElement>("wechatAiProvider");
 const aiProviderField = byId("aiProviderField");
 const promptPresetField = byId("promptPresetField");
-const promptPresetOptions = byId("promptPresetOptions");
+const wechatAiPromptPreset = byId<HTMLSelectElement>("wechatAiPromptPreset");
+const promptPresetPreview = byId("promptPresetPreview");
 const promptHint = req("promptHint");
 const generateErrorSummary = byId("generateErrorSummary");
 const generateErrorList = byId("generateErrorList");
@@ -158,9 +159,9 @@ let currentRewardEnabled = false;
 let currentRewardMessage = "";
 let currentAiProvider = "mock";
 let currentCreationMode = "ai";
-// 多套提示词模板：来自 /api/generate/prompt，选中项高亮，编辑提示词后取消高亮。
+// 多套提示词预设：与「提示词自定义」互补，最终提示词 = 预设 + 自定义。
 let promptPresets: Array<{ id: string; name: string; prompt: string }> = [];
-let selectedPresetId: string | null = null;
+let currentPresetId = "";
 let hasGenerationAttempted = false;
 let lastPackResult: any = null;
 // 当前预览中的贴纸与扩展资源（含 *_prompt），供单资源重生成时更新。
@@ -184,7 +185,7 @@ type FieldA11yConfig = {
 };
 
 const FIELD_A11Y_CONFIGS: Record<string, FieldA11yConfig> = {
-  prompt: { key: "prompt", target: wechatAiPrompt, label: "提示词", errorId: "wechatAiPromptError", baseDescribedBy: ["promptHint"] },
+  prompt: { key: "prompt", target: wechatAiPrompt, label: "提示词自定义", errorId: "wechatAiPromptError", baseDescribedBy: ["promptHint"] },
   title: { key: "title", target: wechatAiTitle, label: "表情包标题", errorId: "wechatAiTitleError", baseDescribedBy: ["wechatAiTitleHint"] },
   author: { key: "author", target: wechatAiAuthor, label: "作者名", errorId: "wechatAiAuthorError", baseDescribedBy: ["wechatAiAuthorHint"] },
   count: { key: "count", target: wechatAiCount, label: "贴纸数量", errorId: "wechatAiCountError", baseDescribedBy: ["wechatAiCountHint"] },
@@ -369,7 +370,7 @@ function clearGenerateValidation(): void {
 }
 function validateGenerateInputs(): boolean {
   clearGenerateValidation();
-  const prompt = wechatAiPrompt.value.trim();
+  const prompt = getEffectivePrompt();
   const title = wechatAiTitle.value.trim();
   const author = wechatAiAuthor.value.trim();
   const rewardMessage = wechatAiRewardMessage.value.trim();
@@ -377,7 +378,7 @@ function validateGenerateInputs(): boolean {
   const errors: Array<{ target: HTMLElement; message: string }> = [];
   const spec = PLATFORM_SPECS[currentPlatform];
 
-  if (!prompt) errors.push({ target: wechatAiPrompt, message: "请先填写提示词。" });
+  if (!prompt) errors.push({ target: wechatAiPrompt, message: "请选择提示词预设或填写自定义提示词。" });
   if (spec.showsTitle && !title) errors.push({ target: wechatAiTitle, message: "请填写表情包标题。" });
   if (spec.showsAuthor && !author) errors.push({ target: wechatAiAuthor, message: "请填写作者名。" });
   if (!Number.isInteger(stickerCount) || stickerCount < MIN_STICKER_COUNT || stickerCount > MAX_STICKER_COUNT) {
@@ -403,8 +404,8 @@ function setPromptHint(styles: string[] = []): void {
     extraText = currentRewardEnabled ? "，并附带赞赏引导图和感谢图" : "，并自动补齐封面、图标和横幅";
   }
   promptHint.textContent = Array.isArray(styles) && styles.length
-    ? `已加载推荐风格：${styles.join("、")}。建议在提示词中补充主体、情绪、动作和背景限制。当前生成 ${count} 张表情${extraText}。`
-    : `建议在提示词中补充主体、情绪、动作和背景限制。当前生成 ${count} 张表情${extraText}。`;
+    ? `已加载推荐风格：${styles.join("、")}。最终提示词 = 预设 + 自定义，可只填其一。当前生成 ${count} 张表情${extraText}。`
+    : `最终提示词 = 预设 + 自定义，可只填其一。当前生成 ${count} 张表情${extraText}。`;
 }
 function syncOriginalPreviewSlot(): void {
   const hasSrc = Boolean(originalPreview?.getAttribute("src"));
@@ -453,30 +454,40 @@ function renderStyleOptions(styles: string[] = DEFAULT_STYLE_OPTIONS): void {
     wechatAiStyleOptions.appendChild(button);
   }
 }
-function renderPromptPresets(): void {
+function populatePromptPresets(): void {
   if (promptPresetField) promptPresetField.hidden = promptPresets.length === 0;
-  if (!promptPresetOptions) return;
-  promptPresetOptions.innerHTML = "";
+  if (!wechatAiPromptPreset) return;
+  const previous = currentPresetId;
+  wechatAiPromptPreset.innerHTML = "";
+  const none = document.createElement("option");
+  none.value = "";
+  none.textContent = "不使用预设（纯自定义）";
+  wechatAiPromptPreset.appendChild(none);
   for (const preset of promptPresets) {
-    const button = document.createElement("button");
-    button.type = "button";
-    button.className = "style-chip";
-    button.dataset.selected = preset.id === selectedPresetId ? "true" : "false";
-    button.setAttribute("aria-pressed", preset.id === selectedPresetId ? "true" : "false");
-    button.textContent = preset.name;
-    button.addEventListener("click", () => applyPromptPreset(preset.id));
-    promptPresetOptions.appendChild(button);
+    const option = document.createElement("option");
+    option.value = preset.id;
+    option.textContent = preset.name;
+    wechatAiPromptPreset.appendChild(option);
   }
+  currentPresetId = promptPresets.some((p) => p.id === previous) ? previous : "";
+  wechatAiPromptPreset.value = currentPresetId;
+  syncPromptPresetPreview();
 }
-function applyPromptPreset(id: string): void {
-  const preset = promptPresets.find((item) => item.id === id);
-  if (!preset) return;
-  selectedPresetId = id;
-  wechatAiPrompt.value = preset.prompt;
-  setFieldInvalid(wechatAiPrompt, false);
-  renderPromptPresets();
-  setPromptHint(currentStyles);
-  syncRegenerateButton();
+function syncPromptPresetPreview(): void {
+  if (!promptPresetPreview) return;
+  const preset = promptPresets.find((p) => p.id === currentPresetId);
+  promptPresetPreview.hidden = !preset;
+  promptPresetPreview.textContent = preset
+    ? `已选「${preset.name}」：${preset.prompt}`
+    : "";
+}
+/** 提交给后端的基础提示词：预设（基础）+ 自定义（补充），可只填其一。 */
+function getEffectivePrompt(): string {
+  const custom = wechatAiPrompt.value.trim();
+  const preset = promptPresets.find((p) => p.id === currentPresetId);
+  const base = preset ? preset.prompt.trim() : "";
+  if (base && custom) return `${base}\n${custom}`;
+  return base || custom;
 }
 
 // ── Persistence ─────────────────────────────────────────────────────────────
@@ -567,6 +578,7 @@ function persistLastPackPayload(result: any): void {
     savedAt: new Date().toISOString(),
     uploadId: currentUploadId,
     prompt: wechatAiPrompt.value,
+    promptPreset: currentPresetId,
     provider: currentAiProvider,
     title: wechatAiTitle.value,
     author: wechatAiAuthor.value,
@@ -632,6 +644,9 @@ function restorePersistedPackResult(): boolean {
     syncStateFromResult(restored.result);
 
     wechatAiPrompt.value = restored.prompt;
+    currentPresetId = typeof restored.promptPreset === "string" ? restored.promptPreset : "";
+    if (wechatAiPromptPreset) wechatAiPromptPreset.value = currentPresetId;
+    syncPromptPresetPreview();
     if (wechatAiProvider) wechatAiProvider.value = currentAiProvider;
     wechatAiTitle.value = restored.title;
     wechatAiAuthor.value = restored.author;
@@ -1004,7 +1019,7 @@ function toggleHistory(expand?: boolean): void {
 
 // ── Buttons / creation mode ─────────────────────────────────────────────────
 function canRegenerate(): boolean {
-  return currentCreationMode === "ai" && Boolean(currentUploadId && wechatAiPrompt.value.trim() && hasGenerationAttempted);
+  return currentCreationMode === "ai" && Boolean(currentUploadId && getEffectivePrompt() && hasGenerationAttempted);
 }
 function syncRegenerateButton(): void {
   regenerateSubmit.disabled = canRegenerate() ? false : true;
@@ -1139,7 +1154,7 @@ const EXTRA_TITLE_BY_KEY: Record<string, string> = {
 
 /** 编辑时用的基础提示词：优先用表单里的，其次回退到包里记录的原始提示词。 */
 function resolveBasePrompt(): string {
-  const typed = wechatAiPrompt.value.trim();
+  const typed = getEffectivePrompt();
   if (typed) return typed;
   const stored = lastPackResult?.generation?.prompt;
   return typeof stored === "string" && stored.trim() ? stored.trim() : "";
@@ -1537,9 +1552,9 @@ function resetAllState(): void {
   if (creationModeImport) creationModeImport.checked = true;
   if (creationModeAi) creationModeAi.checked = false;
   wechatAiPrompt.value = "";
-  promptPresets = [];
-  selectedPresetId = null;
-  renderPromptPresets();
+  currentPresetId = "";
+  if (wechatAiPromptPreset) wechatAiPromptPreset.value = "";
+  syncPromptPresetPreview();
   wechatAiTitle.value = "";
   wechatAiAuthor.value = "";
   wechatAiVersion.value = "";
@@ -1583,14 +1598,12 @@ async function suggestPrompt(): Promise<void> {
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ referenceAssetId: currentUploadId, presetId: currentPlatform })
     });
-    wechatAiPrompt.value = json.prompt ?? "";
     currentStyles = Array.isArray(json.styles) ? json.styles.filter(Boolean) : [];
     renderStyleOptions(DEFAULT_STYLE_OPTIONS);
     promptPresets = Array.isArray(json.promptPresets)
       ? json.promptPresets.filter((p: any) => p && typeof p.id === "string" && typeof p.name === "string" && typeof p.prompt === "string")
       : [];
-    selectedPresetId = typeof json.suggestedPresetId === "string" ? json.suggestedPresetId : null;
-    renderPromptPresets();
+    populatePromptPresets();
     setPromptHint(currentStyles);
   } catch { /* 忽略后台提示词生成错误 */ }
 }
@@ -1817,7 +1830,7 @@ async function generatePlatformPack(): Promise<void> {
   }
   if (!validateGenerateInputs()) { syncRegenerateButton(); return; }
 
-  const prompt = wechatAiPrompt.value.trim();
+  const prompt = getEffectivePrompt();
   const rewardMessage = wechatAiRewardMessage.value.trim();
   const stickerCount = Number(wechatAiCount.value || DEFAULT_STICKER_COUNT);
   const spec = PLATFORM_SPECS[currentPlatform];
@@ -2375,8 +2388,13 @@ function bindEvents(): void {
 
   wechatAiPrompt.addEventListener("input", () => {
     setFieldInvalid(wechatAiPrompt, false);
-    // 手动改了内容就不再算「用了某一套模板」，取消高亮
-    if (selectedPresetId) { selectedPresetId = null; renderPromptPresets(); }
+    syncRegenerateButton();
+  });
+  wechatAiPromptPreset?.addEventListener("change", () => {
+    currentPresetId = wechatAiPromptPreset.value;
+    setFieldInvalid(wechatAiPrompt, false);
+    syncPromptPresetPreview();
+    setPromptHint(currentStyles);
     syncRegenerateButton();
   });
   wechatAiTitle.addEventListener("input", () => setFieldInvalid(wechatAiTitle, false));
@@ -2569,6 +2587,14 @@ async function initApp(): Promise<void> {
           currentAiProvider = config.wechat.defaultProvider;
           wechatAiProvider.value = currentAiProvider;
         }
+      }
+
+      const presetSource = config?.platforms?.wechat_stickers?.promptPresets ?? config?.wechat?.promptPresets;
+      if (Array.isArray(presetSource)) {
+        promptPresets = presetSource.filter(
+          (p: any) => p && typeof p.id === "string" && typeof p.name === "string" && typeof p.prompt === "string"
+        );
+        populatePromptPresets();
       }
     }
   } catch (err) {
