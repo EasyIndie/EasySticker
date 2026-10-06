@@ -295,7 +295,7 @@ export function buildApp(config: AppConfig, deps?: Partial<AppDeps>): FastifyIns
     openapi: {
       info: {
         title: "EasySticker API",
-        version: "0.1.0"
+        version: "0.3.0"
       }
     }
   });

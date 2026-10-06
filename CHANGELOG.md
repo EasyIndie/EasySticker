@@ -8,6 +8,8 @@
 
 ## [未发布]
 
+## [0.3.0] - 2026-10-06
+
 ### 新增
 
 - **多套提示词预设 + 提示词自定义互补**：内置 12 套预设（日常聊天 / 职场吐槽 / 萌宠拟人 /
@@ -98,6 +100,7 @@
 Sharp 尺寸与格式转换，结构化 ZIP（含 `metadata.json`）导出，SSE 生成进度，
 管理后台（用户 / 存储 / 设置 / 监控告警），自托管部署（Docker + 反向代理）。
 
-[未发布]: https://github.com/EasyIndie/EasySticker/compare/v0.2.0...HEAD
+[未发布]: https://github.com/EasyIndie/EasySticker/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/EasyIndie/EasySticker/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/EasyIndie/EasySticker/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/EasyIndie/EasySticker/releases/tag/v0.1.0
