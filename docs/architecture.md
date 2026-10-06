@@ -52,6 +52,11 @@ infrastructure（适配器）  providers 实现、fileAssetStore、mailer、moni
 - **单资源重生成**（`generate/single.ts` + `POST /api/generate/resource`）：按 `target`（`sticker.index` 或 `extra.key`）只重做一张，复用同一套提示词模板/尺寸/平台校验。前端「编辑图片」用 `mode="edit"`：以**当前这张图**为参考图，把 `instruction` 以「编辑要求：…」追加进提示词，只重做这一张，并把 `sourceAssetId` 写回 metadata 供追溯；还可再附一张参考图（`editReferenceAssetId`，同时记入 metadata 并纳入 GC 引用，避免刚上传就被当孤儿回收）。多图经 `AiGenerateInput.additionalReferenceImages` 下传：generic 变体把 `image` 传数组（实测豆包 Seedream 接受），gpt-image 变体用 `image[]`；**只有一张时不走数组**，单图路径行为不变。
 - **扩展资源单张失败不中断整包**：`extras.ts` 记录 `failures` 并照常发带 `error` 的 `extra` 事件，前端把该卡片渲染成可点击重试的错误态。
 - **多套提示词预设，与自定义互补**（`flow.ts` + `prompt-config.default.json`）：`promptPresets` 内置 12 套基础提示词（`global.styles` 同为 12 种风格），`/api/config` 与 `POST /api/generate/prompt` 只回传可选项（**不替用户随机选**）；前端用「提示词预设」下拉 + 「提示词自定义」textarea，最终提示词 = 预设 + 自定义（可只填其一），提交前拼接 —— 解决「只能拿到同一段默认提示词、连续多次生成结果雷同」。情绪仍按顺序逐张分配，不做随机。
+- **导入的 `presetId` 走 URL query**（`routes/generate.ts`）：multipart 请求下 `req.body` 为空，
+  `presetId` 只能从 query 读。早期只读 `req.body.presetId` 会静默回落到微信，导致 Telegram / WhatsApp
+  导入被「至少 8 张」拒绝。前端 `/generate/import`、`/generate/import-pack` 均在 URL 上带 `?presetId=`。
+- **提示词平台中立**：`global.prompt` / `templates.sticker` 不写死「微信」「240px」，同一套提示词适用于
+  三个平台；平台差异只体现在目标尺寸 / 格式 / 是否生成扩展资源（仅微信）。
 - **素材查找 O(1)**：`lib/assets.ts` 按已知扩展名 `statSync` 探测，而不是 `readdirSync` 扫目录。后者是 O(目录大小) 的**同步** I/O，挂在 `GET /api/assets/:id`（结果页每张图一个请求）和打包（每包约 30 次）热路径上；实测 333 文件时 0.699ms → 0.023ms，且不随规模退化。同时用 `ASSET_ID_PATTERN` 白名单挡路径穿越。
 - **包只存清单，ZIP 按需现打**：`packs/<packId>.json` 存 `PackManifest`（逐张提示词/尺寸/角色），下载时 `createPackArchive` 现场打包、边打边发。消除了「uploads 一份 + ZIP 一份」的双倍占用，也让「单资源重生成 → 重建整包」从搬几 MB 变成写几 KB。旧包（仅 `.zip`）仍可直接流式下载，无需迁移。
 - **包归属（owner）**：清单记录 `owner`（已登录 = 邮箱，未登录 = 前端持久化的 `x-client-id`）。注意它与**匿名日配额**用的是不同键：配额按 `ip:<req.ip>` 防刷，归属按 `client:<id>` 让未登录用户找回历史，见 `lib/owner.ts`。`GET /api/packs` 只返回请求者自己的包 —— 无归属的旧包不出现在任何人列表里，避免列出别人的包。`owner` **只进清单，不进 ZIP 的 `metadata.json`**（那个会随表情包分发出去）。删包/还原要求 owner 匹配或管理员。

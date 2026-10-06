@@ -49,8 +49,8 @@ const PLATFORM_SPECS: Record<string, PlatformSpec> = {
     importDesc: "已有成品图片时可直接批量导入并规范为 Telegram 贴纸规格；想继续改以前生成的包，就用当时下载的 ZIP 还原生成现场。",
     importHint: "导入后会统一居中、等比缩放、补透明边，并转换为符合 Telegram 贴纸规格的 PNG。",
     importHeading: "导入贴纸图",
-    importUploadText: "支持 PNG，建议一次导入 1-50 张。",
-    importAccept: "image/png",
+    importUploadText: "支持 PNG、JPG、WebP、GIF，导入后会统一转成 PNG；建议一次导入 1-50 张。",
+    importAccept: "image/png,image/jpeg,image/webp,image/gif",
     generateDesc: "基于上传图和提示词自动生成并打包。"
   },
   whatsapp_webp: {
@@ -66,8 +66,8 @@ const PLATFORM_SPECS: Record<string, PlatformSpec> = {
     importDesc: "已有成品图片时可直接批量导入并规范为 WhatsApp 贴纸规格；想继续改以前生成的包，就用当时下载的 ZIP 还原生成现场。",
     importHint: "导入后会统一居中、等比缩放、补透明边，并转换为符合 WhatsApp 贴纸规格的 WebP。",
     importHeading: "导入贴纸图",
-    importUploadText: "支持 WebP，建议一次导入 1-30 张。",
-    importAccept: "image/webp",
+    importUploadText: "支持 PNG、JPG、WebP、GIF，导入后会统一转成 WebP；建议一次导入 1-30 张。",
+    importAccept: "image/png,image/jpeg,image/webp,image/gif",
     generateDesc: "基于上传图和提示词自动生成并打包。"
   }
 };
@@ -1776,7 +1776,8 @@ async function importPlatformPack(): Promise<void> {
     const metadata = getMetadataPayload();
     if (metadata) for (const [key, value] of Object.entries(metadata)) formData.append(key, value);
 
-    const json = await requestJson("/api/generate/import", { method: "POST", body: formData });
+    // presetId 走 query：multipart 请求下服务端读不到 req.body
+    const json = await requestJson(`/api/generate/import?presetId=${encodeURIComponent(currentPlatform)}`, { method: "POST", body: formData });
     window._ui!.setStatus(importState, "导入完成", "success");
     renderCompletedPackResult(json, "图片已导入并标准化，可以预览后下载 ZIP。", `已将导入图片统一处理为${spec.platformLabel}规格，可继续核对并下载 ZIP。`);
   } catch (error) {
@@ -1812,7 +1813,7 @@ async function restorePackZip(file: File): Promise<void> {
     const formData = new FormData();
     formData.append("presetId", currentPlatform);
     formData.append("file", file, file.name || "pack.zip");
-    const json = await requestJson("/api/generate/import-pack", { method: "POST", body: formData });
+    const json = await requestJson(`/api/generate/import-pack?presetId=${encodeURIComponent(currentPlatform)}`, { method: "POST", body: formData });
 
     const restoredPlatform = json?.meta?.presetId;
     if (restoredPlatform && PLATFORM_SPECS[restoredPlatform] && restoredPlatform !== currentPlatform) {

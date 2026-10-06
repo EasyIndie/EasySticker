@@ -1,4 +1,22 @@
 import { type FastifyInstance, type FastifyRequest } from "fastify";
+
+/**
+ * multipart 请求下 `req.body` 不会被填充，`presetId` 必须从 URL query 读取
+ * （前端在 URL 上带 `?presetId=`）。非 multipart 时回退到 body。
+ * 早期只读 `req.body.presetId`，导致导入总是回落到 `wechat_stickers`，
+ * Telegram / WhatsApp 导入被当成微信、卡在「至少 8 张」而失败。
+ */
+function resolvePresetId(req: FastifyRequest): string {
+  const fromQuery = (req.query as Record<string, unknown> | undefined)?.["presetId"];
+  const fromBody = (req.body as Record<string, unknown> | undefined)?.["presetId"];
+  const value =
+    typeof fromQuery === "string" && fromQuery
+      ? fromQuery
+      : typeof fromBody === "string" && fromBody
+        ? fromBody
+        : "";
+  return value || "wechat_stickers";
+}
 import { generateAssetsAndPack, getPromptTemplate } from "../services/generate/flow";
 import { generateSingleResource } from "../services/generate/single";
 import { generateReferenceImage } from "../services/generate/reference";
@@ -39,14 +57,14 @@ export function registerGenerateRoutes(deps: AppDeps) {
   });
 
   app.post("/generate/import", async (req, reply) => {
-    const presetId = (req.body as any)?.presetId || "wechat_stickers";
+    const presetId = resolvePresetId(req);
     const { owner } = await resolveRequester(req);
     return importStickerPack(withAssetOwner(deps.assetStore, deps.dataDir, owner), deps.dataDir, presetId, req, owner);
   });
 
   // 导入从本站下载的 ZIP 包，还原生成现场（可继续单张重生成 / 编辑图片）。
   app.post("/generate/import-pack", async (req, reply) => {
-    const presetId = (req.body as any)?.presetId || "wechat_stickers";
+    const presetId = resolvePresetId(req);
     const { owner } = await resolveRequester(req);
     return restorePackFromZip(withAssetOwner(deps.assetStore, deps.dataDir, owner), deps.dataDir, presetId, req, owner);
   });
