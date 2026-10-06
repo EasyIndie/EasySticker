@@ -35,7 +35,7 @@ docker compose -f docker-compose.image.yml up -d
 ```
 
 - 镜像：`ghcr.io/easyindie/easysticker`（`linux/amd64` + `linux/arm64`，含 `:latest` 与版本 tag）。
-- 锁版本：在 `.env` 里设 `EASYSTICKER_TAG=0.2.0`。
+- 锁版本：在 `.env` 里设 `EASYSTICKER_TAG=0.3.0`。
 - 升级：`docker compose -f docker-compose.image.yml pull && docker compose -f docker-compose.image.yml up -d`。
 - 数据落在 `./data`（映射到容器内 `/app/data`）。
 

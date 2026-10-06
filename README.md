@@ -205,14 +205,14 @@ docker compose -f docker-compose.image.yml up -d
 ```
 
 镜像 `ghcr.io/easyindie/easysticker` 同时提供 `linux/amd64` 与 `linux/arm64`，
-含 `:latest` 与版本 tag（如 `:0.2.0`）。数据落在 `./data`。
+含 `:latest` 与版本 tag（如 `:0.3.0`）。数据落在 `./data`。
 
 升级 / 锁版本：
 
 ```bash
 # 升级到最新
 docker compose -f docker-compose.image.yml pull && docker compose -f docker-compose.image.yml up -d
-# 锁定版本：在 .env 里设 EASYSTICKER_TAG=0.2.0
+# 锁定版本：在 .env 里设 EASYSTICKER_TAG=0.3.0
 ```
 
 不想用 compose，一条 `docker run` 也可以：
