@@ -146,7 +146,20 @@ const originalPreviewPlaceholder = byId("originalPreviewPlaceholder");
 const platformRadios = document.querySelectorAll<HTMLInputElement>('input[name="platform"]');
 
 // ── Mutable state ───────────────────────────────────────────────────────────
-let DEFAULT_STYLE_OPTIONS = ["扁平插画", "贴纸", "3D 卡通", "日系 Q 版", "像素风", "国潮风"];
+let DEFAULT_STYLE_OPTIONS = [
+  "扁平插画",
+  "贴纸",
+  "3D 卡通",
+  "日系 Q 版",
+  "像素风",
+  "国潮风",
+  "手绘涂鸦",
+  "水彩风",
+  "软萌毛绒",
+  "黏土 3D",
+  "极简线条",
+  "复古漫画"
+];
 let currentPlatform = "wechat_stickers";
 let DEFAULT_STICKER_COUNT: number = PLATFORM_SPECS.wechat_stickers.defaultCount;
 let MIN_STICKER_COUNT: number = PLATFORM_SPECS.wechat_stickers.minCount;
