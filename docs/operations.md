@@ -23,14 +23,44 @@ npm run prod                # NODE_ENV=production node dist/server.js
 > **不需要**复制 `prompt-config.default.json` 为 `prompt-config.json`。
 > 后者是可选的覆盖文件，只写与默认不同的字段即可（见配置参考）。
 
-### 1.2 Docker Compose
+### 1.2 Docker
+
+**方式 A：免源码（推荐）** —— 拉取预构建镜像，不需要克隆仓库或 Node 环境：
+
+```bash
+curl -O https://raw.githubusercontent.com/EasyIndie/EasySticker/main/docker-compose.image.yml
+curl -o .env https://raw.githubusercontent.com/EasyIndie/EasySticker/main/.env.example
+# 编辑 .env：至少填 API_TOKEN / JWT_SECRET / ADMIN_PASSWORD
+docker compose -f docker-compose.image.yml up -d
+```
+
+- 镜像：`ghcr.io/easyindie/easysticker`（`linux/amd64` + `linux/arm64`，含 `:latest` 与版本 tag）。
+- 锁版本：在 `.env` 里设 `EASYSTICKER_TAG=0.2.0`。
+- 升级：`docker compose -f docker-compose.image.yml pull && docker compose -f docker-compose.image.yml up -d`。
+- 数据落在 `./data`（映射到容器内 `/app/data`）。
+
+不用 compose 也可以：
+
+```bash
+docker run -d --name easysticker -p 3000:3000 \
+  -v "$PWD/data:/app/data" \
+  -e API_TOKEN=... -e JWT_SECRET=... -e ADMIN_PASSWORD=... \
+  ghcr.io/easyindie/easysticker:latest
+```
+
+**方式 B：从源码构建**：
 
 ```bash
 docker compose build
 docker compose up -d easysticker
 ```
 
-服务默认监听 `127.0.0.1:3000`，**不要直接暴露到公网**，前面加一层 HTTPS 反代。
+容器内监听 `0.0.0.0:3000`（两种 compose 都映射到宿主 `3000`，可用 `.env` 的 `PORT` 改）。
+**不要直接暴露到公网**，前面加一层 HTTPS 反代。
+
+> 镜像内置 `prompt-config.default.json` 与前端产物；自定义配置优先用环境变量，
+> 需深度定制再挂载 `prompt-config.json`（**先创建宿主文件**，否则 Docker 会把该路径建成目录）。
+> 镜像以非 root 用户运行，`/app/data` 为可写卷。
 
 ### 1.3 反向代理（Nginx）
 
@@ -166,7 +196,16 @@ npm run gc -- --apply --orphan-min-age-hours 1
 > 素材的 mtime 与「是否仍被引用」无关，直接删会把包打坏（图片 404、ZIP 打不出来）。
 > 用 `npm run gc`，它按引用关系判断。
 
-后台「存储」标签页能看到占用、待回收量、全部包列表，并手动清理或逐个删除。
+后台「存储」标签页能看到占用、待回收量、全部包列表，支持**多选 / 全选 + 批量删除**（删除需二次确认，
+全选删除需输入 `DELETE`）；**删除后会立即回收该包素材**，不必等下一次巡检。
+
+后台「用户」标签页支持**软删（停用）**与**硬删**：
+
+- **停用**：账号保留，登录被拒；其已签发的 JWT 会**立即失效**（不必等 7 天）。
+- **硬删**（`DELETE /api/admin/users/:email`）：删除账号；加 `?purge=true` 时一并清理
+  其名下包（并回收素材）、用量日志、监控记录，以及**该用户上传但从未进入任何包的散图**
+  （依据素材归属索引 `data/uploads/.owners.jsonl` 精确匹配，不会误伤他人）。
+- 管理员账号受保护，不能停用 / 删除。
 
 ### 3.4 修复历史包
 
@@ -199,6 +238,7 @@ copy(localStorage.getItem('easysticker:last-wechat-pack'))
 |------|------|
 | `data/users.json` | 用户账户（邮箱、密码哈希、角色） |
 | `data/uploads/` | **所有素材**（表情图、参考图、扩展资源） |
+| `data/uploads/.owners.jsonl` | 素材归属索引（`assetId → owner`，追加写）。硬删账号清理散图用；备份建议一并带上 |
 | `data/packs/` | 包清单（含逐张提示词/尺寸/owner） |
 | `data/usage/` | 使用量统计 |
 | `data/monitoring/` | 请求/系统/磁盘指标 JSONL，按天分文件 |

@@ -58,6 +58,20 @@ infrastructure（适配器）  providers 实现、fileAssetStore、mailer、moni
 - **GC 只做可证明安全的回收**（`maintenance/gc.ts`）：压缩旧包（缺 `files[]` 或素材不全则跳过）、清孤儿素材（须过安全期）、清 `.orig` 备份、按保留期删包。服务端每 6 小时巡检（`server.maintenance`），CLI 入口 `npm run gc`，后台「存储」面板同源调用。
 - **静态资源豁免鉴权与限流**：`isPublicRoute` 放行 `/api/assets/:id` 与 `/api/packs/:id/download`（前缀匹配）。`<img>` / `<a>` 带不了 `Authorization`，且结果页并发加载几十张图会撞 429。
 - **限流按路由豁免而非按方法判断**，避免把静态资源计入 API 频率（`test/rateLimit.test.ts` 覆盖）。
+- **管理员独立限流桶**：后台一次页面加载 / 切页会并发很多请求（图表、表格、设置、SSE），普通额度会误伤。
+  管理员身份已在「停用/删除即失效」钩子里确认，因此单独走 `admin:<ip>` 桶（600 次/分），
+  普通用户与匿名仍按配置额度。
+- **账号软删 / 硬删**：软删 = `setDisabled`（登录被拒）；硬删 `DELETE /api/admin/users/:email`
+  可选 `purge=true`，依次删除名下包（`deletePacksAndReclaim` 回收素材）、用量日志、监控记录，
+  以及「上传但从未进包」的散图。**管理员账号受保护**，不能停用/删除（单管理员模型）。
+- **停用/删除后 JWT 立即失效**：全局 `onRequest` 钩子在每次请求校验 JWT 后回查 `userStore`，
+  用户不存在或被停用即 401 —— 修复了「仅在登录时校验 disabled，旧 token 默认 7 天仍可用」的缺口。
+- **素材归属索引 + 定向散图回收**：`lib/assetOwners.ts` 用追加写的 `data/uploads/.owners.jsonl`
+  记录 `assetId → owner`（生成/导入/上传经 `withAssetOwner` 包一层即可，各服务无感）。
+  `reclaimAssetsByOwner` 据此只删「归属该用户且无人引用」的散图，不误伤他人；GC 顺带压缩索引。
+- **文生参考图**（`generate/reference.ts` + `POST /api/generate/reference`）：复用 provider/尺寸配置，
+  **不传参考图**即走 text-to-image（gpt-image 走 `/images/generations`，generic 走 `generations` 且不带 `image`），
+  结果落盘为 asset，返回值与上传接口一致（`uploadId` / `url`），前端无需区分来源。
 
 ### 3.2 缓存（三档策略，互相锁死）
 
@@ -84,6 +98,9 @@ infrastructure（适配器）  providers 实现、fileAssetStore、mailer、moni
 - **弹窗不做背景模糊**：`backdrop-filter` 会强制浏览器对弹窗背后的整个视口重新做模糊合成，首次打开多出约 30ms 长任务；换纯色遮罩视觉几乎一致。另外挂载后空闲时空跑一次弹窗，把首次绘制的样式/合成开销前移。
 - **编辑后的状态必须回写本地**：`applyResourceResult` 同步更新 `lastPackResult.stickers[index]`，编辑完调 `persistLastPackPayload()` 并就地更新历史记录。否则刷新会退回编辑前的图，**再编辑会以旧图为源、把上一次编辑悄悄丢掉**。
 - **前端资源用内容哈希**：见 §3.2。
+- **统计页用独立图表模块**（`web/src/features/charts.ts`）：零依赖 SVG，按容器真实宽度绘制 +
+  `ResizeObserver` 自适应（不再用 `preserveAspectRatio="none"` 拉伸），带坐标轴/网格/图例/悬浮读数；
+  曲线用单调三次插值避免过冲。颜色走 CSS 变量，自动适配亮/暗主题。
 
 ### 3.4 实时通信（SSE，两处）
 
@@ -135,8 +152,9 @@ infrastructure（适配器）  providers 实现、fileAssetStore、mailer、moni
 ### P6 护栏
 - [ ] dependency-cruiser / ESLint import 边界，CI 强制依赖方向。
 - [ ] 契约测试（基于 `shared/contracts`）。
-- [ ] changesets 发版与 changelog。
-- [ ] CI workflow（当前靠本地 `npm test`）。
+- [ ] changesets 发版（当前用手工维护的 [CHANGELOG.md](../CHANGELOG.md)）。
+- [x] CI workflow（`.github/workflows/ci.yml`：类型 / 单测 / 构建 / 文档链接 + e2e；
+      `.github/workflows/docker.yml`：构建并推送 `ghcr.io/easyindie/easysticker`）。
 
 ### 已知小项
 - usage 成功率恒 100%（没有把失败计入）。

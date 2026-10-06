@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 安全问题（请勿公开）
+    url: https://github.com/EasyIndie/EasySticker/security/advisories/new
+    about: 漏洞请走私密渠道，见 SECURITY.md
+  - name: 使用文档
+    url: https://github.com/EasyIndie/EasySticker/blob/main/docs/README.md
+    about: 部署、配置、运维与开发文档索引

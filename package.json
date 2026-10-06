@@ -1,6 +1,6 @@
 {
   "name": "easysticker",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "type": "commonjs",
   "engines": {
@@ -19,6 +19,7 @@
     "setup": "node scripts/setup.mjs",
     "mock-ai": "node scripts/mock-ai-server.mjs",
     "repair-pack": "node scripts/repair-pack.mjs",
+    "docs:check": "node scripts/check-docs.mjs",
     "test": "npm run typecheck && npm run web:typecheck && npm run build && node ./node_modules/.bin/vitest run",
     "test:e2e": "playwright test",
     "gc": "npm run build && node dist/cli/gc.js"
