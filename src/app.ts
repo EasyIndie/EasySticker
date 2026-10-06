@@ -56,6 +56,13 @@ const STATIC_EXTS = new Set([".css", ".js", ".png", ".jpg", ".jpeg", ".gif", ".w
 // 图片会瞬间超过 maxRequests 而触发 429，导致图片加载失败。
 const PUBLIC_PREFIXES = ["/api/assets/"];
 
+/**
+ * 后台一次页面加载 / 切页会并发很多请求（统计图表、表格、设置、SSE …），
+ * 用普通用户的额度会频繁误伤管理员。给已认证管理员一个独立且宽松得多的额度。
+ */
+const ADMIN_RATE_LIMIT_MAX = 600;
+const ADMIN_RATE_LIMIT_WINDOW_MS = 60_000;
+
 function isPublicRoute(url: string): boolean {
   const [path] = url.split("?");
   if (PUBLIC_ROUTES.has(path)) return true;
@@ -250,9 +257,17 @@ export function buildApp(config: AppConfig, deps?: Partial<AppDeps>): FastifyIns
     // Key by IP only — using the Authorization header here would let callers bypass
     // the limiter by sending a fresh random token per request.
     const key = req.ip;
+    // 管理员身份已在钩子 3.5 的 JWT 校验里确认过（且管理员账号唯一、受保护），
+    // 这里给它单独一个桶，避免后台正常操作被普通额度挡住。
+    const isAdmin = (req.user as { role?: string } | undefined)?.role === "admin";
     const result = isLoginRoute
       ? resolved.security.checkRateLimit(key, { maxRequests: 5, windowMs: 60_000 })
-      : resolved.security.checkRateLimit(key);
+      : isAdmin
+        ? resolved.security.checkRateLimit(`admin:${key}`, {
+            maxRequests: ADMIN_RATE_LIMIT_MAX,
+            windowMs: ADMIN_RATE_LIMIT_WINDOW_MS
+          })
+        : resolved.security.checkRateLimit(key);
     if (result && !result.allowed) {
       const retryAfter = Math.ceil((result.resetAt - Date.now()) / 1000);
       reply.header("Retry-After", String(retryAfter));
