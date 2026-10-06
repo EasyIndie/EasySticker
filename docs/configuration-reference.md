@@ -18,7 +18,7 @@
 | `prompt-config.json` | 可选。只写与默认不同的字段，其余继承默认 |
 | `.env` | 可选。优先级最高，适合放密钥；由 `lib/envFile.ts` 读写，启动时自动加载且**不覆盖**已有环境变量 |
 
-**合并规则**：以 default 为基线做 section 深合并 —— `providers` 按 provider id 合并、`global` / `templates` / `extraPrompts` 按 key 合并、`emotions` 整体替换（不是逐项合并）。所以覆盖文件通常只需几行：
+**合并规则**：以 default 为基线做 section 深合并 —— `providers` 按 provider id 合并、`global` / `templates` / `extraPrompts` 按 key 合并、`emotions` / `promptPresets` 整体替换（不是逐项合并）。所以覆盖文件通常只需几行：
 
 ```json
 {
@@ -177,7 +177,7 @@
 
 ### 4.2 `emotions`
 
-24 个情绪/动作词，按顺序分配给每一张贴纸（第 N 张贴纸用第 N 个）。
+24 个情绪/动作词。每次生成会先**打乱顺序**再逐张分配，这样即使沿用同一套提示词，连续两次生成的情绪排布也不同，降低套图雷同度（metadata.json 仍逐张记录实际使用的情绪）。
 
 ### 4.3 `templates`
 
@@ -201,6 +201,18 @@
 | `banner` | 详情页横幅 |
 | `rewardGuide` | 赞赏引导图（仅微信） |
 | `rewardThanks` | 赞赏答谢图（仅微信） |
+
+### 4.5 `promptPresets`
+
+多套提示词模板，供前端「提示词模板」胶囊一键套用，解决「每次上传参考图都拿到同一段推荐提示词、多次生成结果雷同」的问题。默认内置 6 套：日常聊天 / 职场吐槽 / 萌宠拟人 / 情侣互动 / 节日祝福 / 沙雕搞怪。
+
+| 字段 | 说明 |
+|------|------|
+| `id` | 唯一标识，用于标记选中项 |
+| `name` | 前端展示名 |
+| `prompt` | 套用后填入「提示词」输入框的基础提示词 |
+
+`POST /api/generate/prompt` 会返回全部预设，并**随机**挑一套作为推荐（`suggestedPresetId`），所以每次上传 / AI 生成参考图后拿到的推荐提示词会变化。整体替换：在 `prompt-config.json` 写 `promptPresets` 即完全覆盖默认 6 套。
 
 ---
 

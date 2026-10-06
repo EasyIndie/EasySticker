@@ -779,6 +779,11 @@ button.secondary:hover {
   background: var(--color-surface-secondary);
 }
 
+/* 作为 .field 子项时，间距统一交给 .field 的 gap，避免重叠外边距 */
+.field > .mode-selector {
+  margin-top: 0;
+}
+
 .mode-option {
   position: relative;
   display: flex;
