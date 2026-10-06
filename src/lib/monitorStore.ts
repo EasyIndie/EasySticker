@@ -62,6 +62,9 @@ export interface MonitorStore {
 
   /** Remove old JSONL files beyond retention period. */
   cleanup(): void;
+
+  /** 硬删账号时抹掉监控记录里的该用户，返回删除条数。 */
+  purgeUser(email: string): number;
 }
 
 // ── Helpers ────────────────────────────────────────────────────
@@ -372,6 +375,36 @@ export function createMonitorStore(
       const hasMore = offset + limit < results.length;
 
       return { metrics: paginated, hasMore };
+    },
+
+    purgeUser(email) {
+      const target = email.toLowerCase().trim();
+      let removed = 0;
+      const typeDir = path.join(logDir, "request");
+      try {
+        if (fs.existsSync(typeDir)) {
+          for (const file of fs.readdirSync(typeDir).filter(f => f.endsWith(".jsonl"))) {
+            const full = path.join(typeDir, file);
+            const lines = fs.readFileSync(full, "utf-8").split("\n");
+            const kept: string[] = [];
+            for (const line of lines) {
+              if (!line) continue;
+              try {
+                const rec = JSON.parse(line);
+                if (rec.user && String(rec.user).toLowerCase().trim() === target) {
+                  removed += 1;
+                  continue;
+                }
+              } catch { /* 保留无法解析的行 */ }
+              kept.push(line);
+            }
+            fs.writeFileSync(full, kept.length ? kept.join("\n") + "\n" : "", "utf-8");
+          }
+        }
+      } catch (err) {
+        console.error("Failed to purge monitor records:", err);
+      }
+      return removed;
     },
 
     cleanup() {

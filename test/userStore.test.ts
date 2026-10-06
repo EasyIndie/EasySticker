@@ -249,4 +249,20 @@ describe("createUserStore", () => {
     expect(store.list()).toEqual([]);
     cleanup(emptyDir);
   });
+
+  it("hard delete removes the user and persists", () => {
+    const store = createUserStore(dir);
+    store.register("a@test.com", "pw", "admin");
+    store.register("b@test.com", "pw", "user");
+
+    expect(store.delete("a@test.com")).toBe(true);
+    expect(store.get("a@test.com")).toBeUndefined();
+    // 再删一次是 no-op
+    expect(store.delete("a@test.com")).toBe(false);
+
+    // 已落盘
+    const store2 = createUserStore(dir);
+    expect(store2.get("a@test.com")).toBeUndefined();
+    expect(store2.get("b@test.com")).toBeTruthy();
+  });
 });

@@ -75,6 +75,9 @@ const PLATFORM_SPECS: Record<string, PlatformSpec> = {
 // ── DOM elements ────────────────────────────────────────────────────────────
 const uploadForm = req<HTMLFormElement>("uploadForm");
 const fileInput = req<HTMLInputElement>("file");
+const referencePrompt = byId<HTMLTextAreaElement>("referencePrompt");
+const referenceStyle = byId<HTMLInputElement>("referenceStyle");
+const generateReferenceBtn = byId<HTMLButtonElement>("generateReferenceBtn");
 const uploadState = req("uploadState");
 const importForm = byId<HTMLFormElement>("importForm");
 const importFiles = byId<HTMLInputElement>("importFiles");
@@ -1953,6 +1956,64 @@ async function generatePlatformPack(): Promise<void> {
   }
 }
 
+/**
+ * 用文字让 AI 生成一张参考图，替代「必须先有一张现成图片」。
+ * 服务端走的是文生图（不带参考图），返回的 uploadId 与上传接口完全一致，
+ * 所以后续「生成整套表情包」的流程无需任何改动。
+ */
+async function generateAiReference(): Promise<void> {
+  const prompt = referencePrompt?.value.trim() ?? "";
+  if (!prompt) {
+    window._ui!.setNotice("请先描述你想要的参考图内容。", "error");
+    referencePrompt?.focus();
+    return;
+  }
+  if (generateReferenceBtn) generateReferenceBtn.disabled = true;
+  window._ui!.setStatus(uploadState, "AI 生成参考图中...", "loading");
+  window._ui!.setNotice("正在用 AI 生成参考图，可能需要几十秒...", "info");
+  resetGenerationResult();
+
+  try {
+    const json = await requestJson("/api/generate/reference", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        prompt,
+        style: referenceStyle?.value.trim() || undefined,
+        provider: wechatAiProvider ? wechatAiProvider.value : undefined
+      })
+    });
+    if (!json?.uploadId) throw new Error("AI 生成参考图失败，请重试。");
+
+    currentUploadId = json.uploadId as string;
+    currentStyles = [...DEFAULT_STYLE_OPTIONS];
+    renderStyleOptions(DEFAULT_STYLE_OPTIONS);
+    clearGenerateValidation();
+    hasGenerationAttempted = false;
+
+    originalPreview.src = window._preview!.buildAssetUrl(currentUploadId);
+    syncOriginalPreviewSlot();
+    window._ui!.setStatus(uploadState, "AI 参考图已生成", "success");
+    window._ui!.setNotice("AI 参考图已生成，正在为你准备推荐提示词。", "success");
+    window._preview!.setExportInfo("结果概览与导出信息", "参考图已就绪，下一步补充提示词并生成表情包。");
+    updateStepNav(2, [0, 1]);
+
+    try { await suggestPrompt(); }
+    catch (promptError) {
+      window._ui!.setNotice(promptError instanceof Error ? promptError.message : "参考图已生成，请手动生成提示词。", "error");
+    }
+  } catch (error) {
+    currentUploadId = null;
+    hasGenerationAttempted = false;
+    originalPreview.removeAttribute("src");
+    window._ui!.setStatus(uploadState, "生成失败", "error");
+    window._ui!.setNotice(error instanceof Error ? error.message : "AI 生成参考图失败，请稍后重试。", "error");
+    syncRegenerateButton();
+  } finally {
+    if (generateReferenceBtn) generateReferenceBtn.disabled = false;
+  }
+}
+
 async function handleFileUpload(): Promise<void> {
   const file = fileInput.files?.[0];
   if (!file) {
@@ -2263,6 +2324,13 @@ function initKeyboardShortcuts(): void {
 function bindEvents(): void {
   fileInput.addEventListener("change", () => { if (fileInput.files?.length) void handleFileUpload(); });
   uploadForm.addEventListener("submit", (e) => e.preventDefault());
+  generateReferenceBtn?.addEventListener("click", () => void generateAiReference());
+  referencePrompt?.addEventListener("keydown", (event) => {
+    if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) {
+      event.preventDefault();
+      void generateAiReference();
+    }
+  });
   importForm?.addEventListener("submit", async (e) => { e.preventDefault(); });
 
   wechatAiPrompt.addEventListener("input", () => { setFieldInvalid(wechatAiPrompt, false); syncRegenerateButton(); });

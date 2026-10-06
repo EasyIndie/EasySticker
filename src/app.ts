@@ -211,6 +211,34 @@ export function buildApp(config: AppConfig, deps?: Partial<AppDeps>): FastifyIns
     });
   });
 
+  // 3.5 已停用/已删除账号的 JWT 立即失效
+  //
+  // 之前只在登录时检查 disabled，已经签发出去的 JWT（默认 7 天）在鉴权钩子里
+  // 不会再回查用户，于是被停用的账号还能继续用旧 token 访问。这里补上：
+  // 请求只要带了用户 JWT，就确认该用户仍存在且未被停用。
+  app.addHook("onRequest", async (req, reply) => {
+    if (req.method === "OPTIONS") return;
+    if (isPublicRoute(req.url)) return;
+    const authHeader = req.headers.authorization;
+    if (!authHeader?.startsWith("Bearer ")) return;
+    // 配置了机器 API token 且命中时跳过（那不是某个用户）
+    if (resolved.security.isAuthEnabled && resolved.security.checkAuth(authHeader.slice(7))) return;
+    try {
+      await req.jwtVerify();
+    } catch {
+      return; // token 无效/过期：交给各路由自行拒绝
+    }
+    const email = (req.user as { email?: string } | undefined)?.email;
+    if (!email) return;
+    const user = resolved.userStore.get(email);
+    if (!user || user.disabled) {
+      reply.status(401).send({
+        error: "Unauthorized",
+        message: user?.disabled ? "账号已被停用，请联系管理员。" : "账号不存在或已被删除。"
+      });
+    }
+  });
+
   // 4. Rate limiting
   app.addHook("onRequest", async (req, reply) => {
     if (!resolved.security.isRateLimitEnabled) return;

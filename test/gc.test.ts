@@ -6,7 +6,7 @@ import sharp from "sharp";
 import { buildApp } from "../src/app";
 import { createFileAssetStore, listAssetFiles } from "../src/lib/assets";
 import { createPack, findPackZipPath, readPackManifest } from "../src/services/pack/service";
-import { runGc } from "../src/services/maintenance/gc";
+import { deletePacksAndReclaim, runGc } from "../src/services/maintenance/gc";
 import { readZipEntries } from "../src/lib/zip";
 
 describe("数据目录 GC", () => {
@@ -236,5 +236,49 @@ describe("数据目录 GC", () => {
     const report = await runGc({ dataDir, dryRun: false, orphanMinAgeMs: 0 });
     expect(store.find(sticker)).toBeNull();
     expect(report.errors).toEqual([]);
+  }, 60000);
+
+  it("orphanAssetIds 只回收指定素材，其余孤儿不动", async () => {
+    const target = await mkAsset(240, 240, 90);
+    const other = await mkAsset(240, 240, 95);
+    ageFile(store.find(target)!.filePath, 48);
+    ageFile(store.find(other)!.filePath, 48);
+
+    const report = await runGc({ dataDir, dryRun: false, orphanMinAgeMs: 0, orphanAssetIds: [target] });
+    expect(report.orphanAssets.count).toBe(1);
+    expect(store.find(target)).toBeNull();
+    expect(store.find(other)).not.toBeNull();
+  }, 60000);
+
+  it("deletePacksAndReclaim：删包后立即回收其素材，且不动仍被引用的素材", async () => {
+    const shared = await mkAsset(240, 240, 100);
+    const onlyThis = await mkAsset(240, 240, 105);
+    const keepPack = await createPack(store, dataDir, {
+      presetId: "wechat_stickers",
+      assets: [{ label: "001", assetId: shared, role: "sticker" }],
+      metadata: { title: "保留包" },
+      generation: { source: "ai-generate", providerId: "mock", prompt: "x", styles: ["贴纸"] }
+    });
+    const dropPack = await createPack(store, dataDir, {
+      presetId: "wechat_stickers",
+      assets: [
+        { label: "001", assetId: shared, role: "sticker" },
+        { label: "002", assetId: onlyThis, role: "sticker" }
+      ],
+      metadata: { title: "删除包" },
+      generation: { source: "ai-generate", providerId: "mock", prompt: "x", styles: ["贴纸"] }
+    });
+
+    // 素材刚生成（远小于 6 小时安全期），删包后仍应被立即回收
+    const result = await deletePacksAndReclaim(dataDir, [dropPack.packId, "does-not-exist"]);
+    expect(result.deleted).toEqual([dropPack.packId]);
+    expect(result.missing).toEqual(["does-not-exist"]);
+    expect(result.reclaimedBytes).toBeGreaterThan(0);
+    expect(result.errors).toEqual([]);
+
+    expect(readPackManifest(dataDir, dropPack.packId)).toBeNull();
+    expect(store.find(onlyThis)).toBeNull(); // 只属于被删包 → 立即回收
+    expect(store.find(shared)).not.toBeNull(); // 仍被保留包引用 → 保留
+    expect(readPackManifest(dataDir, keepPack.packId)).not.toBeNull();
   }, 60000);
 });

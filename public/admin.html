@@ -14,7 +14,7 @@
   <title>EasySticker 管理后台</title>
   <meta name="theme-color" id="themeMeta" content="#F0F2F5" data-dark="#0f172a">
   <script src="/js/theme.js?v=2ce5d795"></script>
-  <link rel="stylesheet" href="admin.css?v=8">
+  <link rel="stylesheet" href="/admin.css?v=c4899ec7">
 </head>
 <body>
 
@@ -147,6 +147,7 @@
             <h3>用户列表</h3>
             <button class="btn btn-outline btn-sm" id="load-users-btn">刷新</button>
           </div>
+          <div id="users-status" class="status-msg" role="status" aria-live="polite"></div>
           <div id="users-container">
             <p class="loading-text">加载中...</p>
           </div>
@@ -156,30 +157,68 @@
       <!-- ====== 统计 ====== -->
       <div id="stats-panel" class="tab-panel" style="display:none">
 
-        <!-- 今日概览 -->
-        <section class="stats-overview" id="stats-overview">
-          <div class="stat-card stat-total"><h4>总生成</h4><span id="stat-total-generated">--</span></div>
-          <div class="stat-card stat-success"><h4>成功</h4><span id="stat-total-success">--</span></div>
-          <div class="stat-card stat-fail"><h4>失败</h4><span id="stat-total-fail">--</span></div>
-          <div class="stat-card stat-rate"><h4>成功率</h4><span id="stat-total-rate">--</span></div>
+        <!-- KPI 概览 -->
+        <section class="kpi-grid" id="stats-overview">
+          <div class="kpi-card">
+            <div class="kpi-icon kpi-icon-blue"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg></div>
+            <div class="kpi-body"><div class="kpi-label">今日生成</div><div class="kpi-value" id="stat-today-generated">--</div><div class="kpi-sub" id="stat-today-sub">&nbsp;</div></div>
+          </div>
+          <div class="kpi-card">
+            <div class="kpi-icon kpi-icon-violet"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="12" y1="20" x2="12" y2="10"/><line x1="18" y1="20" x2="18" y2="4"/><line x1="6" y1="20" x2="6" y2="16"/></svg></div>
+            <div class="kpi-body"><div class="kpi-label">累计生成</div><div class="kpi-value" id="stat-total-generated">--</div><div class="kpi-sub" id="stat-total-sub">&nbsp;</div></div>
+          </div>
+          <div class="kpi-card">
+            <div class="kpi-icon kpi-icon-green"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg></div>
+            <div class="kpi-body"><div class="kpi-label">今日成功率</div><div class="kpi-value" id="stat-today-rate">--</div><div class="stat-bar"><i id="stat-today-rate-bar"></i></div></div>
+          </div>
+          <div class="kpi-card">
+            <div class="kpi-icon kpi-icon-amber"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg></div>
+            <div class="kpi-body"><div class="kpi-label">累计成功率</div><div class="kpi-value" id="stat-total-rate">--</div><div class="stat-bar"><i id="stat-total-rate-bar"></i></div></div>
+          </div>
         </section>
 
-        <!-- 使用趋势 -->
+        <!-- 请求吞吐 -->
         <section class="section-card">
-          <h3><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg> 请求趋势</h3>
-          <div class="chart-container">
-            <svg id="chart-requests" viewBox="0 0 700 200" preserveAspectRatio="none" width="100%" height="200"></svg>
+          <div class="chart-head">
+            <h3><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg> 请求吞吐</h3>
+            <div class="chart-meta" id="chart-requests-meta"></div>
           </div>
-          <p id="chart-requests-empty" class="empty-text" style="display:none">暂无数据</p>
+          <p class="section-desc">近 24 小时按分钟聚合的请求数；红色虚线为其中的错误请求。</p>
+          <div class="chart-container" id="chart-requests"></div>
         </section>
 
-        <!-- 系统趋势 -->
+        <!-- 响应延迟 -->
         <section class="section-card">
-          <h3><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg> 系统资源</h3>
-          <div class="chart-container">
-            <svg id="chart-system" viewBox="0 0 700 200" preserveAspectRatio="none" width="100%" height="200"></svg>
+          <div class="chart-head">
+            <h3><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg> 响应延迟</h3>
+            <div class="chart-meta" id="chart-latency-meta"></div>
           </div>
-          <p id="chart-system-empty" class="empty-text" style="display:none">暂无数据</p>
+          <p class="section-desc">P50 反映典型体验，P95 反映尾延迟；两者差距越大，说明抖动越明显。</p>
+          <div class="chart-container" id="chart-latency"></div>
+        </section>
+
+        <!-- 系统资源 -->
+        <section class="section-card">
+          <div class="chart-head">
+            <h3><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="2"/><rect x="9" y="9" width="6" height="6"/><line x1="9" y1="1" x2="9" y2="4"/><line x1="15" y1="1" x2="15" y2="4"/><line x1="9" y1="20" x2="9" y2="23"/><line x1="15" y1="20" x2="15" y2="23"/><line x1="20" y1="9" x2="23" y2="9"/><line x1="20" y1="14" x2="23" y2="14"/><line x1="1" y1="9" x2="4" y2="9"/><line x1="1" y1="14" x2="4" y2="14"/></svg> 系统资源</h3>
+            <div class="chart-meta" id="chart-system-meta"></div>
+          </div>
+          <p class="section-desc">CPU 与内存占用率（0–100%），按分钟取平均。</p>
+          <div class="chart-container" id="chart-system"></div>
+        </section>
+
+        <!-- 用户用量 -->
+        <section class="section-card">
+          <h3><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg> 用户用量</h3>
+          <p class="section-desc">按累计生成量排序；成功率 ≥95% 显示为绿色，85–95% 为黄色，低于 85% 为红色。</p>
+          <div id="stats-users"></div>
+        </section>
+
+        <!-- 接口热点 -->
+        <section class="section-card">
+          <h3><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg> 接口热点</h3>
+          <p class="section-desc">近 24 小时请求量 Top 10；P95 超过 1s 标黄，出现错误标红。</p>
+          <div id="stats-routes"></div>
         </section>
       </div>
 
@@ -201,6 +240,10 @@
 
         <section class="section-card">
           <h3><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 8v13H3V8"/><path d="M1 3h22v5H1z"/><path d="M10 12h4"/></svg> 全部包 <span id="storage-pack-count" class="section-desc"></span></h3>
+          <div class="storage-bulk-bar">
+            <button id="storage-delete-selected-btn" class="btn btn-danger btn-sm" disabled>删除选中</button>
+            <span id="storage-selection-info" class="section-desc"></span>
+          </div>
           <div id="storage-packs"></div>
         </section>
       </div>
@@ -261,6 +304,6 @@
     </main>
   </div>
 
-  <script src="/js/admin.js?v=87ab1417"></script>
+  <script src="/js/admin.js?v=44762714"></script>
 </body>
 </html>

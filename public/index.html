@@ -11,7 +11,7 @@
     <title>EasySticker</title>
     <meta name="theme-color" id="themeMeta" content="#07c160" data-dark="#111827" />
     <script src="/js/theme.js?v=2ce5d795"></script>
-    <link rel="stylesheet" href="/styles.css?v=d98c783a" />
+    <link rel="stylesheet" href="/styles.css?v=158963ad" />
   </head>
   <body>
     <a href="#mainContent" class="skip-link">跳到主要内容</a>
@@ -170,6 +170,23 @@
               <span id="uploadHint" class="field-hint">建议上传主体清晰、边缘完整的 PNG 或 JPG，上传后仅作为当前生成流程的参考图。</span>
             </label>
           </form>
+          <div class="reference-generator">
+            <div class="reference-generator-head">
+              <span class="section-title">没有现成图片？让 AI 生成一张参考图</span>
+              <span class="field-hint">描述主体与风格，AI 会先生成参考图，再据此生成整套表情包。</span>
+            </div>
+            <label class="field" for="referencePrompt">
+              <textarea
+                id="referencePrompt"
+                rows="2"
+                placeholder="例如：一只戴红围巾的柴犬，白色背景，正面半身，可爱卡通风格"
+              ></textarea>
+            </label>
+            <div class="reference-generator-row">
+              <input id="referenceStyle" type="text" placeholder="风格（可选），如：水彩、像素风、3D 卡通" />
+              <button id="generateReferenceBtn" type="button" class="secondary">AI 生成参考图</button>
+            </div>
+          </div>
           <div id="uploadState" class="status-chip" aria-live="polite">等待上传</div>
           <div class="preview-card">
             <div class="section-title">原图预览</div>
@@ -588,6 +605,6 @@
     <script src="/js/preview.js?v=820bcee9"></script>
     <script src="/js/generator-api.js?v=a1439256"></script>
     <script src="/js/ui.js?v=5463a81e"></script>
-    <script src="/js/app.js?v=c186d79b"></script>
+    <script src="/js/app.js?v=2e76e1d5"></script>
   </body>
 </html>
