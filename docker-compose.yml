@@ -1,6 +1,11 @@
+# EasySticker —— 从源码构建部署。
+#
+# 如果不想克隆源码，直接用预构建镜像：见 docker-compose.image.yml
+# （或 docs/operations.md §1.2「方式 A：免源码」）。
 services:
   easysticker:
     build: .
+    image: easysticker:local
     container_name: easysticker
     ports:
       - "3000:3000"
@@ -39,6 +44,7 @@ services:
   # 只体检不删：去掉 --apply（并注意保留期的默认值是 30 天）
   cleanup:
     build: .
+    image: easysticker:local
     container_name: easysticker-cleanup
     profiles:
       - cleanup

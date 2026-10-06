@@ -1,0 +1,62 @@
+# EasySticker —— 免源码部署（直接拉取预构建镜像）
+#
+# 只需本文件 + 一个 .env 即可，无需克隆仓库、无需 Node 环境：
+#
+#   curl -O https://raw.githubusercontent.com/EasyIndie/EasySticker/main/docker-compose.image.yml
+#   curl -o .env https://raw.githubusercontent.com/EasyIndie/EasySticker/main/.env.example
+#   # 编辑 .env（至少填 API_TOKEN / JWT_SECRET / ADMIN_PASSWORD）
+#   docker compose -f docker-compose.image.yml up -d
+#
+# 升级：docker compose -f docker-compose.image.yml pull && docker compose -f docker-compose.image.yml up -d
+# 锁定版本：在 .env 里设 EASYSTICKER_TAG=0.2.0（默认 latest）
+
+services:
+  easysticker:
+    image: ghcr.io/easyindie/easysticker:${EASYSTICKER_TAG:-latest}
+    container_name: easysticker
+    ports:
+      - "${PORT:-3000}:3000"
+    environment:
+      - PORT=3000
+      - NODE_ENV=production
+      - DATA_DIR=/app/data
+      # 生产安全 —— 建议写在 .env 里
+      - API_TOKEN=${API_TOKEN:-}
+      - JWT_SECRET=${JWT_SECRET:-}
+      - ADMIN_EMAIL=${ADMIN_EMAIL:-admin@easysticker.app}
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD:-}
+      - RATE_LIMIT_MAX=${RATE_LIMIT_MAX:-30}
+      - DAILY_QUOTA_MAX=${DAILY_QUOTA_MAX:-100}
+      - DAILY_QUOTA_ANONYMOUS_MAX=${DAILY_QUOTA_ANONYMOUS_MAX:-10}
+      - CORS_ALLOW_ORIGIN=${CORS_ALLOW_ORIGIN:-}
+      - BASE_URL=${BASE_URL:-}
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+      # 邮件（密码重置，可选）
+      - SMTP_HOST=${SMTP_HOST:-}
+      - SMTP_PORT=${SMTP_PORT:-587}
+      - SMTP_USER=${SMTP_USER:-}
+      - SMTP_PASS=${SMTP_PASS:-}
+      - SMTP_FROM=${SMTP_FROM:-}
+      # AI 提供商密钥（推荐放这里，而不是配置文件）
+      - AI_SEEDREAM_API_KEY=${AI_SEEDREAM_API_KEY:-}
+      - AI_OPENAI_API_KEY=${AI_OPENAI_API_KEY:-}
+    volumes:
+      - ./data:/app/data
+      # 默认用镜像内置的 prompt-config.default.json，无需挂载。
+      # 需深度定制时：先创建宿主文件，再取消下一行注释
+      # （切勿在文件不存在时直接挂载，Docker 会把该路径建成目录导致读取失败）。
+      # - ./prompt-config.json:/app/prompt-config.json:ro
+    restart: unless-stopped
+
+  # 定时回收（默认不启用）：docker compose -f docker-compose.image.yml --profile cleanup run --rm cleanup
+  cleanup:
+    image: ghcr.io/easyindie/easysticker:${EASYSTICKER_TAG:-latest}
+    container_name: easysticker-cleanup
+    profiles: [cleanup]
+    command: node dist/cli/gc.js --apply
+    environment:
+      - NODE_ENV=production
+      - DATA_DIR=/app/data
+    volumes:
+      - ./data:/app/data
+    restart: "no"
