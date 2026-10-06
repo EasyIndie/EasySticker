@@ -116,3 +116,6 @@
 `ai.referenceMode` 现在只有 `base64` / `url` / `multipart` 真正被消费。
 
 **取舍**：本地生成（ComfyUI）响应慢、显存要求高、部署成本远超收益，砍掉后自托管门槛显著降低。
+
+**收尾**：遗留的参考工作流文件 `comfy/workflow_api.json` 已于 0.2.0 从仓库删除
+（provider 早已移除，保留它只会让人误以为还能用）。

@@ -22,6 +22,8 @@
 
 服务在后台运行，不会随 pi 退出而关闭。PID 与日志写入 `.pi/run/`（已在 `.gitignore` 中忽略）。
 
+> 开发环境、npm 脚本与测试的完整说明见 [`docs/development.md`](../docs/development.md)。
+
 ## 生效方式
 
 - 首次使用需在会话里执行 `/trust` 授予项目信任，然后 `/reload` 重新加载资源。

@@ -62,6 +62,9 @@
 
 > 登录/注册接口使用独立限流：每 IP 每分钟 5 次。
 >
+> **已认证管理员**使用独立且宽松的额度（`admin:<ip>`，600 次/分）：后台一次页面加载/切页会
+> 并发很多请求（图表、表格、设置、SSE），用普通额度会误伤。普通用户与匿名请求仍按 `maxRequests` 限制。
+>
 > ⚠️ 别把两个「匿名用户标识」搞混：**日配额按 IP**（`ip:<req.ip>`），
 > **包的归属按前端持久化的 `x-client-id`**（`client:<id>`，见 `lib/owner.ts`）。前者防刷，
 > 后者让未登录用户也能找回自己的历史，两者互不影响。
@@ -237,5 +240,6 @@
 | `data/maintenance.json` | 保留期策略生效起点（**不要手改**） | 由 `retention.ts` 自动写入 |
 | `data/users.json` | 用户与密码哈希 | 后台「用户」标签页 |
 | `data/monitoring/*.jsonl` | 请求/系统/磁盘指标，按天分文件 | 自动 |
+| `data/uploads/.owners.jsonl` | 素材归属索引（`assetId → owner`，追加写） | 自动（硬删账号清理散图时用到） |
 
 完整的 HTTP 接口清单一律以 `/docs`（Swagger UI）与 `src/routes/*.ts` 为准。
