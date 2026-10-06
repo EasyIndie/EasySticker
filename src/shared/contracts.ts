@@ -28,6 +28,10 @@ export const generateSchema = z.object({
   presetId: z.string().min(1).default("wechat_stickers"),
   referenceAssetId: z.string().min(1),
   prompt: z.string().min(1),
+  /** 选中的提示词预设 id（空字符串表示未用预设）；随包导出以便完整还原生成现场。 */
+  promptPreset: z.string().optional(),
+  /** 自定义补充提示词（可空字符串）；与 promptPreset 一起还原表单。 */
+  promptCustom: z.string().optional(),
   provider: z.string().optional(),
   styles: z.array(z.string().min(1)).optional(),
   stickerCount: z.number().int().min(1).max(50).optional(),
