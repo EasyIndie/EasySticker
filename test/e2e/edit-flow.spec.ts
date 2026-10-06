@@ -258,7 +258,7 @@ test.describe("单图编辑", () => {
     await page.reload();
     await waitForApp(page);
     // 刷新后创建方式默认回到「导入」，AI 配置区（含提供商选择）是隐藏的
-    await page.locator("#creationModeAi").click({ force: true });
+    await page.locator('label[for="creationModeAi"]').click();
     await page.selectOption("#wechatAiProvider", "mock");
     const card2 = page.locator("#wechatAiPreview .preview-item").first();
     await expect(card2.locator(".preview-edited-tag")).toHaveCount(1);
