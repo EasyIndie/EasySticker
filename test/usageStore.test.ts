@@ -53,6 +53,10 @@ describe("createUsageStore", () => {
     expect(summary.todayGenerated).toBe(3);
     expect(summary.totalGenerated).toBe(3);
     expect(summary.successRate).toBeCloseTo(2 / 3);
+    // 统计页需要「成功次数」本身，而不是只拿全量比率去乘今日数量
+    expect(summary.todaySuccess).toBe(2);
+    expect(summary.todaySuccessRate).toBeCloseTo(2 / 3);
+    expect(summary.totalSuccess).toBe(2);
   });
 
   it("checkDailyQuota reports usage correctly", () => {
@@ -178,5 +182,21 @@ describe("createUsageStore", () => {
     expect(files).toHaveLength(1);
     
     cleanup(customDir);
+  });
+
+  it("purgeUser 只删除目标用户的记录", () => {
+    const store = createUsageStore(dir);
+    store.log({ email: "alice@test.com", action: "generate", success: true });
+    store.log({ email: "alice@test.com", action: "generate", success: false });
+    store.log({ email: "bob@test.com", action: "generate", success: true });
+
+    expect(store.purgeUser("alice@test.com")).toBe(2);
+    expect(store.getSummary("alice@test.com").totalGenerated).toBe(0);
+    expect(store.getSummary("bob@test.com").totalGenerated).toBe(1);
+
+    // 重新从磁盘加载也确认已落盘清理
+    const store2 = createUsageStore(dir);
+    expect(store2.getSummary("alice@test.com").totalGenerated).toBe(0);
+    expect(store2.getSummary("bob@test.com").totalGenerated).toBe(1);
   });
 });

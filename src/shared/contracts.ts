@@ -77,6 +77,14 @@ export const resourceSchema = z.object({
 });
 export type ResourceGenerateRequest = z.infer<typeof resourceSchema>;
 
+/** POST /api/generate/reference — 用文字生成一张参考图（文生图）。 */
+export const referenceGenerateSchema = z.object({
+  prompt: z.string().min(1),
+  provider: z.string().optional(),
+  style: z.string().min(1).optional()
+});
+export type ReferenceGenerateRequest = z.infer<typeof referenceGenerateSchema>;
+
 /** POST /api/generate/cancel */
 export const cancelSchema = z.object({
   taskId: z.string().min(1)

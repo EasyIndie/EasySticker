@@ -1,9 +1,10 @@
 import { type FastifyInstance, type FastifyRequest } from "fastify";
 import { generateAssetsAndPack, getPromptTemplate } from "../services/generate/flow";
 import { generateSingleResource } from "../services/generate/single";
+import { generateReferenceImage } from "../services/generate/reference";
 import { importStickerPack } from "../services/generate/import";
 import { restorePackFromZip } from "../services/generate/restore";
-import { promptSchema, generateSchema, cancelSchema, resourceSchema } from "../shared/contracts";
+import { promptSchema, generateSchema, cancelSchema, resourceSchema, referenceGenerateSchema } from "../shared/contracts";
 import {
   createTask,
   getTask,
@@ -20,6 +21,7 @@ import {
 import { loadPromptConfig } from "../services/generate/promptConfig";
 import type { AppDeps } from "../lib/deps";
 import { resolveRequester } from "../lib/owner";
+import { withAssetOwner } from "../lib/assetOwners";
 
 export function registerGenerateRoutes(deps: AppDeps) {
   return async (app: FastifyInstance) => {
@@ -39,14 +41,14 @@ export function registerGenerateRoutes(deps: AppDeps) {
   app.post("/generate/import", async (req, reply) => {
     const presetId = (req.body as any)?.presetId || "wechat_stickers";
     const { owner } = await resolveRequester(req);
-    return importStickerPack(deps.assetStore, deps.dataDir, presetId, req, owner);
+    return importStickerPack(withAssetOwner(deps.assetStore, deps.dataDir, owner), deps.dataDir, presetId, req, owner);
   });
 
   // 导入从本站下载的 ZIP 包，还原生成现场（可继续单张重生成 / 编辑图片）。
   app.post("/generate/import-pack", async (req, reply) => {
     const presetId = (req.body as any)?.presetId || "wechat_stickers";
     const { owner } = await resolveRequester(req);
-    return restorePackFromZip(deps.assetStore, deps.dataDir, presetId, req, owner);
+    return restorePackFromZip(withAssetOwner(deps.assetStore, deps.dataDir, owner), deps.dataDir, presetId, req, owner);
   });
 
   // Daily quota: registered users capped per account, anonymous users capped per IP.
@@ -91,7 +93,24 @@ export function registerGenerateRoutes(deps: AppDeps) {
       reply.status(quotaError.status);
       return quotaError.body;
     }
-    return generateSingleResource(deps.assetStore, parsed.data.presetId, parsed.data);
+    const { owner } = await resolveRequester(req);
+    return generateSingleResource(withAssetOwner(deps.assetStore, deps.dataDir, owner), parsed.data.presetId, parsed.data);
+  });
+
+  // 由文字生成一张参考图，替代「必须先上传一张图」的限制。
+  app.post("/generate/reference", async (req, reply) => {
+    const parsed = referenceGenerateSchema.safeParse(req.body);
+    if (!parsed.success) {
+      reply.status(400);
+      return { error: "BadRequest", message: "invalid request body", issues: parsed.error.issues };
+    }
+    const quotaError = await enforceGenerationQuota(req);
+    if (quotaError) {
+      reply.status(quotaError.status);
+      return quotaError.body;
+    }
+    const { owner } = await resolveRequester(req);
+    return generateReferenceImage(withAssetOwner(deps.assetStore, deps.dataDir, owner), parsed.data);
   });
 
   app.post("/generate/start", async (req, reply) => {
@@ -116,7 +135,7 @@ export function registerGenerateRoutes(deps: AppDeps) {
     setImmediate(async () => {
       try {
         await generateAssetsAndPack(
-          deps.assetStore,
+          withAssetOwner(deps.assetStore, deps.dataDir, owner),
           deps.dataDir,
           parsed.data.presetId,
           parsed.data,

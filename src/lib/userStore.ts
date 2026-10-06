@@ -108,6 +108,18 @@ export function createUserStore(dataPath: string) {
       return Object.values(data.users).map(u => ({ ...u }));
     },
 
+    /**
+     * 硬删除账号（软删除 = setDisabled）。
+     * 关联数据（其名下包、用量/监控记录）由调用方负责清理。
+     */
+    delete(email: string): boolean {
+      const lower = email.toLowerCase().trim();
+      if (!data.users[lower]) return false;
+      delete data.users[lower];
+      save();
+      return true;
+    },
+
     /** Set user disabled status. */
     setDisabled(email: string, disabled: boolean): boolean {
       const lower = email.toLowerCase().trim();

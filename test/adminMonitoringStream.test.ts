@@ -6,6 +6,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { buildApp } from "../src/app";
 import { createAlertEngine } from "../src/lib/alertEngine";
 import { createMonitorStore } from "../src/lib/monitorStore";
+import { createUserStore } from "../src/lib/userStore";
 
 /**
  * 后台仪表盘的实时数据流。
@@ -18,6 +19,10 @@ describe("后台监控 SSE", () => {
   const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), "easysticker-sse-"));
   const monitorStore = createMonitorStore(dataDir);
   const alertEngine = createAlertEngine(path.join(dataDir, "alerts.json"), monitorStore);
+  // JWT 里的账号必须在 userStore 里真实存在，否则会被「停用/删除失效」钩子挡下（这层现在是有意为之）
+  const userStore = createUserStore(dataDir);
+  userStore.register("admin@test.local", "pw", "admin");
+  userStore.register("user@test.local", "pw", "user");
   const app = buildApp(
     {
       host: "127.0.0.1",
@@ -26,7 +31,7 @@ describe("后台监控 SSE", () => {
       logLevel: "silent",
       security: { jwtSecret: "test-secret-for-sse" }
     },
-    { monitorStore, alertEngine }
+    { monitorStore, alertEngine, userStore }
   );
   let baseUrl = "";
   let adminToken = "";

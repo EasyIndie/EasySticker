@@ -4,9 +4,9 @@ import type { AppDeps } from "../lib/deps";
 import { loadPromptConfig, updatePromptConfig } from "../services/generate/promptConfig";
 import { getAiProvider } from "../services/ai/index";
 import { providerApiKeyEnvName, resolveProviderApiKey, setProviderApiKey } from "../services/ai/apiKey";
-import { runGc } from "../services/maintenance/gc";
+import { deletePacksAndReclaim, reclaimAssetsByOwner, runGc } from "../services/maintenance/gc";
 import { ensureRetentionStarted } from "../services/maintenance/retention";
-import { deletePack, listPacks } from "../services/pack/service";
+import { listPacks } from "../services/pack/service";
 
 export function registerAdminRoutes(deps: AppDeps) {
   return async (app: FastifyInstance): Promise<void> => {
@@ -42,15 +42,61 @@ export function registerAdminRoutes(deps: AppDeps) {
       };
     });
 
-    // POST /api/admin/users/:email/toggle — enable/disable user
+    // POST /api/admin/users/:email/toggle — enable/disable user（软删/停用）
     app.post("/admin/users/:email/toggle", { preHandler: [requireAdmin] }, async (req, reply) => {
       const { email } = req.params as any;
       const user = userStore.get(email);
       if (!user) {
         return reply.status(404).send({ error: "User not found" });
       }
+      // 管理员账号受保护：停用可能导致后台再无人可管，直接拒绝。
+      // 例外：历史遗留的已停用管理员仍允许重新启用。
+      if (user.role === "admin" && !user.disabled) {
+        return reply.status(400).send({ error: "BadRequest", message: "管理员账号受保护，不能被停用" });
+      }
       const updated = userStore.setDisabled(email, !user.disabled);
-      return { success: updated, email, disabled: !user.disabled };
+      return { success: updated, email: user.email, disabled: !user.disabled };
+    });
+
+    // DELETE /api/admin/users/:email — 硬删除账号。
+    // query purge=true 时一并清理：名下包（并回收素材）、用量日志、监控记录。
+    app.delete("/admin/users/:email", { preHandler: [requireAdmin] }, async (req, reply) => {
+      const { email } = req.params as { email: string };
+      const query = (req.query ?? {}) as { purge?: string };
+      const purge = query.purge === "true" || query.purge === "1";
+
+      const target = userStore.get(email);
+      if (!target) {
+        return reply.status(404).send({ error: "NotFound", message: "user not found" });
+      }
+
+      // 管理员账号受保护：删除后可能再也没人能进后台（当前也没有改角色的入口）。
+      if (target.role === "admin") {
+        return reply.status(400).send({ error: "BadRequest", message: "管理员账号受保护，不能被删除" });
+      }
+
+      const summary = { packs: 0, reclaimedBytes: 0, orphanAssets: 0, usageRecords: 0, monitorRecords: 0 };
+      if (purge) {
+        const owned = listPacks(deps.dataDir).filter(
+          (p) => p.owner && p.owner.toLowerCase() === target.email.toLowerCase()
+        );
+        if (owned.length) {
+          const result = await deletePacksAndReclaim(deps.dataDir, owned.map((p) => p.packId));
+          summary.packs = result.deleted.length;
+          summary.reclaimedBytes = result.reclaimedBytes;
+        }
+        // 再清掉「传了但没进任何包」的散图（按归属索引，只删该用户且无人引用的）
+        const orphan = reclaimAssetsByOwner(deps.dataDir, target.email);
+        summary.orphanAssets = orphan.count;
+        summary.reclaimedBytes += orphan.bytes;
+        summary.usageRecords = usageStore.purgeUser(target.email);
+        summary.monitorRecords = monitorStore.purgeUser(target.email);
+      }
+
+      if (!userStore.delete(target.email)) {
+        return reply.status(500).send({ error: "InternalError", message: "删除账号失败" });
+      }
+      return { ok: true, email: target.email, purged: purge, summary };
     });
 
     // GET /api/admin/usage — usage stats for all users
@@ -344,14 +390,33 @@ export function registerAdminRoutes(deps: AppDeps) {
       return { ok: true, report };
     });
 
+    // 删单个包：删完顺手回收只属于它的素材（不等下一次 GC）
     app.delete("/admin/packs/:packId", { preHandler: [requireAdmin] }, async (req, reply) => {
       const { packId } = req.params as { packId: string };
-      const removed = deletePack(deps.dataDir, packId);
-      if (!removed) {
+      const result = await deletePacksAndReclaim(deps.dataDir, [packId]);
+      if (!result.deleted.length) {
         reply.status(404);
         return { error: "NotFound", message: "pack not found" };
       }
-      return { ok: true, packId };
+      return { ok: true, packId, reclaimedBytes: result.reclaimedBytes, errors: result.errors };
+    });
+
+    // 批量删包（后台「删除选中 / 删除全部」）。删除不可恢复，前端已做二次确认。
+    app.post("/admin/packs/bulk-delete", { preHandler: [requireAdmin] }, async (req, reply) => {
+      const body = (req.body as { packIds?: unknown }) || {};
+      const ids = Array.isArray(body.packIds)
+        ? body.packIds.filter((id): id is string => typeof id === "string" && id.trim().length > 0)
+        : [];
+      if (!ids.length) {
+        reply.status(400);
+        return { error: "BadRequest", message: "packIds must be a non-empty array of strings" };
+      }
+      if (ids.length > 1000) {
+        reply.status(400);
+        return { error: "BadRequest", message: "too many packIds (max 1000)" };
+      }
+      const result = await deletePacksAndReclaim(deps.dataDir, ids);
+      return { ok: true, ...result };
     });
   };
 }

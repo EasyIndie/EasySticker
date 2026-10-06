@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { createFileAssetStore, listAssetFiles, type AssetStore } from "../../lib/assets";
+import { loadAssetOwners, pruneAssetOwners, removeAssetOwners } from "../../lib/assetOwners";
 import { readZipEntries } from "../../lib/zip";
 import { ensureRetentionStarted, expiryFor } from "./retention";
 import {
@@ -40,6 +41,12 @@ export type GcOptions = {
   assetRoot?: string;
   /** 孤儿素材需「无人引用」且「落盘超过这么久」才删。默认 6 小时。 */
   orphanMinAgeMs?: number;
+  /**
+   * 只回收这些 assetId 的孤儿素材。
+   * 用于「删包后立刻回收它自己的素材」：配合 orphanMinAgeMs=0，既不等 6 小时，
+   * 又不会误删其他用户正在生成、尚未写进清单的在途资源。
+   */
+  orphanAssetIds?: Iterable<string>;
   /** 包保留天数；未设置或 <= 0 表示不按时间清理。 */
   packRetentionDays?: number;
   /** 把只有 ZIP 的历史包压缩成清单。默认 true。 */
@@ -96,11 +103,27 @@ function sumFiles(files: Array<{ bytes?: number | null }>): number {
   return files.reduce((sum, f) => sum + (f.bytes ?? 0), 0);
 }
 
+/** 汇总「仍被包引用」的 assetId：贴纸 + 编辑用的附加参考图。 */
+export function collectReferencedAssetIds(dataDir: string, packIds?: string[]): Set<string> {
+  const referenced = new Set<string>();
+  for (const packId of packIds ?? listPackIds(dataDir)) {
+    const metadata = readPackMetadata(dataDir, packId);
+    if (!metadata) continue;
+    for (const file of metadata.files) {
+      referenced.add(file.assetId);
+      // 编辑图片用过的附加参考图也要算「被引用」，否则会被当孤儿素材回收掉
+      if (file.editReferenceAssetId) referenced.add(file.editReferenceAssetId);
+    }
+  }
+  return referenced;
+}
+
 export async function runGc(options: GcOptions): Promise<GcReport> {
   const {
     dataDir,
     assetStore = createFileAssetStore(dataDir),
     orphanMinAgeMs = DEFAULT_ORPHAN_MIN_AGE_MS,
+    orphanAssetIds,
     packRetentionDays = 0,
     compactLegacyPacks = true,
     dropOrigBackups = true,
@@ -227,16 +250,7 @@ export async function runGc(options: GcOptions): Promise<GcReport> {
   }
 
   /* 4. 孤儿素材回收 */
-  const referencedAssetIds = new Set<string>();
-  for (const packId of packIds) {
-    const metadata = readPackMetadata(dataDir, packId);
-    if (!metadata) continue;
-    for (const file of metadata.files) {
-      referencedAssetIds.add(file.assetId);
-      // 编辑图片用过的附加参考图也要算「被引用」，否则会被当孤儿素材回收掉
-      if (file.editReferenceAssetId) referencedAssetIds.add(file.editReferenceAssetId);
-    }
-  }
+  const referencedAssetIds = collectReferencedAssetIds(dataDir, packIds);
 
   // 统计包与素材的当前占用
   const assetFiles = listAssetFiles(dataDir);
@@ -253,8 +267,10 @@ export async function runGc(options: GcOptions): Promise<GcReport> {
     }
   }
 
+  const orphanTarget = orphanAssetIds ? new Set(orphanAssetIds) : null;
   for (const file of assetFiles) {
     if (referencedAssetIds.has(file.assetId)) continue;
+    if (orphanTarget && !orphanTarget.has(file.assetId)) continue;
     if (now - file.mtimeMs < orphanMinAgeMs) {
       report.orphanAssets.keptRecent += 1;
       continue;
@@ -270,8 +286,113 @@ export async function runGc(options: GcOptions): Promise<GcReport> {
     }
   }
 
+  // 归属索引随生成不断追加，这里按「仍在的素材」压缩一次，避免无限增长。
+  if (!dryRun) {
+    pruneAssetOwners(dataDir, listAssetFiles(dataDir).map((f) => f.assetId));
+  }
+
   report.reclaimedBytes =
     report.compacted.bytes + report.origBackups.bytes + report.orphanAssets.bytes + report.expired.bytes;
 
   return report;
+}
+
+export type DeletePacksResult = {
+  deleted: string[];
+  /** 传进来的 id 里，服务端找不到对应的（可能已被删）。 */
+  missing: string[];
+  /** 随包一起回收掉的素材字节数。 */
+  reclaimedBytes: number;
+  errors: string[];
+};
+
+/**
+ * 删除若干包，并**立即**回收只属于这些包的素材。
+ *
+ * 之前的 `deletePack` 只删清单，素材要等下一次 GC（孤儿满 6 小时）才回收，
+ * 于是后台删了包磁盘占用却纹丝不动。这里在删包后马上对「被删包引用过的 assetId」
+ * 跑一次定向孤儿回收：仍然被其它包引用的会保留，在途资源不在目标集合里也不会被碰到。
+ */
+export async function deletePacksAndReclaim(
+  dataDir: string,
+  packIds: Iterable<string>,
+  options: { assetStore?: AssetStore } = {}
+): Promise<DeletePacksResult> {
+  const assetStore = options.assetStore ?? createFileAssetStore(dataDir);
+  const targetAssetIds = new Set<string>();
+  const deleted: string[] = [];
+  const missing: string[] = [];
+  const errors: string[] = [];
+
+  for (const packId of packIds) {
+    // 删之前先记下它引用的素材；删完清单就读不到了。
+    const metadata = readPackMetadata(dataDir, packId);
+    const removed = deletePack(dataDir, packId);
+    if (!removed) {
+      missing.push(packId);
+      continue;
+    }
+    deleted.push(packId);
+    for (const file of metadata?.files ?? []) {
+      if (file.assetId) targetAssetIds.add(file.assetId);
+      if (file.editReferenceAssetId) targetAssetIds.add(file.editReferenceAssetId);
+    }
+  }
+
+  let reclaimedBytes = 0;
+  if (deleted.length && targetAssetIds.size) {
+    const report = await runGc({
+      dataDir,
+      assetStore,
+      dryRun: false,
+      compactLegacyPacks: false,
+      dropOrigBackups: false,
+      packRetentionDays: 0,
+      orphanMinAgeMs: 0,
+      orphanAssetIds: targetAssetIds
+    });
+    reclaimedBytes = report.orphanAssets.bytes;
+    errors.push(...report.errors);
+  }
+
+  return { deleted, missing, reclaimedBytes, errors };
+}
+
+export type OwnerReclaimResult = { count: number; bytes: number; errors: string[] };
+
+/**
+ * 回收「归属某用户、但已不被任何包引用」的散图。
+ *
+ * 硬删账号的 `purge` 里，`deletePacksAndReclaim` 只能回收被其名下包引用过的素材；
+ * 用户传了却一直没进包的图要靠这里，按归属索引精确删除，不会误伤其他用户的在途上传。
+ */
+export function reclaimAssetsByOwner(dataDir: string, owner: string): OwnerReclaimResult {
+  const target = owner.toLowerCase().trim();
+  const owners = loadAssetOwners(dataDir);
+  const referenced = collectReferencedAssetIds(dataDir);
+  const result: OwnerReclaimResult = { count: 0, bytes: 0, errors: [] };
+  const removedIds = new Set<string>();
+  const assetFiles = listAssetFiles(dataDir);
+
+  for (const file of assetFiles) {
+    if (referenced.has(file.assetId)) continue;
+    const assetOwner = owners.get(file.assetId);
+    if (!assetOwner || assetOwner.toLowerCase().trim() !== target) continue;
+    try {
+      fs.rmSync(file.filePath, { force: true });
+      result.count += 1;
+      result.bytes += file.bytes;
+      removedIds.add(file.assetId);
+    } catch (error) {
+      result.errors.push(`删除归属素材失败 ${file.filename}: ${(error as Error).message}`);
+    }
+  }
+
+  removeAssetOwners(dataDir, removedIds);
+  // 顺手清掉指向已删文件的旧归属记录，避免索引无限增长
+  pruneAssetOwners(
+    dataDir,
+    assetFiles.filter((f) => !removedIds.has(f.assetId)).map((f) => f.assetId)
+  );
+  return result;
 }
