@@ -1680,6 +1680,19 @@ function syncStateFromResult(json: any): void {
     renderStyleOptions(availableStyles);
     setPromptHint(currentStyles);
   }
+
+  // 还原提示词预设 + 自定义文本，保证从 ZIP / 历史还原后能直接再生成。
+  // 新包分开存 promptPreset / promptCustom；旧包只有合并后的 prompt。
+  const generation = json?.generation ?? {};
+  if (typeof generation.promptCustom === "string" || typeof generation.prompt === "string") {
+    wechatAiPrompt.value =
+      typeof generation.promptCustom === "string" ? generation.promptCustom : generation.prompt;
+    setFieldInvalid(wechatAiPrompt, false);
+    const presetId = typeof generation.promptPreset === "string" ? generation.promptPreset : "";
+    currentPresetId = promptPresets.some((p) => p.id === presetId) ? presetId : "";
+    if (wechatAiPromptPreset) wechatAiPromptPreset.value = currentPresetId;
+    syncPromptPresetPreview();
+  }
   if (json?.meta?.title && !wechatAiTitle.value.trim()) wechatAiTitle.value = json.meta.title;
   if (json?.meta?.author && !wechatAiAuthor.value.trim()) wechatAiAuthor.value = json.meta.author;
   if (json?.meta?.version && !wechatAiVersion.value.trim()) wechatAiVersion.value = json.meta.version;
@@ -1877,6 +1890,8 @@ async function generatePlatformPack(): Promise<void> {
       referenceAssetId: currentUploadId,
       presetId: currentPlatform,
       prompt,
+      promptPreset: currentPresetId,
+      promptCustom: wechatAiPrompt.value.trim(),
       provider: wechatAiProvider ? wechatAiProvider.value : "mock",
       styles: currentStyles.length ? currentStyles : undefined,
       stickerCount,

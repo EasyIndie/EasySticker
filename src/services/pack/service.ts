@@ -44,6 +44,10 @@ export type PackGenerationInfo = {
   providerId?: string;
   model?: string;
   prompt?: string;
+  /** 生成时选中的提示词预设 id；空/缺失表示未用预设（旧包）。 */
+  promptPreset?: string | null;
+  /** 生成时「提示词自定义」输入框的内容；与 promptPreset 一起完整还原表单。 */
+  promptCustom?: string | null;
   negativePrompt?: string;
   styles?: string[];
   stickerCount?: number;
