@@ -3,6 +3,7 @@ import os from "node:os";
 import path from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { buildApp } from "../src/app";
+import { createUserStore } from "../src/lib/userStore";
 
 /**
  * 回归测试：静态资源（结果图片 / 打包下载）必须豁免 API 频率限制。
@@ -13,16 +14,23 @@ import { buildApp } from "../src/app";
  */
 describe("rate limit — 静态资源豁免", () => {
   const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), "easysticker-rl-"));
-  const app = buildApp({
-    host: "127.0.0.1",
-    port: 0,
-    dataDir,
-    logLevel: "silent",
-    security: { rateLimit: { maxRequests: 3, windowMs: 60_000 } }
-  });
+  const userStore = createUserStore(dataDir);
+  const app = buildApp(
+    {
+      host: "127.0.0.1",
+      port: 0,
+      dataDir,
+      logLevel: "silent",
+      security: { rateLimit: { maxRequests: 3, windowMs: 60_000 } }
+    },
+    { userStore }
+  );
+  let adminToken = "";
 
   beforeAll(async () => {
+    userStore.register("admin@test.local", "pw", "admin");
     await app.ready();
+    adminToken = app.jwt.sign({ email: "admin@test.local", role: "admin" });
   });
 
   afterAll(async () => {
@@ -54,5 +62,20 @@ describe("rate limit — 静态资源豁免", () => {
     expect(statuses.slice(0, 3).every((s) => s !== 429)).toBe(true);
     expect(statuses[3]).toBe(429);
     expect(statuses[4]).toBe(429);
+  });
+
+  it("管理员请求走独立的宽额度，不会被普通限流误伤", async () => {
+    // 普通额度只有 3 次/分；管理员桶是 600 次/分，连续请求都应放行
+    const statuses: number[] = [];
+    for (let i = 0; i < 12; i++) {
+      const res = await app.inject({
+        method: "GET",
+        url: "/api/admin/users",
+        headers: { authorization: `Bearer ${adminToken}` }
+      });
+      statuses.push(res.statusCode);
+    }
+    expect(statuses[0]).toBe(200);
+    expect(statuses.every((s) => s !== 429)).toBe(true);
   });
 });
