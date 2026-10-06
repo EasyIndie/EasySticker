@@ -113,7 +113,9 @@ export async function registerConfigRoutes(app: FastifyInstance) {
         maxStickerCount: 24,
         defaultStickerCount: 8,
         defaultProvider,
-        availableProviders
+        availableProviders,
+        // 提示词预设（与「提示词自定义」互补）在页面加载时即可选，不必等上传后再拉。
+        promptPresets: (promptConfig.promptPresets ?? []).map((p) => ({ id: p.id, name: p.name, prompt: p.prompt }))
       },
       // New format for multi-platform frontend
       platforms

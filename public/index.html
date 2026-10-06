@@ -307,18 +307,20 @@
             <p class="muted">AI 模式补充生成参数；两种模式共享标题、作者、版权和赞赏信息。</p>
           </div>
           <div id="aiConfigFields">
-            <div class="field" id="promptPresetField" hidden>
-              <span class="section-title">提示词模板</span>
-              <div id="promptPresetOptions" class="style-options" role="group" aria-label="提示词模板"></div>
-              <div class="field-hint">选一套快速填充提示词，可再自行修改；每次上传或 AI 生成参考图都会自动换一套，方便连续生成不同主题的套图。</div>
-            </div>
+            <label class="field" id="promptPresetField" for="wechatAiPromptPreset" hidden>
+              <span class="section-title">提示词预设</span>
+              <select id="wechatAiPromptPreset" class="select-field">
+                <option value="">不使用预设（纯自定义）</option>
+              </select>
+              <div id="promptPresetPreview" class="field-hint" hidden></div>
+            </label>
             <label class="field" for="wechatAiPrompt">
-              <span class="section-title"><span class="required-mark">*</span>提示词</span>
+              <span class="section-title">提示词自定义</span>
               <textarea
                 id="wechatAiPrompt"
                 rows="5"
                 aria-describedby="promptHint"
-                placeholder="例如：基于参考图主体，生成一组适用于微信聊天场景的可爱表情，补充开心、委屈、赞同等情绪动作，背景干净，主体完整。"
+                placeholder="补充主体、场景、动作、背景等细节；会拼接在所选预设之后一起生成。预设与自定义至少填一项。"
               ></textarea>
               <div id="wechatAiPromptError" class="field-error" hidden></div>
             </label>
@@ -622,6 +624,6 @@
     <script src="/js/preview.js?v=820bcee9"></script>
     <script src="/js/generator-api.js?v=a1439256"></script>
     <script src="/js/ui.js?v=5463a81e"></script>
-    <script src="/js/app.js?v=8b1bceb7"></script>
+    <script src="/js/app.js?v=66371859"></script>
   </body>
 </html>
