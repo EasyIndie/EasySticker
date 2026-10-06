@@ -3047,7 +3047,7 @@ textarea:focus-visible {
 /* ── AI 生成参考图 ─────────────────────────────────────────── */
 .reference-generator {
   margin-top: var(--space-3);
-  padding: var(--space-3);
+  padding: var(--space-4);
   border: 1px dashed var(--color-border-default);
   border-radius: var(--radius-md);
   background: var(--color-surface-secondary);
@@ -3057,27 +3057,16 @@ textarea:focus-visible {
   display: flex;
   flex-direction: column;
   gap: 4px;
-  margin-bottom: var(--space-2);
 }
 
-.reference-generator-row {
+/* 主体 / 风格各自是一个 .field（自动带 margin-top 间距 + 标题），
+   与步骤 03 的表单保持一致，不再让两个输入框贴在一起。 */
+.reference-generator-actions {
   display: flex;
-  gap: var(--space-2);
-  align-items: stretch;
+  justify-content: flex-end;
+  margin-top: var(--space-3);
 }
 
-.reference-generator-row input {
-  flex: 1 1 auto;
-  min-width: 0;
-}
-
-.reference-generator-row button {
-  flex: none;
+.reference-generator-actions button {
   white-space: nowrap;
-}
-
-@media (max-width: 560px) {
-  .reference-generator-row {
-    flex-direction: column;
-  }
 }
