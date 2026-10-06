@@ -73,6 +73,8 @@ export interface PromptConfig {
     styles: string[];
   };
   emotions: string[];
+  /** 多套提示词模板：用户可一键套用，减少多次生成结果雷同。 */
+  promptPresets?: Array<{ id: string; name: string; prompt: string }>;
   templates: {
     sticker: string;
     extra: string;
@@ -151,6 +153,10 @@ export function loadPromptConfig(): PromptConfig {
 
       if (customConfig.emotions && Array.isArray(customConfig.emotions)) {
         config.emotions = customConfig.emotions;
+      }
+
+      if (customConfig.promptPresets && Array.isArray(customConfig.promptPresets)) {
+        config.promptPresets = customConfig.promptPresets;
       }
       
       if (customConfig.templates) {
