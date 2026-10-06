@@ -32,12 +32,29 @@ export type PlatformGenerateRequest = {
 
 export async function getPromptTemplate(referenceAssetId: string) {
   const promptConfig = loadPromptConfig();
+  const presets = Array.isArray(promptConfig.promptPresets) ? promptConfig.promptPresets : [];
+  // 每次随机挑一套，避免每次上传参考图都拿到完全相同的推荐提示词。
+  const picked = presets.length > 0 ? presets[Math.floor(Math.random() * presets.length)] : undefined;
   return {
     referenceAssetId,
-    prompt: promptConfig.global.prompt,
+    prompt: picked?.prompt ?? promptConfig.global.prompt,
     negativePrompt: promptConfig.global.negativePrompt,
-    styles: promptConfig.global.styles
+    styles: promptConfig.global.styles,
+    promptPresets: presets.map((p) => ({ id: p.id, name: p.name, prompt: p.prompt })),
+    suggestedPresetId: picked?.id ?? null
   };
+}
+
+/** Fisher–Yates 洗牌，返回新数组。 */
+function shuffle<T>(items: T[]): T[] {
+  const out = [...items];
+  for (let i = out.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    const tmp = out[i]!;
+    out[i] = out[j]!;
+    out[j] = tmp;
+  }
+  return out;
 }
 
 export async function generateAssetsAndPack(
@@ -72,6 +89,9 @@ export async function generateAssetsAndPack(
   const referenceBytes = fs.readFileSync(reference.filePath);
   const referenceBase64 = referenceBytes.toString("base64");
   const emotions = promptConfig.emotions;
+  // 每次生成打乱情绪顺序：即使沿用同一套提示词，两张图对应的情绪也会变，
+  // 避免连续多次生成的套图高度雷同。generation.emotions 仍记录原始全集。
+  const emotionOrder = emotions.length > 1 ? shuffle(emotions) : emotions;
 
   const referenceMode = promptConfig.ai?.referenceMode ?? "base64";
   const baseUrl = promptConfig.ai?.publicBaseUrl || "";
@@ -105,7 +125,7 @@ export async function generateAssetsAndPack(
   for (let i = 0; i < count; i++) {
     throwIfCanceled();
     const style = styles[i % styles.length]!;
-    const emotion = emotions[i % emotions.length];
+    const emotion = emotionOrder[i % emotionOrder.length];
 
     emit?.("progress", { phase: "stickers", current: currentGenerated + 1, total: totalImageCount });
     const compiledPrompt = compilePrompt(promptConfig.templates.sticker, {

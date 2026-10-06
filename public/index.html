@@ -11,7 +11,7 @@
     <title>EasySticker</title>
     <meta name="theme-color" id="themeMeta" content="#07c160" data-dark="#111827" />
     <script src="/js/theme.js?v=2ce5d795"></script>
-    <link rel="stylesheet" href="/styles.css?v=e4714779" />
+    <link rel="stylesheet" href="/styles.css?v=6625531b" />
   </head>
   <body>
     <a href="#mainContent" class="skip-link">跳到主要内容</a>
@@ -115,6 +115,26 @@
             <p class="muted">按素材现状选择入口，选择目标平台后，后续预览、校验、metadata 和 ZIP 下载保持一致。</p>
           </div>
           <div class="field">
+            <span class="section-title">创建方式</span>
+            <div class="mode-selector" role="radiogroup" aria-label="创建方式">
+              <label class="mode-option" for="creationModeImport">
+                <input id="creationModeImport" name="creationMode" type="radio" value="import" checked />
+                <span>导入已有图片</span>
+              </label>
+              <label class="mode-option" for="creationModeAi">
+                <input id="creationModeAi" name="creationMode" type="radio" value="ai" />
+                <span>AI 生成</span>
+              </label>
+            </div>
+          </div>
+          <label class="field" id="aiProviderField" for="wechatAiProvider" hidden>
+            <span class="section-title">AI 提供商</span>
+            <select id="wechatAiProvider" class="select-field">
+              <option value="mock" selected>加载中...</option>
+            </select>
+            <span class="field-hint">用于 AI 生成参考图与整包表情；选择 AI 创建方式后即可在此确认。</span>
+          </label>
+          <div class="field">
             <span class="section-title">目标平台</span>
             <div class="platform-selector" id="platformSelector" role="radiogroup" aria-label="目标平台">
               <label class="platform-option" data-platform="wechat_stickers">
@@ -136,16 +156,6 @@
                 <span class="platform-spec">512×512 WebP</span>
               </label>
             </div>
-          </div>
-          <div class="mode-selector" role="radiogroup" aria-label="创建方式">
-            <label class="mode-option" for="creationModeImport">
-              <input id="creationModeImport" name="creationMode" type="radio" value="import" checked />
-              <span>导入已有图片</span>
-            </label>
-            <label class="mode-option" for="creationModeAi">
-              <input id="creationModeAi" name="creationMode" type="radio" value="ai" />
-              <span>AI 生成</span>
-            </label>
           </div>
         </article>
 
@@ -297,12 +307,11 @@
             <p class="muted">AI 模式补充生成参数；两种模式共享标题、作者、版权和赞赏信息。</p>
           </div>
           <div id="aiConfigFields">
-            <label class="field" for="wechatAiProvider">
-              <span class="section-title"><span class="required-mark">*</span>AI 提供商选择</span>
-              <select id="wechatAiProvider" class="select-field">
-                <option value="mock" selected>加载中...</option>
-              </select>
-            </label>
+            <div class="field" id="promptPresetField" hidden>
+              <span class="section-title">提示词模板</span>
+              <div id="promptPresetOptions" class="style-options" role="group" aria-label="提示词模板"></div>
+              <div class="field-hint">选一套快速填充提示词，可再自行修改；每次上传或 AI 生成参考图都会自动换一套，方便连续生成不同主题的套图。</div>
+            </div>
             <label class="field" for="wechatAiPrompt">
               <span class="section-title"><span class="required-mark">*</span>提示词</span>
               <textarea
@@ -613,6 +622,6 @@
     <script src="/js/preview.js?v=820bcee9"></script>
     <script src="/js/generator-api.js?v=a1439256"></script>
     <script src="/js/ui.js?v=5463a81e"></script>
-    <script src="/js/app.js?v=2e76e1d5"></script>
+    <script src="/js/app.js?v=8b1bceb7"></script>
   </body>
 </html>

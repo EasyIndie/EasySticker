@@ -129,6 +129,9 @@ const wechatAiStyleOptions = req("wechatAiStyleOptions");
 const wechatAiCountDec = byId<HTMLButtonElement>("wechatAiCountDec");
 const wechatAiCountInc = byId<HTMLButtonElement>("wechatAiCountInc");
 const wechatAiProvider = byId<HTMLSelectElement>("wechatAiProvider");
+const aiProviderField = byId("aiProviderField");
+const promptPresetField = byId("promptPresetField");
+const promptPresetOptions = byId("promptPresetOptions");
 const promptHint = req("promptHint");
 const generateErrorSummary = byId("generateErrorSummary");
 const generateErrorList = byId("generateErrorList");
@@ -155,6 +158,9 @@ let currentRewardEnabled = false;
 let currentRewardMessage = "";
 let currentAiProvider = "mock";
 let currentCreationMode = "ai";
+// 多套提示词模板：来自 /api/generate/prompt，选中项高亮，编辑提示词后取消高亮。
+let promptPresets: Array<{ id: string; name: string; prompt: string }> = [];
+let selectedPresetId: string | null = null;
 let hasGenerationAttempted = false;
 let lastPackResult: any = null;
 // 当前预览中的贴纸与扩展资源（含 *_prompt），供单资源重生成时更新。
@@ -446,6 +452,31 @@ function renderStyleOptions(styles: string[] = DEFAULT_STYLE_OPTIONS): void {
     });
     wechatAiStyleOptions.appendChild(button);
   }
+}
+function renderPromptPresets(): void {
+  if (promptPresetField) promptPresetField.hidden = promptPresets.length === 0;
+  if (!promptPresetOptions) return;
+  promptPresetOptions.innerHTML = "";
+  for (const preset of promptPresets) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "style-chip";
+    button.dataset.selected = preset.id === selectedPresetId ? "true" : "false";
+    button.setAttribute("aria-pressed", preset.id === selectedPresetId ? "true" : "false");
+    button.textContent = preset.name;
+    button.addEventListener("click", () => applyPromptPreset(preset.id));
+    promptPresetOptions.appendChild(button);
+  }
+}
+function applyPromptPreset(id: string): void {
+  const preset = promptPresets.find((item) => item.id === id);
+  if (!preset) return;
+  selectedPresetId = id;
+  wechatAiPrompt.value = preset.prompt;
+  setFieldInvalid(wechatAiPrompt, false);
+  renderPromptPresets();
+  setPromptHint(currentStyles);
+  syncRegenerateButton();
 }
 
 // ── Persistence ─────────────────────────────────────────────────────────────
@@ -1439,6 +1470,7 @@ function syncCreationMode(): void {
   if (aiSourceSection) aiSourceSection.hidden = currentCreationMode !== "ai";
   if (importSourceSection) importSourceSection.hidden = currentCreationMode !== "import";
   if (aiConfigFields) aiConfigFields.hidden = currentCreationMode !== "ai";
+  if (aiProviderField) aiProviderField.hidden = currentCreationMode !== "ai";
   window._ui!.setButtonLabel(generateSubmit, currentCreationMode === "import" ? "导入并打包" : "开始生成");
   regenerateSubmit.hidden = currentCreationMode !== "ai";
   if (cancelGenerate) cancelGenerate.hidden = true;
@@ -1505,6 +1537,9 @@ function resetAllState(): void {
   if (creationModeImport) creationModeImport.checked = true;
   if (creationModeAi) creationModeAi.checked = false;
   wechatAiPrompt.value = "";
+  promptPresets = [];
+  selectedPresetId = null;
+  renderPromptPresets();
   wechatAiTitle.value = "";
   wechatAiAuthor.value = "";
   wechatAiVersion.value = "";
@@ -1551,6 +1586,11 @@ async function suggestPrompt(): Promise<void> {
     wechatAiPrompt.value = json.prompt ?? "";
     currentStyles = Array.isArray(json.styles) ? json.styles.filter(Boolean) : [];
     renderStyleOptions(DEFAULT_STYLE_OPTIONS);
+    promptPresets = Array.isArray(json.promptPresets)
+      ? json.promptPresets.filter((p: any) => p && typeof p.id === "string" && typeof p.name === "string" && typeof p.prompt === "string")
+      : [];
+    selectedPresetId = typeof json.suggestedPresetId === "string" ? json.suggestedPresetId : null;
+    renderPromptPresets();
     setPromptHint(currentStyles);
   } catch { /* 忽略后台提示词生成错误 */ }
 }
@@ -2333,7 +2373,12 @@ function bindEvents(): void {
   });
   importForm?.addEventListener("submit", async (e) => { e.preventDefault(); });
 
-  wechatAiPrompt.addEventListener("input", () => { setFieldInvalid(wechatAiPrompt, false); syncRegenerateButton(); });
+  wechatAiPrompt.addEventListener("input", () => {
+    setFieldInvalid(wechatAiPrompt, false);
+    // 手动改了内容就不再算「用了某一套模板」，取消高亮
+    if (selectedPresetId) { selectedPresetId = null; renderPromptPresets(); }
+    syncRegenerateButton();
+  });
   wechatAiTitle.addEventListener("input", () => setFieldInvalid(wechatAiTitle, false));
   wechatAiAuthor.addEventListener("input", () => setFieldInvalid(wechatAiAuthor, false));
   wechatAiCount.addEventListener("change", () => { setFieldInvalid(wechatAiCount, false); setPromptHint(currentStyles); });
