@@ -20,8 +20,8 @@ test.describe("AI 生成流程", () => {
   });
 
   test("切换到 AI 模式后参考图上传区域可见", async ({ page }) => {
-    // radio 被 label 覆盖，用 force
-    await page.locator("#creationModeAi").click({ force: true });
+    // 点 label（radio 被 label 覆盖指针事件）
+    await page.locator('label[for="creationModeAi"]').click();
     // AI 区域的上传 input 在 #file
     const fileInput = page.locator("#aiSourceSection #file");
     await expect(fileInput).toBeVisible();
@@ -29,7 +29,7 @@ test.describe("AI 生成流程", () => {
 
   test("AI 模式 + 微信平台后显示提示词 textarea", async ({ page }) => {
     // 需要 AI 模式 + 微信平台才显示
-    await page.locator("#creationModeAi").click({ force: true });
+    await page.locator('label[for="creationModeAi"]').click();
     await page.locator("input[name='platform'][value='wechat_stickers']").click({ force: true });
     const textarea = page.locator("#wechatAiPrompt");
     await expect(textarea).toBeVisible();
