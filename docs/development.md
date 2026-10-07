@@ -39,15 +39,15 @@ cp .env.example .env        # 本地开发可原样使用：默认 development +
 
 ### 编辑器 / AI 工具：pi 本地指令
 
-仓库自带 `.pi/extensions/dev-commands.ts`，在 pi 会话里注册了两个指令（详见 [`.pi/README.md`](../.pi/README.md)）：
+仓库自带 `.pi/extensions/dev-commands.ts`，在 pi 会话里注册了一个指令（详见 [`.pi/README.md`](../.pi/README.md)）：
 
 | 指令 | 等价命令 | 说明 |
 |------|---------|------|
 | `/dev` | `npm run dev` | 后端开发服务 |
-| `/web` | `npm run web:dev` | 前端开发服务 |
 
-都支持 `start` / `stop` / `restart` / `status` / `logs`，默认 `start`。服务后台常驻，
-PID 与日志在 `.pi/run/`（已 gitignore）。
+支持 `start` / `lan` / `stop` / `restart` / `status` / `logs`，默认 `start`。
+**默认仅本机可访问**：后端绑 `127.0.0.1`；需要局域网访问时用 `lan`（后端改绑 `0.0.0.0`）。
+服务后台常驻，PID、日志与访问模式在 `.pi/run/`（已 gitignore）。
 
 ---
 
