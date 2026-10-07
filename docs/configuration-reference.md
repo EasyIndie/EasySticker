@@ -35,7 +35,7 @@
 
 | 字段 | 类型 | 默认值 | 说明 |
 |------|------|--------|------|
-| `host` | string | `"0.0.0.0"` | 监听地址 |
+| `host` | string | `"0.0.0.0"` | 监听地址（`HOST` 环境变量优先） |
 | `port` | number | `3000` | 监听端口（`PORT` 环境变量优先） |
 | `dataDir` | string | `"data"` | 数据存储目录（`DATA_DIR` 环境变量优先） |
 | `logLevel` | string | `"info"` | `trace`/`debug`/`info`/`warn`/`error`/`fatal`/`silent` |
@@ -227,6 +227,7 @@
 | `ADMIN_PASSWORD` | 推荐 | 自动生成 | 首个管理员账户密码（不设则每次启动随机生成并打印到日志） |
 | `ADMIN_EMAIL` | 否 | `admin@easysticker.app` | 首个管理员邮箱 |
 | `AI_<PROVIDER_ID>_API_KEY` | 推荐 | — | 各提供商密钥，如 `AI_SEEDREAM_API_KEY`、`AI_OPENAI_API_KEY`。优先于配置文件 |
+| `HOST` | 否 | `0.0.0.0` | 监听地址，优先级高于 `server.host`。设 `127.0.0.1` 仅本机可访问（pi 的 `/dev` 指令默认会注入此值，`/dev lan` 则注入 `0.0.0.0`） |
 | `PORT` | 否 | `3000` | 服务端口 |
 | `DATA_DIR` | 否 | `data` | 数据存储目录 |
 | `LOG_LEVEL` | 否 | `info` | 日志级别 |
