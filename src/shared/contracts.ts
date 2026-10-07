@@ -81,11 +81,20 @@ export const resourceSchema = z.object({
 });
 export type ResourceGenerateRequest = z.infer<typeof resourceSchema>;
 
-/** POST /api/generate/reference — 用文字生成一张参考图（文生图）。 */
+/**
+ * POST /api/generate/reference — 生成一张参考图。
+ * 默认纯文生图；可选传 `referenceImageAssetId`（主底图）与
+ * `additionalReferenceImageAssetIds`（额外底图）走图生图（参考图 + 文字）。
+ * 不传任何参考图时行为与以前完全一致。
+ */
 export const referenceGenerateSchema = z.object({
   prompt: z.string().min(1),
   provider: z.string().optional(),
-  style: z.string().min(1).optional()
+  style: z.string().min(1).optional(),
+  /** 可选：已上传的参考图 assetId，作为图生图的主底图。 */
+  referenceImageAssetId: z.string().min(1).optional(),
+  /** 可选：额外参考图 assetId，排在主底图之后（仅部分模型支持多图）。 */
+  additionalReferenceImageAssetIds: z.array(z.string().min(1)).max(3).optional()
 });
 export type ReferenceGenerateRequest = z.infer<typeof referenceGenerateSchema>;
 

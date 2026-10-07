@@ -11,7 +11,7 @@
     <title>EasySticker</title>
     <meta name="theme-color" id="themeMeta" content="#07c160" data-dark="#111827" />
     <script src="/js/theme.js?v=2ce5d795"></script>
-    <link rel="stylesheet" href="/styles.css?v=6625531b" />
+    <link rel="stylesheet" href="/styles.css?v=4c6c8c0e" />
   </head>
   <body>
     <a href="#mainContent" class="skip-link">跳到主要内容</a>
@@ -201,6 +201,19 @@
                 placeholder="如：水彩、像素风、3D 卡通"
               />
             </label>
+            <label class="field" for="referenceImageFile">
+              <span class="section-title">参考底图<span class="optional-mark">可选·图生图</span></span>
+              <input
+                id="referenceImageFile"
+                type="file"
+                accept="image/png,image/jpeg"
+                multiple
+              />
+              <span class="field-hint">不选则保持纯文生图；可选一张主底图，最多再加 3 张附加参考图，AI 会在其基础上结合上面的描述与风格生成新的参考图。</span>
+            </label>
+            <div id="referenceImagePreviewList" class="reference-image-preview-list" hidden></div>
+            <p id="referenceImageHint" class="field-hint" hidden></p>
+            <button id="clearReferenceImageBtn" type="button" class="ghost-button" hidden>移除底图</button>
             <div class="reference-generator-actions">
               <button id="generateReferenceBtn" type="button" class="secondary">AI 生成参考图</button>
             </div>
@@ -624,6 +637,6 @@
     <script src="/js/preview.js?v=820bcee9"></script>
     <script src="/js/generator-api.js?v=a1439256"></script>
     <script src="/js/ui.js?v=5463a81e"></script>
-    <script src="/js/app.js?v=3121b96b"></script>
+    <script src="/js/app.js?v=0fe77cd3"></script>
   </body>
 </html>
