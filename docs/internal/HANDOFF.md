@@ -13,7 +13,8 @@ Fastify + TypeScript 后端，Vite + TypeScript 前端（构建为 `public/js/*`
 - **前端切片**：旧的 `public/app.js` / `public/admin.js` 已删除，迁入 `web/src/`，
   构建为七个 IIFE（`auth` / `preview` / `generator-api` / `ui` / `app` / `admin` / `theme`）。
 - **生图统一为 OpenAI 兼容 Images API**：只剩 `mock` / `openai` 两个 provider 实现，
-  豆包 Seedream 走 `variant: "generic"`。**参考图不再只能上传**：`POST /api/generate/reference` 可文生图。
+  豆包 Seedream 走 `variant: "generic"`。**参考图不再只能上传**：`POST /api/generate/reference` 可文生图，
+  也可传 `referenceImageAssetId`（主底图）+ `additionalReferenceImageAssetIds`（附加参考图，最多 3 张）生成（图生图）。
 - **密钥只放 `.env`**（`AI_<PROVIDER_ID>_API_KEY`），环境变量优先于 `prompt-config.json`，接口不回显。
 - **包只存清单、ZIP 按需现打**；GC 每 6 小时巡检；保留期默认 30 天且**不追溯既往**。
 - **包归属（owner）**：`GET /api/packs` 只返回自己的包；删包 / 还原要求 owner 匹配或管理员。

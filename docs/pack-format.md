@@ -162,4 +162,5 @@ data/packs/<packId>.json         # 包清单（几 KB），含逐张提示词 / 
 | `assetId` | 只传资产 id | ⚠️ 无 provider 消费，保留待实现 |
 
 参考图也可以不来自上传：`POST /api/generate/reference` 能用文字直接生成一张参考图（文生图），
+也可传 `referenceImageAssetId`（主底图）+ `additionalReferenceImageAssetIds`（附加参考图）生成（图生图），
 返回值与上传接口一致，见 [architecture.md §3.1](architecture.md#31-后端)。

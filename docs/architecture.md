@@ -75,8 +75,10 @@ infrastructure（适配器）  providers 实现、fileAssetStore、mailer、moni
 - **素材归属索引 + 定向散图回收**：`lib/assetOwners.ts` 用追加写的 `data/uploads/.owners.jsonl`
   记录 `assetId → owner`（生成/导入/上传经 `withAssetOwner` 包一层即可，各服务无感）。
   `reclaimAssetsByOwner` 据此只删「归属该用户且无人引用」的散图，不误伤他人；GC 顺带压缩索引。
-- **文生参考图**（`generate/reference.ts` + `POST /api/generate/reference`）：复用 provider/尺寸配置，
-  **不传参考图**即走 text-to-image（gpt-image 走 `/images/generations`，generic 走 `generations` 且不带 `image`），
+- **AI 生成参考图**（`generate/reference.ts` + `POST /api/generate/reference`）：复用 provider/尺寸配置，
+  默认**不传参考图**即走 text-to-image（gpt-image 走 `/images/generations`，generic 走 `generations` 且不带 `image`）；
+  也可传 `referenceImageAssetId`（主底图）+ `additionalReferenceImageAssetIds`（附加参考图，最多 3 张）走 image-to-image
+  （gpt-image 走 `/images/edits`，generic 走 `generations` 带 `image`），
   结果落盘为 asset，返回值与上传接口一致（`uploadId` / `url`），前端无需区分来源。
 
 ### 3.2 缓存（三档策略，互相锁死）
