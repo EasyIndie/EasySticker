@@ -92,7 +92,9 @@ async function main() {
   const config = loadPromptConfig();
   const serverConfig = config.server || {};
 
-  const host = serverConfig.host ?? "0.0.0.0";
+  // HOST 环境变量优先（pi 的 /dev 指令据此控制本机/局域网监听），
+  // 其次 prompt-config 的 server.host，最后默认 0.0.0.0。
+  const host = process.env["HOST"] ?? serverConfig.host ?? "0.0.0.0";
   const port = Number(process.env["PORT"] ?? serverConfig.port ?? 3000);
   const dataDir = process.env["DATA_DIR"] || serverConfig.dataDir || path.join(process.cwd(), "data");
   const logLevel = process.env["LOG_LEVEL"] || serverConfig.logLevel || "info";
