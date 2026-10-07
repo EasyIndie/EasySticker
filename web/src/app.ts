@@ -77,6 +77,10 @@ const uploadForm = req<HTMLFormElement>("uploadForm");
 const fileInput = req<HTMLInputElement>("file");
 const referencePrompt = byId<HTMLTextAreaElement>("referencePrompt");
 const referenceStyle = byId<HTMLInputElement>("referenceStyle");
+const referenceImageFile = byId<HTMLInputElement>("referenceImageFile");
+const referenceImageHint = byId<HTMLParagraphElement>("referenceImageHint");
+const referenceImagePreviewList = byId<HTMLDivElement>("referenceImagePreviewList");
+const clearReferenceImageBtn = byId<HTMLButtonElement>("clearReferenceImageBtn");
 const generateReferenceBtn = byId<HTMLButtonElement>("generateReferenceBtn");
 const uploadState = req("uploadState");
 const importForm = byId<HTMLFormElement>("importForm");
@@ -172,6 +176,8 @@ let currentRewardEnabled = false;
 let currentRewardMessage = "";
 let currentAiProvider = "mock";
 let currentCreationMode = "ai";
+// AI 生成参考图时可选的底图（图生图）。第 1 张是主底图，其余作为附加参考图。
+let aiReferenceImages: Array<{ assetId: string; url: string; name: string }> = [];
 // 多套提示词预设：与「提示词自定义」互补，最终提示词 = 预设 + 自定义。
 let promptPresets: Array<{ id: string; name: string; prompt: string }> = [];
 let currentPresetId = "";
@@ -1562,6 +1568,7 @@ function resetAllState(): void {
 
   uploadForm.reset();
   importForm?.reset?.();
+  clearAiReferenceImage();
   if (creationModeImport) creationModeImport.checked = true;
   if (creationModeAi) creationModeAi.checked = false;
   wechatAiPrompt.value = "";
@@ -2039,9 +2046,9 @@ async function generatePlatformPack(): Promise<void> {
 }
 
 /**
- * 用文字让 AI 生成一张参考图，替代「必须先有一张现成图片」。
- * 服务端走的是文生图（不带参考图），返回的 uploadId 与上传接口完全一致，
- * 所以后续「生成整套表情包」的流程无需任何改动。
+ * 让 AI 生成一张参考图，替代「必须先有一张现成图片」。
+ * 默认走文生图；用户选了底图后走图生图（参考图 + 文字），支持多张底图。
+ * 返回的 uploadId 与上传接口完全一致，所以后续「生成整套表情包」的流程无需任何改动。
  */
 async function generateAiReference(): Promise<void> {
   const prompt = referencePrompt?.value.trim() ?? "";
@@ -2050,9 +2057,11 @@ async function generateAiReference(): Promise<void> {
     referencePrompt?.focus();
     return;
   }
+  const referenceAssetId = aiReferenceImages[0]?.assetId;
+  const additionalReferenceImageAssetIds = aiReferenceImages.slice(1).map((img) => img.assetId);
   if (generateReferenceBtn) generateReferenceBtn.disabled = true;
   window._ui!.setStatus(uploadState, "AI 生成参考图中...", "loading");
-  window._ui!.setNotice("正在用 AI 生成参考图，可能需要几十秒...", "info");
+  window._ui!.setNotice(referenceAssetId ? "正在基于底图与描述生成参考图，可能需要几十秒..." : "正在用 AI 生成参考图，可能需要几十秒...", "info");
   resetGenerationResult();
 
   try {
@@ -2062,7 +2071,9 @@ async function generateAiReference(): Promise<void> {
       body: JSON.stringify({
         prompt,
         style: referenceStyle?.value.trim() || undefined,
-        provider: wechatAiProvider ? wechatAiProvider.value : undefined
+        provider: wechatAiProvider ? wechatAiProvider.value : undefined,
+        ...(referenceAssetId ? { referenceImageAssetId: referenceAssetId } : {}),
+        ...(additionalReferenceImageAssetIds.length ? { additionalReferenceImageAssetIds } : {})
       })
     });
     if (!json?.uploadId) throw new Error("AI 生成参考图失败，请重试。");
@@ -2093,6 +2104,115 @@ async function generateAiReference(): Promise<void> {
     syncRegenerateButton();
   } finally {
     if (generateReferenceBtn) generateReferenceBtn.disabled = false;
+  }
+}
+
+/** 把 AI 生成参考图的可选底图上传成 asset，随后以 referenceImageAssetId / additionalReferenceImageAssetIds 传给服务端走图生图。 */
+async function handleAiReferenceImageChange(): Promise<void> {
+  const files = Array.from(referenceImageFile?.files ?? []);
+  if (!files.length) {
+    clearAiReferenceImage();
+    return;
+  }
+  // 第 1 张是主底图，其余是附加参考图；后端 additionalReferenceImageAssetIds 上限 3。
+  const MAX_REFERENCE_IMAGES = 4;
+  if (files.length > MAX_REFERENCE_IMAGES) {
+    window._ui!.setNotice(`最多支持 ${MAX_REFERENCE_IMAGES} 张参考底图（1 张主底图 + 3 张附加参考图）。`, "error");
+    if (referenceImageFile) referenceImageFile.value = "";
+    return;
+  }
+  try {
+    const uploaded: Array<{ assetId: string; url: string; name: string }> = [];
+    for (const file of files) {
+      const id = await uploadReferenceFile(file);
+      uploaded.push({ assetId: id, url: window._preview!.buildAssetUrl(id), name: file.name });
+    }
+    aiReferenceImages = uploaded;
+    renderAiReferenceImages();
+    syncAiReferenceImageHint();
+    if (clearReferenceImageBtn) clearReferenceImageBtn.hidden = false;
+    window._ui!.setNotice(
+      files.length > 1 ? "已上传多张参考底图，可点击 AI 生成参考图。" : "底图已就绪，可点击 AI 生成参考图。",
+      "success"
+    );
+  } catch (error) {
+    clearAiReferenceImage();
+    window._ui!.setNotice(error instanceof Error ? error.message : "底图上传失败，请重试。", "error");
+  }
+}
+
+/** 渲染已选底图的预览缩略图。 */
+function renderAiReferenceImages(): void {
+  if (!referenceImagePreviewList) return;
+  referenceImagePreviewList.innerHTML = "";
+  aiReferenceImages.forEach((image, index) => {
+    const item = document.createElement("div");
+    item.className = "reference-image-preview-item";
+
+    const media = document.createElement("img");
+    media.src = image.url;
+    media.alt = image.name;
+    media.loading = "lazy";
+    media.decoding = "async";
+    media.onerror = () => {
+      item.classList.add("reference-image-preview-item-error");
+      media.outerHTML = `<div class="reference-image-preview-error">加载失败</div>`;
+    };
+
+    const label = document.createElement("span");
+    label.className = "reference-image-preview-label";
+    label.textContent = index === 0 ? "主底图" : `参考 ${index + 1}`;
+
+    const remove = document.createElement("button");
+    remove.type = "button";
+    remove.className = "reference-image-preview-remove";
+    remove.setAttribute("aria-label", `移除 ${image.name}`);
+    remove.title = `移除 ${image.name}`;
+    remove.textContent = "×";
+    remove.addEventListener("click", () => removeAiReferenceImage(index));
+
+    item.appendChild(media);
+    item.appendChild(label);
+    item.appendChild(remove);
+    referenceImagePreviewList.appendChild(item);
+  });
+  referenceImagePreviewList.hidden = aiReferenceImages.length === 0;
+}
+
+function syncAiReferenceImageHint(): void {
+  if (!referenceImageHint) return;
+  if (!aiReferenceImages.length) {
+    referenceImageHint.hidden = true;
+    return;
+  }
+  const names = aiReferenceImages.map((image) => image.name).join("、");
+  referenceImageHint.textContent =
+    aiReferenceImages.length > 1
+      ? `已选 ${aiReferenceImages.length} 张底图：${names}。第 1 张为主底图，其余作为附加参考（部分模型支持多图）。`
+      : `已选底图：${names}，AI 将在此基础上结合描述生成参考图。`;
+  referenceImageHint.hidden = false;
+}
+
+/** 移除指定索引的参考底图。 */
+function removeAiReferenceImage(index: number): void {
+  aiReferenceImages.splice(index, 1);
+  renderAiReferenceImages();
+  syncAiReferenceImageHint();
+  if (!aiReferenceImages.length) {
+    if (referenceImageFile) referenceImageFile.value = "";
+    if (clearReferenceImageBtn) clearReferenceImageBtn.hidden = true;
+  }
+}
+
+/** 移除已选的参考底图，回到纯文生图。 */
+function clearAiReferenceImage(): void {
+  aiReferenceImages = [];
+  if (referenceImageFile) referenceImageFile.value = "";
+  if (referenceImageHint) referenceImageHint.hidden = true;
+  if (clearReferenceImageBtn) clearReferenceImageBtn.hidden = true;
+  if (referenceImagePreviewList) {
+    referenceImagePreviewList.innerHTML = "";
+    referenceImagePreviewList.hidden = true;
   }
 }
 
@@ -2407,6 +2527,8 @@ function bindEvents(): void {
   fileInput.addEventListener("change", () => { if (fileInput.files?.length) void handleFileUpload(); });
   uploadForm.addEventListener("submit", (e) => e.preventDefault());
   generateReferenceBtn?.addEventListener("click", () => void generateAiReference());
+  referenceImageFile?.addEventListener("change", () => void handleAiReferenceImageChange());
+  clearReferenceImageBtn?.addEventListener("click", () => clearAiReferenceImage());
   referencePrompt?.addEventListener("keydown", (event) => {
     if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) {
       event.preventDefault();
