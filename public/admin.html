@@ -14,7 +14,7 @@
   <title>EasySticker 管理后台</title>
   <meta name="theme-color" id="themeMeta" content="#F0F2F5" data-dark="#0f172a">
   <script src="/js/theme.js?v=2ce5d795"></script>
-  <link rel="stylesheet" href="/admin.css?v=c4899ec7">
+  <link rel="stylesheet" href="/admin.css?v=a54130c4">
 </head>
 <body>
 
@@ -273,6 +273,10 @@
               <label for="setting-retention">监控数据保留天数</label>
               <input id="setting-retention" type="number" min="1" max="365" value="7">
             </div>
+            <div class="input-group">
+              <label for="setting-notification-interval">通知最小间隔 (ms)</label>
+              <input id="setting-notification-interval" type="number" min="0" step="60000" value="60000">
+            </div>
           </div>
           <p id="settings-msg" class="status-msg"></p>
         </section>
@@ -304,6 +308,6 @@
     </main>
   </div>
 
-  <script src="/js/admin.js?v=44762714"></script>
+  <script src="/js/admin.js?v=ba354468"></script>
 </body>
 </html>

@@ -301,5 +301,7 @@ RATE_LIMIT_MAX=600 DAILY_QUOTA_ANONYMOUS_MAX=500 node dist/server.js
 | 忘记管理员密码 | 设置 `ADMIN_PASSWORD` 重启；或删 `data/users.json` 里的对应用户重新注册为管理员 |
 | 重启后所有人被登出 | 未固定 `JWT_SECRET` |
 | 大量 429 | 限流/日配额太紧，或压测时没放宽（见 §5） |
+| 告警 webhook 太频繁 | ①「服务端错误率过高」现在只统计 5xx，4xx 噪声不再触发；若仍频繁，调大该规则的 `silenceMs` 或全局 `notificationInterval`（后台「设置」）。②告警恢复后会发一条恢复通知，不再反复推送。③旧配置启动时自动把 `error_rate_high` 从 `errorRate` 迁到 `serverErrorRate` |
+| 告警只说「错误率过高」 | 升级后消息会带出错路由、状态码分布与排查建议（后台告警列表 / webhook）；对应监控可在 `data/monitoring/request/*.jsonl` 按 route/status 搜索 |
 | 首页还在跑旧的前端代码 | 跑 `npm run web:build`（会同时刷新 HTML 里的内容哈希） |
 | 生成结果一直是随机图 | `ai.defaultProvider` 还是 `mock` |

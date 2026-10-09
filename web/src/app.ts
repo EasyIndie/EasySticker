@@ -103,6 +103,12 @@ const editInstruction = req<HTMLTextAreaElement>("editInstruction");
 const editChips = req("editChips");
 const editReference = req<HTMLInputElement>("editReference");
 const editUseOriginalRef = req<HTMLInputElement>("editUseOriginalRef");
+const versionDialog = byId("versionDialog");
+const versionDialogBackdrop = byId("versionDialogBackdrop");
+const versionDialogClose = byId("versionDialogClose");
+const versionDialogBody = byId("versionDialogBody");
+const versionDialogTitle = byId("versionDialogTitle");
+const versionDialogTarget = byId("versionDialogTarget");
 const importState = req("importState");
 const originalPreview = req<HTMLImageElement>("originalPreview");
 const creationModeAi = byId<HTMLInputElement>("creationModeAi");
@@ -137,6 +143,8 @@ const aiProviderField = byId("aiProviderField");
 const promptPresetField = byId("promptPresetField");
 const wechatAiPromptPreset = byId<HTMLSelectElement>("wechatAiPromptPreset");
 const promptPresetPreview = byId("promptPresetPreview");
+const promptModeField = byId("promptModeField");
+const wechatAiPromptMode = byId<HTMLSelectElement>("wechatAiPromptMode");
 const promptHint = req("promptHint");
 const generateErrorSummary = byId("generateErrorSummary");
 const generateErrorList = byId("generateErrorList");
@@ -162,7 +170,8 @@ let DEFAULT_STYLE_OPTIONS = [
   "软萌毛绒",
   "黏土 3D",
   "极简线条",
-  "复古漫画"
+  "复古漫画",
+  "极简蜡笔涂鸦"
 ];
 let currentPlatform = "wechat_stickers";
 let DEFAULT_STICKER_COUNT: number = PLATFORM_SPECS.wechat_stickers.defaultCount;
@@ -179,8 +188,11 @@ let currentCreationMode = "ai";
 // AI 生成参考图时可选的底图（图生图）。第 1 张是主底图，其余作为附加参考图。
 let aiReferenceImages: Array<{ assetId: string; url: string; name: string }> = [];
 // 多套提示词预设：与「提示词自定义」互补，最终提示词 = 预设 + 自定义。
-let promptPresets: Array<{ id: string; name: string; prompt: string }> = [];
+// 预设可携带推荐风格（style）供前端自动切选。
+let promptPresets: Array<{ id: string; name: string; prompt: string; style?: string }> = [];
 let currentPresetId = "";
+// 自定义提示词与预设的关系：append = 追加（预设 + 自定义），override = 覆盖（仅用自定义）。
+let promptMode: "append" | "override" = "append";
 let hasGenerationAttempted = false;
 let lastPackResult: any = null;
 // 当前预览中的贴纸与扩展资源（含 *_prompt），供单资源重生成时更新。
@@ -422,9 +434,12 @@ function setPromptHint(styles: string[] = []): void {
   if (spec.showsExtraAssets) {
     extraText = currentRewardEnabled ? "，并附带赞赏引导图和感谢图" : "，并自动补齐封面、图标和横幅";
   }
+  const modeText = currentPresetId
+    ? (promptMode === "override" ? "自定义覆盖预设" : "自定义追加在预设后")
+    : "预设 + 自定义";
   promptHint.textContent = Array.isArray(styles) && styles.length
-    ? `已加载推荐风格：${styles.join("、")}。最终提示词 = 预设 + 自定义，可只填其一。当前生成 ${count} 张表情${extraText}。`
-    : `最终提示词 = 预设 + 自定义，可只填其一。当前生成 ${count} 张表情${extraText}。`;
+    ? `已加载推荐风格：${styles.join("、")}。最终提示词：${modeText}，可只填其一。当前生成 ${count} 张表情${extraText}。`
+    : `最终提示词：${modeText}，两者至少填一项。当前生成 ${count} 张表情${extraText}。`;
 }
 function syncOriginalPreviewSlot(): void {
   const hasSrc = Boolean(originalPreview?.getAttribute("src"));
@@ -491,6 +506,12 @@ function populatePromptPresets(): void {
   currentPresetId = promptPresets.some((p) => p.id === previous) ? previous : "";
   wechatAiPromptPreset.value = currentPresetId;
   syncPromptPresetPreview();
+  syncPromptModeField();
+}
+/** 仅当选择预设时，才需要「追加 / 覆盖」二选一。 */
+function syncPromptModeField(): void {
+  if (promptModeField) promptModeField.hidden = !currentPresetId;
+  if (wechatAiPromptMode) wechatAiPromptMode.value = promptMode;
 }
 function syncPromptPresetPreview(): void {
   if (!promptPresetPreview) return;
@@ -500,11 +521,22 @@ function syncPromptPresetPreview(): void {
     ? `已选「${preset.name}」：${preset.prompt}`
     : "";
 }
-/** 提交给后端的基础提示词：预设（基础）+ 自定义（补充），可只填其一。 */
+/** 选中预设若声明了推荐风格，自动切到该风格（须在可选列表中）。 */
+function applyPresetStyle(): void {
+  const style = promptPresets.find((p) => p.id === currentPresetId)?.style;
+  if (!style || !availableStyles.includes(style)) return;
+  if (currentStyles.length === 1 && currentStyles[0] === style) return;
+  currentStyles = [style];
+  renderStyleOptions(availableStyles);
+  setPromptHint(currentStyles);
+}
+/** 提交给后端的基础提示词：按 promptMode 决定追加还是覆盖；预设与自定义可只填其一。 */
 function getEffectivePrompt(): string {
   const custom = wechatAiPrompt.value.trim();
   const preset = promptPresets.find((p) => p.id === currentPresetId);
   const base = preset ? preset.prompt.trim() : "";
+  // 覆盖模式：只要填了自定义，就完全忽略预设
+  if (custom && promptMode === "override") return custom;
   if (base && custom) return `${base}\n${custom}`;
   return base || custom;
 }
@@ -536,7 +568,8 @@ function sanitizePersistedPackResult(raw: any): any {
           emotion: typeof item.emotion === "string" ? item.emotion : undefined,
           sourceAssetId: typeof item.sourceAssetId === "string" ? item.sourceAssetId : undefined,
           editReferenceAssetId:
-            typeof item.editReferenceAssetId === "string" ? item.editReferenceAssetId : undefined
+            typeof item.editReferenceAssetId === "string" ? item.editReferenceAssetId : undefined,
+          versions: Array.isArray(item.versions) ? item.versions : undefined
         }))
     : [];
 
@@ -552,6 +585,9 @@ function sanitizePersistedPackResult(raw: any): any {
     rewardEnabled: Boolean(raw.rewardEnabled),
     rewardMessage: typeof raw.rewardMessage === "string" ? raw.rewardMessage : "",
     stickerCount: Number.isFinite(raw.stickerCount) ? raw.stickerCount : DEFAULT_STICKER_COUNT,
+    promptMode: raw.promptMode === "override" ? "override" : "append",
+    promptPreset: typeof raw.promptPreset === "string" ? raw.promptPreset : "",
+    creationMode: raw.creationMode === "ai" ? "ai" : raw.creationMode === "import" ? "import" : undefined,
     styles: Array.isArray(raw.styles) ? raw.styles.filter((item: any) => typeof item === "string" && item.trim()) : [],
     hasGenerationAttempted: Boolean(raw.hasGenerationAttempted),
     result: {
@@ -578,7 +614,9 @@ function sanitizePersistedPackResult(raw: any): any {
             ...(typeof raw.rewardMessage === "string" && raw.rewardMessage ? { rewardMessage: raw.rewardMessage } : {}),
             ...(raw.rewardEnabled ? { rewardEnabled: true } : {})
           },
-      extras: result.extras && typeof result.extras === "object" ? result.extras : {}
+      extras: result.extras && typeof result.extras === "object" ? result.extras : {},
+      generation: result.generation && typeof result.generation === "object" ? result.generation : undefined,
+      extraDetails: result.extraDetails && typeof result.extraDetails === "object" ? result.extraDetails : undefined
     }
   };
 }
@@ -598,7 +636,9 @@ function persistLastPackPayload(result: any): void {
     uploadId: currentUploadId,
     prompt: wechatAiPrompt.value,
     promptPreset: currentPresetId,
+    promptMode,
     provider: currentAiProvider,
+    creationMode: currentCreationMode,
     title: wechatAiTitle.value,
     author: wechatAiAuthor.value,
     versionText: wechatAiVersion.value,
@@ -626,12 +666,17 @@ function persistLastPackPayload(result: any): void {
               emotion: typeof item.emotion === "string" ? item.emotion : undefined,
               sourceAssetId: typeof item.sourceAssetId === "string" ? item.sourceAssetId : undefined,
               editReferenceAssetId:
-                typeof item.editReferenceAssetId === "string" ? item.editReferenceAssetId : undefined
+                typeof item.editReferenceAssetId === "string" ? item.editReferenceAssetId : undefined,
+              versions: Array.isArray(item.versions) ? item.versions : undefined
             }))
         : [],
       metadataJson: typeof result.metadataJson === "string" ? result.metadataJson : undefined,
       meta: result.meta && typeof result.meta === "object" ? result.meta : {},
-      extras: result.extras && typeof result.extras === "object" ? result.extras : {}
+      // 生成上下文（含 source / providerId / 预设 / 风格 / 数量）：刷新后靠它还原创建方式等 UI
+      generation: result.generation && typeof result.generation === "object" ? result.generation : undefined,
+      extras: result.extras && typeof result.extras === "object" ? result.extras : {},
+      // 扩展资源的历史版本不在 result.extras 里，单独带上，刷新后才能还原
+      extraDetails: collectPackAssets().extraDetails
     }
   };
   try { storage.setItem(STORAGE_LAST_PACK, JSON.stringify(payload)); } catch { /* ignore */ }
@@ -660,12 +705,14 @@ function restorePersistedPackResult(): boolean {
     lastPackResult = restored.result;
     // 必须把资源写回模块状态，否则恢复出来的预览只是「看得见」：
     // 单资源重生成、编辑图片都会因为 currentStickers 为空而静默失效。
-    syncStateFromResult(restored.result);
+    syncStateFromResult(restored.result, { creationMode: restored.creationMode });
 
     wechatAiPrompt.value = restored.prompt;
     currentPresetId = typeof restored.promptPreset === "string" ? restored.promptPreset : "";
+    promptMode = restored.promptMode === "override" ? "override" : "append";
     if (wechatAiPromptPreset) wechatAiPromptPreset.value = currentPresetId;
     syncPromptPresetPreview();
+    syncPromptModeField();
     if (wechatAiProvider) wechatAiProvider.value = currentAiProvider;
     wechatAiTitle.value = restored.title;
     wechatAiAuthor.value = restored.author;
@@ -1007,8 +1054,8 @@ async function restoreFromHistory(packId: string): Promise<void> {
     wechatAiVersion.value = "";
     wechatAiCopyright.value = "";
     switchPlatform(json?.meta?.presetId);
-    if (creationModeImport) creationModeImport.checked = true;
-    syncCreationMode();
+    // 创建方式由 renderCompletedPackResult → syncStateFromResult 按 generation.source 还原，
+    // 这里不再硬编码为导入。
 
     renderCompletedPackResult(
       json,
@@ -1089,11 +1136,12 @@ function collectPackAssets(): {
     emotion?: string;
     sourceAssetId?: string;
     editReferenceAssetId?: string;
+    versions?: any[];
   }>;
   extras: Record<string, string>;
   extraDetails: Record<
     string,
-    { prompt?: string; style?: string; sourceAssetId?: string; editReferenceAssetId?: string }
+    { prompt?: string; style?: string; sourceAssetId?: string; editReferenceAssetId?: string; versions?: any[] }
   >;
 } {
   const assets = currentStickers
@@ -1106,22 +1154,26 @@ function collectPackAssets(): {
       ...(s.style ? { style: s.style } : {}),
       ...(s.emotion ? { emotion: s.emotion } : {}),
       ...(s.sourceAssetId ? { sourceAssetId: s.sourceAssetId } : {}),
-      ...(s.editReferenceAssetId ? { editReferenceAssetId: s.editReferenceAssetId } : {})
+      ...(s.editReferenceAssetId ? { editReferenceAssetId: s.editReferenceAssetId } : {}),
+      ...(Array.isArray(s.versions) && s.versions.length ? { versions: s.versions } : {})
     }));
   const extras: Record<string, string> = {};
   const extraDetails: Record<
     string,
-    { prompt?: string; style?: string; sourceAssetId?: string; editReferenceAssetId?: string }
+    { prompt?: string; style?: string; sourceAssetId?: string; editReferenceAssetId?: string; versions?: any[] }
   > = {};
   for (const key of EXTRA_ASSET_KEYS) {
     const id = currentExtras[key];
     if (typeof id === "string" && id) extras[key] = id;
-    const detail: { prompt?: string; style?: string; sourceAssetId?: string; editReferenceAssetId?: string } = {};
+    const detail: { prompt?: string; style?: string; sourceAssetId?: string; editReferenceAssetId?: string; versions?: any[] } = {};
     if (currentExtras[`${key}_prompt`]) detail.prompt = currentExtras[`${key}_prompt`];
     if (currentExtras[`${key}_style`]) detail.style = currentExtras[`${key}_style`];
     if (currentExtras[`${key}_sourceAssetId`]) detail.sourceAssetId = currentExtras[`${key}_sourceAssetId`];
     if (currentExtras[`${key}_editReferenceAssetId`]) {
       detail.editReferenceAssetId = currentExtras[`${key}_editReferenceAssetId`];
+    }
+    if (Array.isArray(currentExtras[`${key}_versions`]) && currentExtras[`${key}_versions`].length) {
+      detail.versions = currentExtras[`${key}_versions`];
     }
     if (Object.keys(detail).length) extraDetails[EXTRA_ROLE_BY_KEY[key]!] = detail;
   }
@@ -1139,6 +1191,8 @@ async function rebuildPackFromState(): Promise<void> {
       ...extras,
       metadata: getMetadataPayload()
     };
+    // 带上原 packId：让服务端原地更新这一条历史，而不是每次编辑都新建一个包
+    if (lastPackResult?.packId) body.packId = lastPackResult.packId;
     if (Object.keys(extraDetails).length) body.extraDetails = extraDetails;
     if (lastPackResult?.generation) body.generation = lastPackResult.generation;
     // 参考图一并打进 source/，保证重建后的 ZIP 仍可完整还原
@@ -1193,13 +1247,53 @@ function resourceAssetId(target: ResourceTarget): string | null {
   return null;
 }
 
+/** 追加一个新的历史版本；若无历史则先用当前图补一条「初版」。 */
+function buildNextVersions(
+  existing: { assetId?: string; prompt?: string; style?: string; emotion?: string; versions?: any[] },
+  res: any,
+  kind: "edit" | "regenerate",
+  instruction?: string
+): any[] {
+  const versions =
+    Array.isArray(existing?.versions) && existing.versions.length
+      ? [...existing.versions]
+      : existing?.assetId
+        ? [
+            {
+              assetId: existing.assetId,
+              createdAt: lastPackResult?.generation?.createdAt ?? new Date().toISOString(),
+              kind: "generate" as const,
+              ...(existing.prompt ? { prompt: existing.prompt } : {}),
+              ...(existing.style ? { style: existing.style } : {}),
+              ...(existing.emotion ? { emotion: existing.emotion } : {})
+            }
+          ]
+        : [];
+  versions.push({
+    assetId: res.assetId,
+    createdAt: typeof res.createdAt === "string" ? res.createdAt : new Date().toISOString(),
+    kind,
+    ...(instruction ? { instruction } : {}),
+    ...(res.prompt ? { prompt: res.prompt } : {}),
+    ...(res.style ? { style: res.style } : {}),
+    ...(res.emotion ? { emotion: res.emotion } : {})
+  });
+  // 与服务端 `packFileVersionSchema` 的 max(50) 对齐，避免编辑太多次后重建被打 400
+  return versions.slice(-50);
+}
+
 /** 把单资源生成的结果写回预览状态。 */
-function applyResourceResult(target: ResourceTarget, res: any): void {
+function applyResourceResult(
+  target: ResourceTarget,
+  res: any,
+  meta: { kind: "edit" | "regenerate"; instruction?: string } = { kind: "regenerate" }
+): void {
   const url = res.url || `/api/assets/${res.assetId}`;
   if (target.kind === "sticker" && typeof target.index === "number") {
     const index = target.index;
     const existing = currentStickers[index];
     if (!existing) return;
+    const versions = buildNextVersions(existing, res, meta.kind, meta.instruction);
     currentStickers[index] = {
       ...existing,
       label: res.label ?? existing.label,
@@ -1208,6 +1302,7 @@ function applyResourceResult(target: ResourceTarget, res: any): void {
       prompt: res.prompt,
       style: res.style ?? existing.style,
       emotion: res.emotion ?? existing.emotion,
+      versions,
       ...(res.sourceAssetId ? { sourceAssetId: res.sourceAssetId } : {}),
       ...(res.editReferenceAssetId ? { editReferenceAssetId: res.editReferenceAssetId } : {})
     };
@@ -1221,6 +1316,7 @@ function applyResourceResult(target: ResourceTarget, res: any): void {
         prompt: currentStickers[index].prompt,
         style: currentStickers[index].style,
         emotion: currentStickers[index].emotion,
+        versions,
         sourceAssetId: currentStickers[index].sourceAssetId,
         editReferenceAssetId: currentStickers[index].editReferenceAssetId
       };
@@ -1235,14 +1331,23 @@ function applyResourceResult(target: ResourceTarget, res: any): void {
     return;
   }
   if (target.key) {
-    currentExtras[target.key] = res.assetId;
-    currentExtras[`${target.key}_prompt`] = res.prompt;
-    if (res.style) currentExtras[`${target.key}_style`] = res.style;
-    if (res.sourceAssetId) currentExtras[`${target.key}_sourceAssetId`] = res.sourceAssetId;
-    if (res.editReferenceAssetId) currentExtras[`${target.key}_editReferenceAssetId`] = res.editReferenceAssetId;
-    delete currentExtras[`${target.key}_error`];
+    const key = target.key;
+    const existing = {
+      assetId: currentExtras[key],
+      prompt: currentExtras[`${key}_prompt`],
+      style: currentExtras[`${key}_style`],
+      versions: currentExtras[`${key}_versions`]
+    };
+    const versions = buildNextVersions(existing, res, meta.kind, meta.instruction);
+    currentExtras[key] = res.assetId;
+    currentExtras[`${key}_prompt`] = res.prompt;
+    if (res.style) currentExtras[`${key}_style`] = res.style;
+    currentExtras[`${key}_versions`] = versions;
+    if (res.sourceAssetId) currentExtras[`${key}_sourceAssetId`] = res.sourceAssetId;
+    if (res.editReferenceAssetId) currentExtras[`${key}_editReferenceAssetId`] = res.editReferenceAssetId;
+    delete currentExtras[`${key}_error`];
     if (lastPackResult?.extras) {
-      lastPackResult.extras = { ...lastPackResult.extras, [target.key]: res.assetId };
+      lastPackResult.extras = { ...lastPackResult.extras, [key]: res.assetId };
     }
     if (!window._preview!.updateExtraAsset(target.key, currentExtras, "success")) {
       window._preview!.renderExtraAssets(currentExtras, "success");
@@ -1267,6 +1372,7 @@ async function runSingleResource(
       presetId: currentPlatform,
       referenceAssetId: currentUploadId,
       prompt: resolveBasePrompt(),
+      promptPreset: currentPresetId || undefined,
       provider: wechatAiProvider ? wechatAiProvider.value : undefined,
       styles: currentStyles.length ? currentStyles : undefined,
       stickerCount: Number(wechatAiCount.value || DEFAULT_STICKER_COUNT),
@@ -1278,7 +1384,10 @@ async function runSingleResource(
       ...(options.editReferenceAssetId ? { editReferenceAssetId: options.editReferenceAssetId } : {})
     })
   });
-  applyResourceResult(target, res);
+  applyResourceResult(target, res, {
+    kind: options.mode === "edit" ? "edit" : "regenerate",
+    instruction: options.instruction
+  });
   const previousPackId = lastPackResult?.packId;
   if (lastPackResult) await rebuildPackFromState();
   // 同步本地持久化：刷新后预览要是编辑后的图，历史记录也要指向最新那个包
@@ -1286,6 +1395,189 @@ async function runSingleResource(
     persistLastPackPayload(lastPackResult);
     addToPackHistory(lastPackResult, previousPackId);
   }
+}
+
+// ── 历史版本：查看与回退 ────────────────────────────────────────────────
+
+const VERSION_KIND_LABEL: Record<string, string> = {
+  generate: "初版",
+  edit: "编辑",
+  regenerate: "重新生成",
+  restore: "回退"
+};
+
+let versionTarget: ResourceTarget | null = null;
+
+/** 读取某个资源当前的历史版本列表（贴纸走 currentStickers，扩展资源走 currentExtras）。 */
+function getResourceVersions(target: ResourceTarget): any[] {
+  if (target.kind === "sticker" && typeof target.index === "number") {
+    const versions = currentStickers[target.index]?.versions;
+    return Array.isArray(versions) ? versions : [];
+  }
+  if (target.key) {
+    const versions = currentExtras[`${target.key}_versions`];
+    return Array.isArray(versions) ? versions : [];
+  }
+  return [];
+}
+
+function renderVersionDialog(): void {
+  if (!versionDialogBody || !versionTarget) return;
+  const versions = getResourceVersions(versionTarget);
+  const currentId = resourceAssetId(versionTarget);
+  versionDialogBody.innerHTML = "";
+
+  versions
+    .slice()
+    .reverse()
+    .forEach((version, revIndex) => {
+      const index = versions.length - 1 - revIndex;
+      const isCurrent = version.assetId === currentId;
+      const item = document.createElement("div");
+      item.className = `version-item${isCurrent ? " version-item-current" : ""}`;
+
+      const link = document.createElement("a");
+      link.className = "version-thumb-link";
+      link.href = window._preview!.buildAssetUrl(version.assetId);
+      link.target = "_blank";
+      link.rel = "noopener";
+      link.title = "点击查看原图";
+      const img = document.createElement("img");
+      img.className = "version-thumb";
+      img.src = window._preview!.buildAssetUrl(version.assetId);
+      img.alt = `v${index + 1}`;
+      img.loading = "lazy";
+      link.appendChild(img);
+
+      const meta = document.createElement("div");
+      meta.className = "version-meta";
+      const title = document.createElement("div");
+      title.className = "version-title";
+      title.textContent = `v${index + 1} · ${VERSION_KIND_LABEL[version.kind] ?? version.kind}`;
+      if (isCurrent) {
+        const tag = document.createElement("span");
+        tag.className = "version-current-tag";
+        tag.textContent = "当前";
+        title.appendChild(tag);
+      }
+      const time = document.createElement("div");
+      time.className = "version-time";
+      time.textContent = version.createdAt ? new Date(version.createdAt).toLocaleString() : "";
+      meta.appendChild(title);
+      meta.appendChild(time);
+      if (version.instruction) {
+        const instr = document.createElement("div");
+        instr.className = "version-instruction";
+        instr.textContent = `修改要求：${version.instruction}`;
+        meta.appendChild(instr);
+      }
+
+      const actions = document.createElement("div");
+      actions.className = "version-actions";
+      if (!isCurrent) {
+        const restore = document.createElement("button");
+        restore.type = "button";
+        restore.className = "secondary btn-sm";
+        restore.textContent = "恢复该版本";
+        restore.addEventListener("click", () => void restoreResourceVersion(versionTarget!, version.assetId));
+        actions.appendChild(restore);
+      }
+
+      item.appendChild(link);
+      item.appendChild(meta);
+      item.appendChild(actions);
+      versionDialogBody.appendChild(item);
+    });
+}
+
+function openVersionDialog(target: ResourceTarget): void {
+  const versions = getResourceVersions(target);
+  if (versions.length <= 1) {
+    window._ui!.setNotice("这一张还没有历史版本，编辑一次后就能查看。", "info");
+    return;
+  }
+  versionTarget = target;
+  if (versionDialogTitle) versionDialogTitle.textContent = `${resourceLabel(target)} · 历史版本`;
+  if (versionDialogTarget) {
+    versionDialogTarget.textContent = `共 ${versions.length} 个版本（最新在前），可查看原图或恢复某一版。`;
+  }
+  renderVersionDialog();
+  if (versionDialog) {
+    versionDialog.style.visibility = "hidden";
+    versionDialog.hidden = false;
+    void versionDialog.offsetHeight;
+    versionDialog.style.visibility = "";
+  }
+}
+
+function closeVersionDialog(): void {
+  if (versionDialog) versionDialog.hidden = true;
+  versionTarget = null;
+}
+
+/** 回退到某个历史版本：只移动「当前指针」，不改图片、不新增版本。 */
+async function restoreResourceVersion(target: ResourceTarget, versionAssetId: string): Promise<void> {
+  const versions = getResourceVersions(target);
+  const version = versions.find((v) => v.assetId === versionAssetId);
+  if (!version) return;
+  const url = window._preview!.buildAssetUrl(versionAssetId);
+
+  if (target.kind === "sticker" && typeof target.index === "number") {
+    const index = target.index;
+    const existing = currentStickers[index];
+    if (!existing) return;
+    currentStickers[index] = {
+      ...existing,
+      assetId: version.assetId,
+      url,
+      ...(version.prompt ? { prompt: version.prompt } : {}),
+      ...(version.style ? { style: version.style } : {}),
+      ...(version.emotion ? { emotion: version.emotion } : {})
+    };
+    if (lastPackResult?.stickers?.[index]) {
+      lastPackResult.stickers[index] = {
+        ...lastPackResult.stickers[index],
+        assetId: version.assetId,
+        url,
+        ...(version.prompt ? { prompt: version.prompt } : {}),
+        ...(version.style ? { style: version.style } : {}),
+        ...(version.emotion ? { emotion: version.emotion } : {})
+      };
+    }
+    if (!window._preview!.updatePreviewCard(index, currentStickers[index], "success")) {
+      wechatAiPreview.innerHTML = "";
+      window._preview!.renderPreview(currentStickers, "success");
+    }
+  } else if (target.key) {
+    const key = target.key;
+    currentExtras[key] = version.assetId;
+    if (version.prompt) currentExtras[`${key}_prompt`] = version.prompt;
+    if (version.style) currentExtras[`${key}_style`] = version.style;
+    delete currentExtras[`${key}_error`];
+    if (lastPackResult?.extras) {
+      lastPackResult.extras = { ...lastPackResult.extras, [key]: version.assetId };
+    }
+    if (!window._preview!.updateExtraAsset(key, currentExtras, "success")) {
+      window._preview!.renderExtraAssets(currentExtras, "success");
+    }
+  }
+
+  closeVersionDialog();
+  const previousPackId = lastPackResult?.packId;
+  if (lastPackResult) await rebuildPackFromState();
+  if (lastPackResult) {
+    persistLastPackPayload(lastPackResult);
+    addToPackHistory(lastPackResult, previousPackId);
+  }
+  window._ui!.setNotice(`已恢复到所选历史版本（${resourceLabel(target)}）。`, "success");
+}
+
+function mountVersionDialog(): void {
+  versionDialogBackdrop?.addEventListener("click", closeVersionDialog);
+  versionDialogClose?.addEventListener("click", closeVersionDialog);
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape" && versionDialog && !versionDialog.hidden) closeVersionDialog();
+  });
 }
 
 /** 把一张本地图片上传成 asset，用作附加参考图。 */
@@ -1389,10 +1681,6 @@ async function submitEditDialog(): Promise<void> {
   if (!instruction) {
     if (editDialogStatus) editDialogStatus.textContent = "请先填写修改要求。";
     editInstruction.focus();
-    return;
-  }
-  if (!resolveBasePrompt()) {
-    if (editDialogStatus) editDialogStatus.textContent = "请先在「提示词」里描述主体，再编辑图片。";
     return;
   }
 
@@ -1573,8 +1861,10 @@ function resetAllState(): void {
   if (creationModeAi) creationModeAi.checked = false;
   wechatAiPrompt.value = "";
   currentPresetId = "";
+  promptMode = "append";
   if (wechatAiPromptPreset) wechatAiPromptPreset.value = "";
   syncPromptPresetPreview();
+  syncPromptModeField();
   wechatAiTitle.value = "";
   wechatAiAuthor.value = "";
   wechatAiVersion.value = "";
@@ -1650,7 +1940,7 @@ function getMetadataPayload(): Record<string, string> | undefined {
  * 导入图片（`/api/generate/import`）与导入 ZIP 还原（`/api/generate/import-pack`）也走这里，
  * 于是导入后的包同样能单张重生成、编辑图片并重建 ZIP。
  */
-function syncStateFromResult(json: any): void {
+function syncStateFromResult(json: any, fallback?: { creationMode?: string }): void {
   const stickers = Array.isArray(json?.stickers) ? json.stickers : [];
   currentStickers = stickers.map((s: any, i: number) => ({
     label: s?.label ?? String(i + 1).padStart(3, "0"),
@@ -1660,7 +1950,9 @@ function syncStateFromResult(json: any): void {
     ...(s?.prompt ? { prompt: s.prompt } : {}),
     ...(s?.style ? { style: s.style } : {}),
     ...(s?.emotion ? { emotion: s.emotion } : {}),
-    ...(s?.sourceAssetId ? { sourceAssetId: s.sourceAssetId } : {})
+    ...(s?.sourceAssetId ? { sourceAssetId: s.sourceAssetId } : {}),
+    ...(s?.editReferenceAssetId ? { editReferenceAssetId: s.editReferenceAssetId } : {}),
+    ...(Array.isArray(s?.versions) && s.versions.length ? { versions: s.versions } : {})
   }));
 
   currentExtras = {};
@@ -1678,9 +1970,12 @@ function syncStateFromResult(json: any): void {
     if (detail.editReferenceAssetId) {
       currentExtras[`${key}_editReferenceAssetId`] = detail.editReferenceAssetId;
     }
+    if (Array.isArray(detail.versions) && detail.versions.length) {
+      currentExtras[`${key}_versions`] = detail.versions;
+    }
   }
 
-  // 还原 ZIP 时把包里的风格 / 标题 / 作者写回表单，后续重建 ZIP 才能保持一致
+  // 还原 ZIP / 历史时把包里的风格写回表单，后续重建 ZIP 才能保持一致
   const styles = Array.isArray(json?.generation?.styles) ? json.generation.styles.filter(Boolean) : [];
   if (styles.length) {
     currentStyles = styles;
@@ -1688,17 +1983,51 @@ function syncStateFromResult(json: any): void {
     setPromptHint(currentStyles);
   }
 
-  // 还原提示词预设 + 自定义文本，保证从 ZIP / 历史还原后能直接再生成。
+  // 还原提示词预设 + 自定义文本 + 自定义用法，保证从 ZIP / 历史还原后能直接再生成。
   // 新包分开存 promptPreset / promptCustom；旧包只有合并后的 prompt。
   const generation = json?.generation ?? {};
-  if (typeof generation.promptCustom === "string" || typeof generation.prompt === "string") {
-    wechatAiPrompt.value =
-      typeof generation.promptCustom === "string" ? generation.promptCustom : generation.prompt;
-    setFieldInvalid(wechatAiPrompt, false);
-    const presetId = typeof generation.promptPreset === "string" ? generation.promptPreset : "";
-    currentPresetId = promptPresets.some((p) => p.id === presetId) ? presetId : "";
-    if (wechatAiPromptPreset) wechatAiPromptPreset.value = currentPresetId;
-    syncPromptPresetPreview();
+  const storedPreset = typeof generation.promptPreset === "string" ? generation.promptPreset : "";
+  if (typeof generation.promptCustom === "string") {
+    wechatAiPrompt.value = generation.promptCustom;
+  } else if (typeof generation.prompt === "string" && !storedPreset) {
+    // 旧包没有分开存，只能把合并后的 prompt 当自定义文本；
+    // 已知用了预设时不要塞进自定义框，否则会与预设重复。
+    wechatAiPrompt.value = generation.prompt;
+  } else {
+    wechatAiPrompt.value = "";
+  }
+  setFieldInvalid(wechatAiPrompt, false);
+  currentPresetId = storedPreset;
+  promptMode = generation.promptMode === "override" ? "override" : "append";
+  if (wechatAiPromptPreset) {
+    // 预设列表可能还没加载完，先把 id 存下；populatePromptPresets 会再对齐一次
+    wechatAiPromptPreset.value = promptPresets.some((p) => p.id === storedPreset) ? storedPreset : "";
+  }
+  syncPromptPresetPreview();
+  syncPromptModeField();
+
+  // 还原「创建方式」（AI 生图 / 导入已有图片）与 AI 提供商；
+  // 否则历史还原后按钮会停在导入，AI 相关字段也不可见。
+  const source = generation.source;
+  const useAi = source
+    ? source === "ai-generate"
+    : Boolean(generation.providerId || generation.referenceAssetId) || fallback?.creationMode === "ai";
+  currentCreationMode = useAi ? "ai" : "import";
+  if (creationModeAi) creationModeAi.checked = useAi;
+  if (creationModeImport) creationModeImport.checked = !useAi;
+  if (typeof generation.providerId === "string" && generation.providerId && wechatAiProvider) {
+    const hasOption = Array.from(wechatAiProvider.options).some((o) => o.value === generation.providerId);
+    if (hasOption) {
+      currentAiProvider = generation.providerId;
+      wechatAiProvider.value = generation.providerId;
+    }
+  }
+  syncCreationMode();
+
+  // 还原贴纸数量
+  const restoredCount = Number(generation.stickerCount) || Number(json?.meta?.count);
+  if (Number.isFinite(restoredCount) && restoredCount > 0) {
+    wechatAiCount.value = String(restoredCount);
   }
   if (json?.meta?.title && !wechatAiTitle.value.trim()) wechatAiTitle.value = json.meta.title;
   if (json?.meta?.author && !wechatAiAuthor.value.trim()) wechatAiAuthor.value = json.meta.author;
@@ -1900,6 +2229,7 @@ async function generatePlatformPack(): Promise<void> {
       prompt,
       promptPreset: currentPresetId,
       promptCustom: wechatAiPrompt.value.trim(),
+      promptMode,
       provider: wechatAiProvider ? wechatAiProvider.value : "mock",
       styles: currentStyles.length ? currentStyles : undefined,
       stickerCount,
@@ -2032,9 +2362,19 @@ async function generatePlatformPack(): Promise<void> {
       const errMsg = error instanceof Error ? error.message : "生成失败";
       const errHint = (error as any)?.userHint || window._ui!.getFriendlyErrorHint(error);
       window._ui!.setNotice(errMsg + " " + errHint, "error");
-      window._preview!.renderPreview([], "error");
-      window._preview!.renderExtraAssets({}, "error");
-      window._preview!.setFeedback("本次生成失败，可直接点击重新生成再次尝试。", "error");
+      // 失败时不要清空预览：本轮已经成功生成的贴纸/扩展资源要保留下来，
+      // 否则用户白等了。只有一张都没成功时才回到错误占位。
+      const hasPartial = currentStickers.length > 0 || Object.keys(currentExtras).length > 0;
+      if (hasPartial) {
+        const partialHint = currentStickers.length
+          ? `本次生成中途失败，但已成功生成的 ${currentStickers.length} 张仍可预览；可直接点击重新生成再次尝试。`
+          : "本次生成中途失败，已生成的资源仍可预览；可直接点击重新生成再次尝试。";
+        window._preview!.setFeedback(partialHint, "error");
+      } else {
+        window._preview!.renderPreview([], "error");
+        window._preview!.renderExtraAssets({}, "error");
+        window._preview!.setFeedback("本次生成失败，可直接点击重新生成再次尝试。", "error");
+      }
       window._preview!.setExportInfo("结果概览与导出信息", "生成失败，请调整提示词或稍后重试。");
     }
   } finally {
@@ -2545,6 +2885,13 @@ function bindEvents(): void {
     currentPresetId = wechatAiPromptPreset.value;
     setFieldInvalid(wechatAiPrompt, false);
     syncPromptPresetPreview();
+    syncPromptModeField();
+    applyPresetStyle();
+    setPromptHint(currentStyles);
+    syncRegenerateButton();
+  });
+  wechatAiPromptMode?.addEventListener("change", () => {
+    promptMode = wechatAiPromptMode.value === "override" ? "override" : "append";
     setPromptHint(currentStyles);
     syncRegenerateButton();
   });
@@ -2635,6 +2982,7 @@ function bindEvents(): void {
   // 阻止冒泡：清空按钮位于 #historyToggle 内，避免同时触发折叠/展开
   clearHistoryBtn?.addEventListener("click", (event) => { event.stopPropagation(); void clearPackHistory(); });
   mountEditDialog();
+  mountVersionDialog();
 
   document.addEventListener("click", (e) => {
     const target = (e.target as HTMLElement | null)?.closest?.("#historyToggle, .collapse-btn");
@@ -2647,6 +2995,14 @@ function bindEvents(): void {
     e.preventDefault();
     const target = targetFromCard(editBtn);
     if (target) openEditDialog(target);
+  });
+  // 卡片上的「版本 N」：查看该图的历史版本，可恢复某一版
+  document.addEventListener("click", (e) => {
+    const versionBtn = (e.target as HTMLElement | null)?.closest?.('[data-action="show-versions"]') as HTMLElement | null;
+    if (!versionBtn) return;
+    e.preventDefault();
+    const target = targetFromCard(versionBtn);
+    if (target) openVersionDialog(target);
   });
   // 失败卡片（贴纸 + 封面/图标/横幅/赞赏图）点击重试，兑现代占位符文案「可点击重新生成」。
   // 有明确 target 时只重生成该资源；否则（整体失败）回退为整包重生成。
@@ -2746,6 +3102,7 @@ async function initApp(): Promise<void> {
           (p: any) => p && typeof p.id === "string" && typeof p.name === "string" && typeof p.prompt === "string"
         );
         populatePromptPresets();
+        applyPresetStyle();
       }
     }
   } catch (err) {

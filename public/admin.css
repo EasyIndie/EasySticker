@@ -608,6 +608,17 @@ input { font-family: inherit; }
 .alert-info { flex: 1; min-width: 200px; }
 .alert-name { font-weight: 600; font-size: 14px; }
 .alert-detail { font-size: 12px; color: var(--c-text-secondary); margin-top: 2px; }
+.alert-details {
+  margin-top: 6px;
+  padding-left: 10px;
+  border-left: 2px solid var(--c-border);
+}
+.alert-detail-line {
+  font-size: 12px;
+  color: var(--c-text-secondary);
+  line-height: 1.5;
+  word-break: break-all;
+}
 
 /* ── Alert Rules ──────────────────────────────────────────── */
 .rule-card {

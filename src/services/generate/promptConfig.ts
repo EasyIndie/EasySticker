@@ -68,13 +68,22 @@ export interface PromptConfig {
     };
   };
   global: {
-    prompt: string;
     negativePrompt: string;
     styles: string[];
+    /** 风格名 → 详细风格提示词。编译时把模板里的 `{{style}}` 展开成它，避免与预设重复描述风格。 */
+    stylePrompts?: Record<string, string>;
   };
   emotions: string[];
   /** 多套提示词模板：用户可一键套用，减少多次生成结果雷同。 */
-  promptPresets?: Array<{ id: string; name: string; prompt: string }>;
+  promptPresets?: Array<{
+    id: string;
+    name: string;
+    prompt: string;
+    /** 预设推荐风格（须存在于 `global.styles`）；选中后前端会自动切到该风格。 */
+    style?: string;
+    /** 预设专属情绪/动作集；选中该预设时覆盖全局 `emotions`（参数化系列模板）。 */
+    emotions?: string[];
+  }>;
   templates: {
     sticker: string;
     extra: string;
@@ -260,4 +269,32 @@ export function compilePrompt(template: string, variables: Record<string, string
     result = result.replace(new RegExp(`{{\\s*${key}\\s*}}`, "g"), value);
   }
   return result;
+}
+
+/**
+ * 把风格名解析成实际写进提示词的风格描述：
+ * 命中 `global.stylePrompts` 时用详细描述，否则回退到风格名本身。
+ * 这样「风格」只在 `stylePrompts` 里描述一次，预设不必重复写画风。
+ */
+export function resolveStylePrompt(config: PromptConfig, style: string): string {
+  const mapped = config.global.stylePrompts?.[style];
+  return mapped && mapped.trim() ? mapped.trim() : style;
+}
+
+/** 按 id 查找提示词预设（参数化系列模板的入口）。 */
+export function findPromptPreset(
+  config: PromptConfig,
+  presetId?: string | null
+): NonNullable<PromptConfig["promptPresets"]>[number] | undefined {
+  if (!presetId) return undefined;
+  return (config.promptPresets ?? []).find((preset) => preset.id === presetId);
+}
+
+/**
+ * 解析本次生成实际使用的情绪/动作集：优先用预设自带的一组，否则回退到全局 `emotions`。
+ * 这样「一个 IP + 一个模板 + N 组情绪参数」的系列预设可以自我描述，不污染其它预设。
+ */
+export function resolveEmotions(config: PromptConfig, presetId?: string | null): string[] {
+  const preset = findPromptPreset(config, presetId);
+  return preset?.emotions?.length ? preset.emotions : config.emotions;
 }

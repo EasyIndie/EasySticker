@@ -38,11 +38,17 @@ data/packs/<packId>.json         # 包清单（几 KB），含逐张提示词 / 
 ├── meta/banner.png           # 详情页横幅
 ├── meta/reward-guide.png     # 赞赏引导图（可选）
 ├── meta/reward-thanks.png    # 赞赏感谢图（可选）
+├── history/001/v1.png        # 编辑历史版本（仅被编辑/重生成过的图才有）
 ├── source/reference.png      # 参考图原图（不压缩、不改尺寸）
-└── metadata.json             # 清单：文件名、尺寸、生成上下文、逐张提示词
+└── metadata.json             # 清单：文件名、尺寸、生成上下文、逐张提示词、历史版本
 ```
 
 > 具体包含哪些扩展资源取决于平台与选项（目前扩展资源仅微信生成）。
+
+> **历史版本**：单张图被编辑/重生成后，每个旧版本原图都会打进 `history/<名称>/vN.<ext>`，
+> 并在 `metadata.json` 的 `files[].versions[]` 里记录（`assetId` / `createdAt` / `kind` /
+> `instruction`）。重新导入时这些图片会被重新入库并重映射 `assetId`，所以「下载 → 导入 →
+> 再下载」历史版本不会丢。未编辑过的图不带 `history/`。
 
 ---
 
@@ -95,7 +101,7 @@ data/packs/<packId>.json         # 包清单（几 KB），含逐张提示词 / 
       "format": "png",
       "mimeType": "image/png",
       "bytes": 23187,
-      "prompt": "一只橘猫在打篮球\n当前表情主题与动作：开心，大笑，挥手打招呼\n风格：贴纸\n画面要求：…",
+      "prompt": "主体：以参考图中的主体为准，保持角色身份与特征一致；主题：日常聊天；…\n表情与动作：开心，大笑，挥手打招呼\n画面风格：Die-cut sticker style, thick white outline…\n背景：纯透明背景（透明 PNG，alpha 通道）…\n构图：正方形 1:1，主体居中，辅助元素不超过 2 个…\nAvoid: 文字、水印、二维码…",
       "style": "贴纸",
       "emotion": "开心，大笑，挥手打招呼"
     },

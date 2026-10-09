@@ -18,6 +18,21 @@ export type PackFileRole =
   /** 生成时使用的参考图（源素材，不是交付资源）。 */
   | "reference";
 
+/** 单张资源的历史版本类型：初版 / 编辑 / 重生成 / 回退。 */
+export type PackFileVersionKind = "generate" | "edit" | "regenerate" | "restore";
+export type PackFileVersion = {
+  assetId: string;
+  createdAt: string;
+  kind: PackFileVersionKind;
+  /** 编辑时填写的修改要求。 */
+  instruction?: string;
+  prompt?: string;
+  style?: string;
+  emotion?: string;
+  /** 该版本在 ZIP 内的路径（非当前版本才会打包进 `history/`）。 */
+  zipPath?: string;
+};
+
 /** 打包入参中的一张贴纸（可携带它的生成上下文）。 */
 export type PackAssetInput = {
   label: string;
@@ -33,6 +48,8 @@ export type PackAssetInput = {
   sourceAssetId?: string;
   /** 编辑图片时额外提供的那张参考图。 */
   editReferenceAssetId?: string;
+  /** 历史版本（含初版），用于查看与回退。 */
+  versions?: PackFileVersion[];
 };
 
 /**
@@ -48,6 +65,8 @@ export type PackGenerationInfo = {
   promptPreset?: string | null;
   /** 生成时「提示词自定义」输入框的内容；与 promptPreset 一起完整还原表单。 */
   promptCustom?: string | null;
+  /** 自定义提示词与预设的关系：append 追加 / override 覆盖；旧包缺失时按 append 处理。 */
+  promptMode?: "append" | "override" | null;
   negativePrompt?: string;
   styles?: string[];
   stickerCount?: number;
@@ -66,6 +85,11 @@ export type PackGenerationInfo = {
 };
 
 export type PackRequest = {
+  /**
+   * 可选：重建时覆盖同一个包。命中且归属一致时原地更新清单并保留原 `createdAt`，
+   * 让「编辑一张图后重新打包」在历史里始终只有一条记录。
+   */
+  packId?: string;
   presetId: string;
   assetIds?: string[];
   assets?: PackAssetInput[];
@@ -88,7 +112,13 @@ export type PackRequest = {
   extraDetails?: Partial<
     Record<
       PackFileRole,
-      { prompt?: string; style?: string; sourceAssetId?: string; editReferenceAssetId?: string }
+      {
+        prompt?: string;
+        style?: string;
+        sourceAssetId?: string;
+        editReferenceAssetId?: string;
+        versions?: PackFileVersion[];
+      }
     >
   >;
 };
@@ -131,6 +161,8 @@ export type PackFileMetadata = {
   emotion?: string;
   sourceAssetId?: string;
   editReferenceAssetId?: string;
+  /** 历史版本（含初版），用于查看与回退。 */
+  versions?: PackFileVersion[];
 };
 
 export type PackMetadata = {
@@ -250,7 +282,14 @@ export async function createPack(
     throw createHttpError(400, "assetIds is required");
   }
 
-  const packId = nanoid();
+  // 覆盖同一 packId：编辑图片重建时前端会带上原 packId。
+  // 命中且归属一致 → 原地更新清单（保留 createdAt），历史天然只有一条；
+  // 未命中 / 归属不符 / 未提供 → 新建，避免覆盖他人的包或让客户端任意指定 ID。
+  const requestedPackId = req.packId?.trim();
+  const existing = requestedPackId ? readPackManifest(dataDir, requestedPackId) : null;
+  const canOverwrite = Boolean(existing && (existing.owner ?? null) === (owner ?? null));
+  const packId = canOverwrite ? requestedPackId! : nanoid();
+  const createdAt = canOverwrite ? existing!.metadata.createdAt : new Date().toISOString();
   const downloadFilename = buildDownloadFilename(req, packId);
 
   const entries: Array<{ assetId: string; filename: string; zipPath: string }> = [];
@@ -276,7 +315,8 @@ export async function createPack(
       ...(asset.style ? { style: asset.style } : {}),
       ...(asset.emotion ? { emotion: asset.emotion } : {}),
       ...(asset.sourceAssetId ? { sourceAssetId: asset.sourceAssetId } : {}),
-      ...(asset.editReferenceAssetId ? { editReferenceAssetId: asset.editReferenceAssetId } : {})
+      ...(asset.editReferenceAssetId ? { editReferenceAssetId: asset.editReferenceAssetId } : {}),
+      ...(asset.versions?.length ? { versions: asset.versions } : {})
     });
   }
 
@@ -298,7 +338,8 @@ export async function createPack(
       ...(detail?.prompt ? { prompt: detail.prompt } : {}),
       ...(detail?.style ? { style: detail.style } : {}),
       ...(detail?.sourceAssetId ? { sourceAssetId: detail.sourceAssetId } : {}),
-      ...(detail?.editReferenceAssetId ? { editReferenceAssetId: detail.editReferenceAssetId } : {})
+      ...(detail?.editReferenceAssetId ? { editReferenceAssetId: detail.editReferenceAssetId } : {}),
+      ...(detail?.versions?.length ? { versions: detail.versions } : {})
     });
   }
 
@@ -320,7 +361,22 @@ export async function createPack(
     }
   }
 
-  const createdAt = new Date().toISOString();
+  // 为历史版本分配 ZIP 内路径（当前版本已在 assets/ 里，不重复打包）。
+  // 下载时会把它们一并打进 history/，导入后历史版本仍可查看/回退。
+  for (const file of files) {
+    const versions = file.versions;
+    if (!versions?.length) continue;
+    const ext = path.extname(file.zipPath) || ".png";
+    const stem = path.posix.basename(file.zipPath, path.extname(file.zipPath));
+    let n = 0;
+    for (const version of versions) {
+      if (!version.assetId || version.assetId === file.assetId || version.zipPath) continue;
+      if (!assetStore.find(version.assetId)) continue;
+      n += 1;
+      version.zipPath = path.posix.join("history", stem, `v${n}${ext}`);
+    }
+  }
+
   const metadata: PackMetadata = {
     schema: "easysticker-pack@0.3",
     packId,
@@ -344,6 +400,11 @@ export async function createPack(
   const manifest: PackManifest = { packId, downloadFilename, owner: owner ?? null, metadata };
   fs.mkdirSync(packsDir(dataDir), { recursive: true });
   fs.writeFileSync(packInfoPath(dataDir, packId), JSON.stringify(manifest, null, 2));
+  // 覆盖旧包时若存在同名旧 ZIP，删掉它 —— 下载优先走 ZIP（见 routes/packs.ts），留着会发旧内容。
+  if (canOverwrite) {
+    const legacyZip = findPackZipPath(dataDir, packId);
+    if (legacyZip) fs.rmSync(legacyZip, { force: true });
+  }
 
   return {
     packId,
@@ -379,9 +440,14 @@ export function writePackManifest(dataDir: string, manifest: PackManifest): void
 
 /** 清单里所有文件是否都还在 uploads 里；返回缺失的 zipPath 列表。 */
 export function missingPackFiles(assetStore: AssetStore, manifest: PackManifest): string[] {
-  return manifest.metadata.files
-    .filter((f) => !assetStore.find(f.assetId))
-    .map((f) => f.zipPath);
+  const missing: string[] = [];
+  for (const f of manifest.metadata.files) {
+    if (!assetStore.find(f.assetId)) missing.push(f.zipPath);
+    for (const version of f.versions ?? []) {
+      if (version.zipPath && !assetStore.find(version.assetId)) missing.push(version.zipPath);
+    }
+  }
+  return missing;
 }
 
 /**
@@ -393,8 +459,13 @@ export function createPackArchive(assetStore: AssetStore, manifest: PackManifest
   const zip = archiver("zip", { zlib: { level: 1 } });
   for (const file of manifest.metadata.files) {
     const found = assetStore.find(file.assetId);
-    if (!found) continue;
-    zip.file(found.filePath, { name: file.zipPath });
+    if (found) zip.file(found.filePath, { name: file.zipPath });
+    // 历史版本同样打进 ZIP，导入后仍可逐版查看/回退
+    for (const version of file.versions ?? []) {
+      if (!version.zipPath) continue;
+      const vfound = assetStore.find(version.assetId);
+      if (vfound) zip.file(vfound.filePath, { name: version.zipPath });
+    }
   }
   zip.append(JSON.stringify(manifest.metadata, null, 2), { name: "metadata.json" });
   // archiver 出错时若无人监听 'error' 会抛未捕获异常；交给响应流自然中断

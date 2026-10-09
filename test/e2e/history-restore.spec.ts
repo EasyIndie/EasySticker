@@ -85,6 +85,66 @@ test.describe("历史记录一键还原", () => {
     await apiRequest(page.request, "delete", `/api/packs/${packId}`);
   });
 
+  test("还原 AI 生成的历史包会还原创建方式 / 预设 / 自定义 / 风格 / 数量", async ({ page }) => {
+    test.setTimeout(90000);
+    const upload = await apiRequest(page.request, "post", "/api/uploads", {
+      multipart: { file: { name: "sticker.png", mimeType: "image/png", buffer: TINY_PNG } }
+    });
+    const { uploadId } = await upload.json();
+
+    const packRes = await apiRequest(page.request, "post", "/api/packs", {
+      data: {
+        presetId: "wechat_stickers",
+        assets: [
+          { label: "001", assetId: uploadId, role: "sticker", prompt: "预设+自定义", style: "贴纸", emotion: "开心" }
+        ],
+        metadata: { title: "AI 还原测试" },
+        generation: {
+          source: "ai-generate",
+          providerId: "mock",
+          prompt: "预设内容\n自定义补充",
+          promptPreset: "daily",
+          promptCustom: "自定义补充",
+          promptMode: "append",
+          styles: ["贴纸"],
+          stickerCount: 1
+        }
+      }
+    });
+    expect(packRes.ok()).toBe(true);
+    const { packId } = await packRes.json();
+
+    await seedHistory(page, {
+      packId,
+      title: "AI 还原测试",
+      author: "",
+      stickerCount: 1,
+      styles: "贴纸",
+      rewardEnabled: false,
+      platformLabel: "微信表情",
+      platform: "wechat_stickers",
+      createdAt: Date.now(),
+      downloadUrl: `/api/packs/${packId}/download`,
+      downloadFilename: `${packId}.zip`
+    });
+
+    await page.locator("#historyToggle").click();
+    await page.locator(`.history-item[data-pack-id="${packId}"] .history-restore-btn`).click();
+    await expect(page.locator("#wechatAiPreview .preview-item")).toHaveCount(1, { timeout: 20_000 });
+
+    // 创建方式：AI 生图（以前会被硬编码成导入）
+    await expect(page.locator("#creationModeAi")).toBeChecked();
+    // 预设 + 自定义文本（自定义框不能塞进合并后的整段）
+    await expect(page.locator("#wechatAiPromptPreset")).toHaveValue("daily");
+    await expect(page.locator("#wechatAiPrompt")).toHaveValue("自定义补充");
+    // 风格 chip
+    await expect(page.locator('#wechatAiStyleOptions .style-chip[data-selected="true"]')).toHaveText("贴纸");
+    // 数量
+    await expect(page.locator("#wechatAiCount")).toHaveValue("1");
+
+    await apiRequest(page.request, "delete", `/api/packs/${packId}`);
+  });
+
   test("服务端已不存在的包会被标为已过期并置灰", async ({ page }) => {
     const goneId = "zzzzzzzzzzzzzzzzzzzzz";
     await seedHistory(page, {

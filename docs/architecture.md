@@ -50,15 +50,17 @@ infrastructure（适配器）  providers 实现、fileAssetStore、mailer、moni
 - **组合根 + 依赖注入**：`server.ts` 装配全部依赖，`lib/deps.ts` 定义 `AppDeps`。路由/服务不通过 `app.decorate()` 取依赖，也没有 `declare module "fastify"` 增强。
 - **领域层去 Fastify 化**：`findAssetFile` / `createPackArchive` / 生成流水线都不接收 `FastifyInstance`。
 - **单资源重生成**（`generate/single.ts` + `POST /api/generate/resource`）：按 `target`（`sticker.index` 或 `extra.key`）只重做一张，复用同一套提示词模板/尺寸/平台校验。前端「编辑图片」用 `mode="edit"`：以**当前这张图**为参考图，把 `instruction` 以「编辑要求：…」追加进提示词，只重做这一张，并把 `sourceAssetId` 写回 metadata 供追溯；还可再附一张参考图（`editReferenceAssetId`，同时记入 metadata 并纳入 GC 引用，避免刚上传就被当孤儿回收）。多图经 `AiGenerateInput.additionalReferenceImages` 下传：generic 变体把 `image` 传数组（实测豆包 Seedream 接受），gpt-image 变体用 `image[]`；**只有一张时不走数组**，单图路径行为不变。
+- **图片历史版本（`versions`）**：单张图每次编辑/重生成都会把上一版记进 `pack.metadata.files[].versions[]`（`assetId` / `createdAt` / `kind` / `instruction`）；卡片上的「版本 N」可查看并回退到任意一版（回退只移动当前指针，不新增版本）。旧版本原图随 ZIP 一起导出到 `history/<名称>/vN.<ext>`，重新导入时重新入库并重映射 `assetId`；GC 的引用集合也把它们算作「被引用」，不会被当孤儿回收。
 - **扩展资源单张失败不中断整包**：`extras.ts` 记录 `failures` 并照常发带 `error` 的 `extra` 事件，前端把该卡片渲染成可点击重试的错误态。
-- **多套提示词预设，与自定义互补**（`flow.ts` + `prompt-config.default.json`）：`promptPresets` 内置 12 套基础提示词（`global.styles` 同为 12 种风格），`/api/config` 与 `POST /api/generate/prompt` 只回传可选项（**不替用户随机选**）；前端用「提示词预设」下拉 + 「提示词自定义」textarea，最终提示词 = 预设 + 自定义（可只填其一），提交前拼接 —— 解决「只能拿到同一段默认提示词、连续多次生成结果雷同」。情绪仍按顺序逐张分配，不做随机。
+- **多套提示词预设，与自定义互补**（`flow.ts` + `prompt-config.default.json`）：`promptPresets` 内置 13 套基础提示词（`global.styles` 同为 13 种风格），`/api/config` 与 `POST /api/generate/prompt` 只回传可选项（**不替用户随机选**）；前端用「提示词预设」下拉 + 「提示词自定义」textarea，最终提示词 = 预设 + 自定义（可只填其一），提交前拼接 —— 解决「只能拿到同一段默认提示词、连续多次生成结果雷同」。预设可选地带 `style`（自动切选推荐风格）与 `emotions`（覆盖全局情绪参数），「极简蜡笔」即用此结构实现「1 个 IP + 1 个模板 + 24 组情绪参数」（角色主体以参考图为准，不写死具体形象）。自定义提示词支持**追加 / 覆盖**两种模式（`promptMode`）。情绪仍按顺序逐张分配，不做随机。
+- **提示词拼接单一入口**（`generate/promptBuilder.ts`）：贴纸 / 扩展资源 / 参考图三条路径分别走 `buildStickerPrompt` / `buildExtraPrompt` / `buildReferencePrompt`，最终结构固定为「内容（主体/主题/动作/元素）→ 画面约束（表情与动作/画面风格/背景/构图）→ 负面约束」。风格描述只来自 `global.stylePrompts`；未选风格（`默认`/空）回退 `global.styles[0]`，不会出现「画面风格：默认」。透明背景只写在 `templates.sticker`，不进全局负面，避免误伤需要背景的封面/横幅/参考图；负面提示由 provider 统一以 `Avoid:` 段追加（见 §4.7）。
 - **导入的 `presetId` 走 URL query**（`routes/generate.ts`）：multipart 请求下 `req.body` 为空，
   `presetId` 只能从 query 读。早期只读 `req.body.presetId` 会静默回落到微信，导致 Telegram / WhatsApp
   导入被「至少 8 张」拒绝。前端 `/generate/import`、`/generate/import-pack` 均在 URL 上带 `?presetId=`。
-- **提示词平台中立**：`global.prompt` / `templates.sticker` 不写死「微信」「240px」，同一套提示词适用于
+- **提示词平台中立**：预设提示词 / `templates.sticker` 不写死「微信」「240px」，同一套提示词适用于
   三个平台；平台差异只体现在目标尺寸 / 格式 / 是否生成扩展资源（仅微信）。
 - **素材查找 O(1)**：`lib/assets.ts` 按已知扩展名 `statSync` 探测，而不是 `readdirSync` 扫目录。后者是 O(目录大小) 的**同步** I/O，挂在 `GET /api/assets/:id`（结果页每张图一个请求）和打包（每包约 30 次）热路径上；实测 333 文件时 0.699ms → 0.023ms，且不随规模退化。同时用 `ASSET_ID_PATTERN` 白名单挡路径穿越。
-- **包只存清单，ZIP 按需现打**：`packs/<packId>.json` 存 `PackManifest`（逐张提示词/尺寸/角色），下载时 `createPackArchive` 现场打包、边打边发。消除了「uploads 一份 + ZIP 一份」的双倍占用，也让「单资源重生成 → 重建整包」从搬几 MB 变成写几 KB。旧包（仅 `.zip`）仍可直接流式下载，无需迁移。
+- **包只存清单，ZIP 按需现打**：`packs/<packId>.json` 存 `PackManifest`（逐张提示词/尺寸/角色），下载时 `createPackArchive` 现场打包、边打边发。消除了「uploads 一份 + ZIP 一份」的双倍占用，也让「单资源重生成 → 重建整包」从搬几 MB 变成写几 KB。**重建时前端带上原 `packId`，服务端命中且归属一致就原地更新同一份清单并保留 `createdAt`** —— 于是「编辑一张图 → 重新打包」在历史里始终只有一条，不再每次新建一个包（旧包仅在仅 `.zip` 时可直接流式下载，无需迁移）。
 - **包归属（owner）**：清单记录 `owner`（已登录 = 邮箱，未登录 = 前端持久化的 `x-client-id`）。注意它与**匿名日配额**用的是不同键：配额按 `ip:<req.ip>` 防刷，归属按 `client:<id>` 让未登录用户找回历史，见 `lib/owner.ts`。`GET /api/packs` 只返回请求者自己的包 —— 无归属的旧包不出现在任何人列表里，避免列出别人的包。`owner` **只进清单，不进 ZIP 的 `metadata.json`**（那个会随表情包分发出去）。删包/还原要求 owner 匹配或管理员。
 - **保留期不追溯既往**（`maintenance/retention.ts`）：策略生效起点记在 `data/maintenance.json`，过期时间 = `max(包创建时间, 生效起点) + 保留天数`。所以「今天才把 `packRetentionDays` 从 0 改成 30」不会立刻清空历史数据。
 - **GC 只做可证明安全的回收**（`maintenance/gc.ts`）：压缩旧包（缺 `files[]` 或素材不全则跳过）、清孤儿素材（须过安全期）、清 `.orig` 备份、按保留期删包。服务端每 6 小时巡检（`server.maintenance`），CLI 入口 `npm run gc`，后台「存储」面板同源调用。
@@ -104,7 +106,8 @@ infrastructure（适配器）  providers 实现、fileAssetStore、mailer、moni
 - **`currentStickers` 是预览的唯一渲染来源**，任何写入都必须带全字段（尤其 `url`），渲染层同时兜底。
 - **单资源改动走定点更新**：`renderPreview` 只能追加卡片，所以早期更新一张图只能 `innerHTML=""` + 整组重绘 —— 24 张贴纸会销毁重建 24 个 `<img>`，实测多出 26 次图片请求与 136ms 长任务。现在 `updatePreviewCard(index)` / `updateExtraAsset(key)` 只替换受影响的那个节点（重测：0 次图片请求、0 长任务）。
 - **弹窗不做背景模糊**：`backdrop-filter` 会强制浏览器对弹窗背后的整个视口重新做模糊合成，首次打开多出约 30ms 长任务；换纯色遮罩视觉几乎一致。另外挂载后空闲时空跑一次弹窗，把首次绘制的样式/合成开销前移。
-- **编辑后的状态必须回写本地**：`applyResourceResult` 同步更新 `lastPackResult.stickers[index]`，编辑完调 `persistLastPackPayload()` 并就地更新历史记录。否则刷新会退回编辑前的图，**再编辑会以旧图为源、把上一次编辑悄悄丢掉**。
+- **编辑后的状态必须回写本地**：`applyResourceResult` 同步更新 `lastPackResult.stickers[index]`，编辑完调 `persistLastPackPayload()` 并就地更新历史记录。否则刷新会退回编辑前的图，**再编辑会以旧图为源、把上一次编辑悄悄丢掉**。重新打包时带上原 `packId`，服务端原地更新同一份清单，所以历史记录不会因编辑而增长。
+- **还原现场要还原「UI 选项」本身**：`syncStateFromResult` 从 `generation` 还原创建方式（`source`）、AI 提供商（`providerId`）、预设 + 自定义 + `promptMode`、风格（`styles`）与数量（`stickerCount`）。历史「还原现场」不再硬编码成导入模式；localStorage 也持久化 `generation`/`creationMode`/`promptPreset`，刷新后同样生效。已知用了预设时不再把合并后的整段提示词塞进自定义框（避免与预设重复）。编辑（`mode=edit`）是图生图，允许无基础提示词，仅 `regenerate` 要求非空。
 - **前端资源用内容哈希**：见 §3.2。
 - **统计页用独立图表模块**（`web/src/features/charts.ts`）：零依赖 SVG，按容器真实宽度绘制 +
   `ResizeObserver` 自适应（不再用 `preserveAspectRatio="none"` 拉伸），带坐标轴/网格/图例/悬浮读数；
@@ -125,8 +128,8 @@ infrastructure（适配器）  providers 实现、fileAssetStore、mailer、moni
 ### 3.5 监控与告警
 
 - **指标采集**（`lib/monitorStore.ts`）：请求级每次 API 请求（`/api/assets/*` 已排除，否则一次页面加载几十张图会淹没真实调用）、系统级每 10 秒、磁盘每 60 秒，按天写 JSONL 到 `data/monitoring/`。
-- **告警引擎**（`lib/alertEngine.ts`）：阈值 + 持续时长 + 10% 回滞解决 + 静默期防重复。默认规则见 [configuration-reference.md](configuration-reference.md)。历史存 `data/alerts-history.json`。
-- **通知**：Webhook（飞书机器人格式）+ 本地日志。
+- **告警引擎**（`lib/alertEngine.ts`）：阈值 + 持续时长 + 静默期防重复，值回落到阈值即恢复（不再有 90% 回滞死区）。错误率告警默认只看 5xx（`serverErrorRate`）——4xx（参数校验/鉴权/限流/扫描器）另设 `clientErrorRate` 规则且默认关闭，避免「错误率过高」被客户端噪声打爆；旧配置启动时自动迁移。告警消息与 webhook 会带上出错路由、状态码分布与排查建议；`lastNotifiedAt` / `notifyCount` 持久化，重启不会立即重推。默认规则见 [configuration-reference.md](configuration-reference.md)。历史存 `data/alerts-history.json`。
+- **通知**：Webhook（飞书交互卡片 / 通用 JSON）+ 本地日志。触发与恢复各推一次；告警持续期间按 `max(规则 silenceMs, 全局 notificationInterval)` 提醒。
 
 ---
 
@@ -186,7 +189,7 @@ src/
                             # monitorStore / alertEngine / alertNotifier / envFile / deps
   services/
     ai/{provider,registry,providers/*}
-    generate/{flow,single,extras,import,restore,convert,promptConfig}
+    generate/{flow,single,extras,import,restore,convert,promptConfig,promptBuilder}
     pack/service.ts
     platform/presets.ts
     maintenance/{gc,scheduler,retention}

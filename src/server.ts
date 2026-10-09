@@ -169,22 +169,33 @@ async function main() {
 
   const alertNotifier = createAlertNotifier(() => alertEngine.getConfig(), logger);
 
-  // Notification cooldown tracker: rule_id → last sent timestamp
-  const lastNotifySent = new Map<string, number>();
-
-  // Evaluate alerts every 30s and send notifications
+  // Evaluate alerts every 30s and dispatch notifications.
+  //
+  // 节流策略（修复「webhook 发送太频繁」）：
+  // - 触发 / 恢复这类状态变化立即推送一次；
+  // - 告警持续期间按 max(规则 silenceMs, 全局 notificationInterval) 提醒，
+  //   且 lastNotifiedAt 持久化在告警记录里 —— 重启后不会立刻把活跃告警再推一遍；
+  // - 恢复通知只发一次（drainResolved 取走）。
   const alertInterval = setInterval(() => {
     alertEngine.evaluate();
-    const active = alertEngine.getActiveAlerts();
+    const config = alertEngine.getConfig();
     const now = Date.now();
-    for (const alert of active) {
-      const rule = alertEngine.getRules().find(r => r.id === alert.rule);
+
+    // 1) 持续中的告警：到点才提醒（全局间隔作为下限，避免规则各自为政造成密集推送）
+    for (const alert of alertEngine.getActiveAlerts()) {
+      const rule = alertEngine.getRules().find((r) => r.id === alert.rule);
       if (!rule) continue;
-      const last = lastNotifySent.get(alert.rule) ?? 0;
-      if (now - last >= rule.silenceMs) {
-        alertNotifier.send(alert);
-        lastNotifySent.set(alert.rule, now);
+      const interval = Math.max(rule.silenceMs, config.notificationInterval);
+      const last = alert.lastNotifiedAt ? Date.parse(alert.lastNotifiedAt) : 0;
+      if (now - last >= interval) {
+        void alertNotifier.send(alert);
+        alertEngine.markNotified(alert.id);
       }
+    }
+
+    // 2) 已恢复的告警：补一条恢复通知（旧实现不发恢复，无法知道何时结束）
+    for (const alert of alertEngine.drainResolved()) {
+      void alertNotifier.send(alert);
     }
   }, 30_000);
 

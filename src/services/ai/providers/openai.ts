@@ -194,10 +194,16 @@ export class OpenAiImageProvider implements AiProvider {
     });
   }
 
+  /**
+   * 把内容/画面约束拼成最终提示词，并在末尾追加负面约束段。
+   * 多数生图接口没有独立的 negative_prompt 字段，所以统一以 `Avoid:` 段落下发，
+   * gpt-image 与 generic（豆包/硅基流动等）都走这里，保证两条链路一致。
+   */
   private buildPrompt(input: AiGenerateInput) {
-    const parts = [input.prompt];
-    if (input.negativePrompt) {
-      parts.push(`Avoid: ${input.negativePrompt}`);
+    const parts = [input.prompt.trim()];
+    const negative = input.negativePrompt?.trim();
+    if (negative) {
+      parts.push(`Avoid: ${negative}`);
     }
     return parts.join("\n");
   }

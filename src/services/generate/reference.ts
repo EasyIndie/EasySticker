@@ -6,6 +6,7 @@ import { getAiProvider } from "../ai";
 import { buildMinimalClient } from "../ai/client";
 import type { AiReferenceImage } from "../ai/provider";
 import { loadPromptConfig } from "./promptConfig";
+import { buildReferencePrompt } from "./promptBuilder";
 
 export type GenerateReferenceRequest = {
   prompt: string;
@@ -77,7 +78,7 @@ export async function generateReferenceImage(
   const width = promptConfig.ai?.imageSize?.width ?? 1024;
   const height = promptConfig.ai?.imageSize?.height ?? 1024;
   const style = req.style?.trim() || undefined;
-  const prompt = style ? `${req.prompt}\n画面风格：${style}` : req.prompt;
+  const prompt = buildReferencePrompt(promptConfig, { prompt: req.prompt, style });
 
   // 图生图：把已上传的参考图传给 provider（主参考图 + 可选附加参考图）。
   const referenceMode = promptConfig.ai?.referenceMode ?? "base64";

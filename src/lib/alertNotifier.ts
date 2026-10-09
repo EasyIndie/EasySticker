@@ -22,8 +22,11 @@ export function createAlertNotifier(
         event: "alert_notification",
         alertId: alert.id,
         rule: alert.rule,
+        metric: alert.metric,
         value: alert.value,
+        resolved: Boolean(alert.resolvedAt),
         message: alert.message,
+        details: alert.details,
       } as Record<string, unknown>);
 
       // 2. Webhook if enabled
@@ -79,6 +82,7 @@ export function createAlertNotifier(
 function buildWebhookPayload(alert: AlertRecord, webhookUrl: string): Record<string, unknown> {
   // Detect Feishu webhook URL pattern
   const isFeishu = /feishu|open\.feishu|lark/i.test(webhookUrl);
+  const resolved = Boolean(alert.resolvedAt);
 
   if (isFeishu) {
     return {
@@ -87,8 +91,9 @@ function buildWebhookPayload(alert: AlertRecord, webhookUrl: string): Record<str
         header: {
           title: {
             tag: "plain_text",
-            content: "🚨 EasySticker 告警",
+            content: resolved ? "✅ EasySticker 告警恢复" : "🚨 EasySticker 告警",
           },
+          template: resolved ? "green" : "red",
         },
         elements: [
           {
@@ -103,22 +108,48 @@ function buildWebhookPayload(alert: AlertRecord, webhookUrl: string): Record<str
     };
   }
 
-  // Generic webhook: plain text payload
+  // Generic webhook: 保留 text 兼容 Slack/自定义机器人，同时附带结构化字段
+  const detailLines = (alert.details ?? []).map((d) => `· ${d}`);
   return {
-    text: `🚨 告警: ${alert.message}`,
+    text: [`${resolved ? "✅ 告警恢复" : "🚨 告警"}：${alert.message}`, ...detailLines].join("\n"),
+    event: resolved ? "alert.resolved" : "alert.fired",
+    alert: {
+      id: alert.id,
+      rule: alert.rule,
+      metric: alert.metric ?? null,
+      message: alert.message,
+      value: alert.value,
+      details: alert.details ?? [],
+      startedAt: alert.startedAt,
+      resolvedAt: alert.resolvedAt,
+      acknowledged: alert.acknowledged,
+      notifyCount: alert.notifyCount ?? 0,
+    },
   };
 }
 
 function buildFeishuMdContent(alert: AlertRecord): string {
-  const lines = [
-    `**规则**: ${alert.rule}`,
-    `**消息**: ${alert.message}`,
-    `**当前值**: ${alert.value}`,
-    `**开始时间**: ${alert.startedAt}`,
+  const resolved = Boolean(alert.resolvedAt);
+  const status = resolved ? "已恢复 ✅" : alert.acknowledged ? "已确认" : "触发 🚨";
+  const lines: string[] = [
+    `**状态**：${status}`,
+    `**规则**：\`${alert.rule}\`（${alert.metric ?? "unknown"}）`,
+    `**详情**：${alert.message}`,
+    `**开始时间**：${alert.startedAt}`,
   ];
 
-  if (alert.acknowledged) {
-    lines.push(`**状态**: 已确认`);
+  if (resolved && alert.resolvedAt) {
+    lines.push(`**恢复时间**：${alert.resolvedAt}`);
+  } else if ((alert.notifyCount ?? 0) > 1) {
+    lines.push(`**提醒**：第 ${alert.notifyCount} 次通知` + (alert.lastNotifiedAt ? `（上次：${alert.lastNotifiedAt}）` : ""));
+  }
+
+  if (alert.details?.length) {
+    lines.push("");
+    lines.push("**归因 / 排查**：");
+    for (const detail of alert.details) {
+      lines.push(`- ${detail}`);
+    }
   }
 
   return lines.join("\n");
