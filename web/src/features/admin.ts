@@ -335,15 +335,20 @@ function renderAlerts(alerts: any[]): void {
     .sort((a, b) => new Date(b.startedAt).getTime() - new Date(a.startedAt).getTime())
     .map((alert) => {
       const acked = alert.acknowledged ? " acknowledged" : "";
+      const details: string[] = Array.isArray(alert.details) ? alert.details : [];
+      const detailsHtml = details.length
+        ? '<div class="alert-details">' + details.map((d) => '<div class="alert-detail-line">' + escHtml(String(d)) + '</div>').join("") + '</div>'
+        : "";
       return (
         '<div class="alert-item' + acked + '">' +
           '<div class="alert-info">' +
             '<div class="alert-name">' + escHtml(alert.message || alert.rule) + '</div>' +
             '<div class="alert-detail">' +
-              '当前值: ' + escHtml(String(alert.value)) +
-              ' | 开始: ' + formatTime(alert.startedAt) +
+              '开始: ' + formatTime(alert.startedAt) +
               ' | 状态: ' + (alert.acknowledged ? "已确认" : "未确认") +
+              (alert.notifyCount ? ' | 已通知 ' + alert.notifyCount + ' 次' : '') +
             '</div>' +
+            detailsHtml +
           '</div>' +
           (!alert.acknowledged
             ? '<button class="btn btn-outline btn-sm" data-action="ack-alert" data-id="' + escHtmlAttr(alert.id) + '">确认</button>'
@@ -784,13 +789,15 @@ async function loadSettings(): Promise<void> {
   req<HTMLInputElement>("setting-webhook-url").value = result.webhookUrl || "";
   req<HTMLInputElement>("setting-webhook-enabled").checked = !!result.webhookEnabled;
   req<HTMLInputElement>("setting-retention").value = result.monitorRetentionDays || 7;
+  req<HTMLInputElement>("setting-notification-interval").value = String(result.notificationInterval ?? 60_000);
 }
 
 async function saveSettings(): Promise<void> {
   const body = {
     webhookUrl: req<HTMLInputElement>("setting-webhook-url").value.trim(),
     webhookEnabled: req<HTMLInputElement>("setting-webhook-enabled").checked,
-    monitorRetentionDays: parseInt(req<HTMLInputElement>("setting-retention").value, 10) || 7
+    monitorRetentionDays: parseInt(req<HTMLInputElement>("setting-retention").value, 10) || 7,
+    notificationInterval: parseInt(req<HTMLInputElement>("setting-notification-interval").value, 10) || 60_000
   };
   const result = await apiCall("PUT", "/admin/settings", body);
   const msg = req("settings-msg");

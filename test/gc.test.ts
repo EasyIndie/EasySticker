@@ -217,6 +217,34 @@ describe("数据目录 GC", () => {
     expect(store.find(sticker)).not.toBeNull();
   }, 60000);
 
+  it("图片历史版本算「被引用」，不会被当孤儿回收", async () => {
+    const current = await mkAsset(240, 240, 70);
+    const history = await mkAsset(240, 240, 30);
+    await createPack(store, dataDir, {
+      presetId: "wechat_stickers",
+      assets: [
+        {
+          label: "001",
+          assetId: current,
+          role: "sticker",
+          versions: [
+            { assetId: history, createdAt: "2024-01-01T00:00:00.000Z", kind: "generate" },
+            { assetId: current, createdAt: "2024-01-02T00:00:00.000Z", kind: "edit" }
+          ]
+        }
+      ],
+      metadata: { title: "带历史版本" },
+      generation: { source: "ai-generate", providerId: "mock", prompt: "x", styles: ["贴纸"] }
+    });
+    ageFile(store.find(history)!.filePath, 48);
+    ageFile(store.find(current)!.filePath, 48);
+
+    const report = await runGc({ dataDir, dryRun: false, orphanMinAgeMs: 6 * 3600_000 });
+    expect(report.errors).toEqual([]);
+    expect(store.find(history)).not.toBeNull();
+    expect(store.find(current)).not.toBeNull();
+  }, 60000);
+
   it("删除包后其素材变成孤儿，下一轮 GC 会回收", async () => {
     const sticker = await mkAsset(240, 240, 50);
     const created = await createPack(store, dataDir, {

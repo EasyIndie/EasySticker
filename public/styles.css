@@ -2964,6 +2964,90 @@ textarea:focus-visible {
   gap: 10px;
 }
 
+/* ── 历史版本弹窗 ─────────────────────────────────────────── */
+.version-dialog-body {
+  display: block;
+  grid-template-columns: none;
+  padding: 16px 20px;
+}
+
+.version-item {
+  display: grid;
+  grid-template-columns: 96px 1fr auto;
+  gap: 14px;
+  align-items: center;
+  padding: 12px;
+  border: 1px solid var(--color-border-default);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-secondary);
+}
+
+.version-item + .version-item {
+  margin-top: 10px;
+}
+
+.version-item-current {
+  border-color: var(--color-primary-border);
+  background: var(--color-surface-primary, var(--color-surface));
+}
+
+.version-thumb-link {
+  display: block;
+}
+
+.version-thumb {
+  width: 96px;
+  height: 96px;
+  object-fit: contain;
+  border: 1px solid var(--color-border-default);
+  border-radius: var(--radius-sm);
+  /* 棋盘格底：透明贴纸也能看清边界 */
+  background-image:
+    linear-gradient(45deg, rgba(0, 0, 0, 0.05) 25%, transparent 25%, transparent 75%, rgba(0, 0, 0, 0.05) 75%),
+    linear-gradient(45deg, rgba(0, 0, 0, 0.05) 25%, transparent 25%, transparent 75%, rgba(0, 0, 0, 0.05) 75%);
+  background-size: 16px 16px;
+  background-position: 0 0, 8px 8px;
+}
+
+.version-meta {
+  min-width: 0;
+}
+
+.version-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+  font-size: var(--font-14, 14px);
+}
+
+.version-current-tag {
+  padding: 1px 8px;
+  border-radius: var(--radius-pill);
+  background: var(--success-ink, #1a7f37);
+  color: #fff;
+  font-size: var(--font-11, 11px);
+  font-weight: 500;
+}
+
+.version-time {
+  margin-top: 2px;
+  font-size: var(--font-12, 12px);
+  color: var(--color-text-secondary);
+}
+
+.version-instruction {
+  margin-top: 4px;
+  font-size: var(--font-12, 12px);
+  color: var(--color-text-secondary);
+  word-break: break-word;
+}
+
+.version-actions {
+  display: flex;
+  gap: 8px;
+}
+
 /* 卡片上的「编辑图片」入口 */
 .preview-actions {
   display: flex;

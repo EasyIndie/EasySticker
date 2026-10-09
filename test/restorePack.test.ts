@@ -265,6 +265,85 @@ describe("导入 ZIP 还原生成现场", () => {
     expect((await app.inject({ method: "GET", url: `/api/packs/${packId}/download` })).statusCode).toBe(200);
   }, 60000);
 
+  it("编辑历史版本会打进 ZIP，重新导入后仍可查看（assetId 重映射）", async () => {
+    const store = createFileAssetStore(dataDir);
+    const stamp = Date.now();
+    const solid = (r: number) =>
+      sharp({ create: { width: 240, height: 240, channels: 4, background: { r, g: 100, b: 100, alpha: 1 } } })
+        .png()
+        .toBuffer();
+
+    const oldId = `ver-old-${stamp}`;
+    const curId = `ver-cur-${stamp}`;
+    const oldBytes = await solid(30);
+    const curBytes = await solid(200);
+    store.save(oldBytes, oldId, "png");
+    store.save(curBytes, curId, "png");
+
+    const { packId } = await createPack(store, dataDir, {
+      presetId: "wechat_stickers",
+      assets: [
+        {
+          label: "001",
+          assetId: curId,
+          role: "sticker",
+          prompt: "v2 提示词",
+          style: "贴纸",
+          emotion: "开心",
+          sourceAssetId: oldId,
+          versions: [
+            { assetId: oldId, createdAt: "2024-01-01T00:00:00.000Z", kind: "generate", prompt: "v1 提示词" },
+            { assetId: curId, createdAt: "2024-01-02T00:00:00.000Z", kind: "edit", instruction: "加一顶帽子", prompt: "v2 提示词" }
+          ]
+        }
+      ],
+      metadata: { title: "版本历史包" },
+      generation: { source: "ai-generate", providerId: "mock", prompt: "原始提示词", styles: ["贴纸"] }
+    });
+
+    // ZIP 里应包含当前图（assets/）与历史版本图（history/）
+    const zipBytes = await downloadZip(packId);
+    const entries = new Map(readZipEntries(zipBytes).map((e) => [e.name, e.content]));
+    expect(entries.has("assets/001.png")).toBe(true);
+    expect(entries.has("history/001/v1.png")).toBe(true);
+    expect(entries.get("history/001/v1.png")!.equals(oldBytes)).toBe(true);
+
+    // 重新导入：版本保留，且 assetId 全部重映射到新库里的 id
+    const boundary = `----easysticker-ver-${stamp}`;
+    const body = Buffer.concat([
+      Buffer.from(
+        `--${boundary}\r\nContent-Disposition: form-data; name="presetId"\r\n\r\nwechat_stickers\r\n` +
+          `--${boundary}\r\nContent-Disposition: form-data; name="file"; filename="pack.zip"\r\n` +
+          `Content-Type: application/zip\r\n\r\n`
+      ),
+      zipBytes,
+      Buffer.from(`\r\n--${boundary}--\r\n`)
+    ]);
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/generate/import-pack",
+      payload: body,
+      headers: { "content-type": `multipart/form-data; boundary=${boundary}` }
+    });
+    expect(res.statusCode).toBe(200);
+    const restored = res.json();
+    const versions = restored.stickers[0].versions as any[];
+    expect(versions).toHaveLength(2);
+    expect(versions[0]).toMatchObject({ kind: "generate", prompt: "v1 提示词", createdAt: "2024-01-01T00:00:00.000Z" });
+    expect(versions[1]).toMatchObject({ kind: "edit", instruction: "加一顶帽子", createdAt: "2024-01-02T00:00:00.000Z" });
+    // 当前版本指向重导入后的新图；初版指向历史图（不同的新 assetId）
+    expect(versions[1].assetId).toBe(restored.stickers[0].assetId);
+    expect(versions[0].assetId).not.toBe(versions[1].assetId);
+    // 历史图字节一致（原样带回）
+    const historyAsset = await app.inject({ method: "GET", url: `/api/assets/${versions[0].assetId}` });
+    expect(historyAsset.statusCode).toBe(200);
+    expect(historyAsset.rawPayload.equals(oldBytes)).toBe(true);
+
+    // 再次导出仍带历史版本
+    const newZip = await downloadZip(restored.packId);
+    expect([...new Set(readZipEntries(newZip).map((e) => e.name))].some((n) => n.startsWith("history/"))).toBe(true);
+  }, 120000);
+
   it("不是本站导出的 ZIP 会被拒绝", async () => {
     const boundary = `----easysticker-bad-${Date.now()}`;
     const body = Buffer.concat([

@@ -11,7 +11,7 @@
     <title>EasySticker</title>
     <meta name="theme-color" id="themeMeta" content="#07c160" data-dark="#111827" />
     <script src="/js/theme.js?v=2ce5d795"></script>
-    <link rel="stylesheet" href="/styles.css?v=4c6c8c0e" />
+    <link rel="stylesheet" href="/styles.css?v=d29150bc" />
   </head>
   <body>
     <a href="#mainContent" class="skip-link">跳到主要内容</a>
@@ -333,9 +333,17 @@
                 id="wechatAiPrompt"
                 rows="5"
                 aria-describedby="promptHint"
-                placeholder="补充主体、场景、动作、背景等细节；会拼接在所选预设之后一起生成。预设与自定义至少填一项。"
+                placeholder="自定义提示词：追加时补充主体、场景、动作等细节；覆盖时直接描述完整要求。预设与自定义至少填一项。"
               ></textarea>
               <div id="wechatAiPromptError" class="field-error" hidden></div>
+            </label>
+            <label class="field" id="promptModeField" for="wechatAiPromptMode" hidden>
+              <span class="section-title">自定义用法</span>
+              <select id="wechatAiPromptMode" class="select-field">
+                <option value="append">追加到所选预设之后</option>
+                <option value="override">覆盖所选预设（仅用自定义）</option>
+              </select>
+              <div class="field-hint">追加：预设 + 自定义拼接；覆盖：忽略所选预设，只用自定义内容。未选预设时两者等价。</div>
             </label>
             <div class="field">
               <span id="wechatAiStyleLabel" class="section-title"><span class="required-mark">*</span>风格选择</span>
@@ -615,6 +623,21 @@
       </div>
     </div>
 
+    <!-- 历史版本弹窗 -->
+    <div id="versionDialog" class="edit-dialog" hidden aria-modal="true" role="dialog" aria-labelledby="versionDialogTitle">
+      <div class="edit-dialog-backdrop" id="versionDialogBackdrop"></div>
+      <div class="edit-dialog-panel">
+        <div class="edit-dialog-head">
+          <div>
+            <h2 id="versionDialogTitle">历史版本</h2>
+            <p class="muted" id="versionDialogTarget" style="margin:4px 0 0;font-size:12px;"></p>
+          </div>
+          <button type="button" class="edit-dialog-close" id="versionDialogClose" aria-label="关闭"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+        </div>
+        <div class="edit-dialog-body version-dialog-body" id="versionDialogBody"></div>
+      </div>
+    </div>
+
     <!-- Lightbox -->
     <div id="lightbox" class="lightbox" hidden aria-modal="true" role="dialog">
       <div class="lightbox-backdrop" id="lightboxBackdrop"></div>
@@ -634,9 +657,9 @@
     </footer>
 
     <script src="/js/auth.js?v=cac9e5cb"></script>
-    <script src="/js/preview.js?v=820bcee9"></script>
+    <script src="/js/preview.js?v=e766a03b"></script>
     <script src="/js/generator-api.js?v=a1439256"></script>
     <script src="/js/ui.js?v=5463a81e"></script>
-    <script src="/js/app.js?v=0fe77cd3"></script>
+    <script src="/js/app.js?v=478e9958"></script>
   </body>
 </html>

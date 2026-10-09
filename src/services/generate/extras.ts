@@ -2,7 +2,8 @@ import createHttpError from "http-errors";
 import { nanoid } from "nanoid";
 import type { AssetStore } from "../../lib/assets";
 import { validateAsset } from "../platform/validate";
-import { compilePrompt, type PromptConfig } from "./promptConfig";
+import { type PromptConfig } from "./promptConfig";
+import { buildExtraPrompt } from "./promptBuilder";
 import { convertToPlatformFormat, toBannerPng, toRewardPng } from "./convert";
 import type { AiGenerateInput, AiGenerateOutput } from "../ai/provider";
 
@@ -76,9 +77,9 @@ export async function generateWechatExtras(ctx: ExtrasContext, opts: ExtrasOptio
   const generateExtraImage = async (customPrompt: string) => {
     throwIfCanceled();
     const style = ctx.styles[0]!;
-    const compiledPrompt = compilePrompt(ctx.promptConfig.templates.extra, {
+    const compiledPrompt = buildExtraPrompt(ctx.promptConfig, {
       prompt: ctx.prompt,
-      customPrompt,
+      requirement: customPrompt,
       style
     });
 

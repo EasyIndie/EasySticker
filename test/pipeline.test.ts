@@ -545,7 +545,7 @@ describe("pipeline", () => {
       const thanks = thanksRes.json();
       expect(thanks.assetId).toBeTypeOf("string");
       expect(thanks.url).toBe(`/api/assets/${thanks.assetId}`);
-      expect(thanks.prompt).toContain("感谢打赏");
+      expect(thanks.prompt).toContain("赞赏答谢横幅");
       // 返回落盘尺寸与所用风格，供前端写回 pack 的 metadata.json
       expect(thanks.style).toBe("贴纸");
       expect(thanks.targetSize).toEqual({ width: 750, height: 560 });

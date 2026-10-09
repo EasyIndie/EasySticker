@@ -4,6 +4,15 @@ import os from "node:os";
 
 // ── Types ──────────────────────────────────────────────────────
 
+export interface ErrorBreakdown {
+  /** 统计窗口（秒）。 */
+  windowSeconds: number;
+  /** 状态码分布，按次数降序。 */
+  byStatus: Array<{ status: number; count: number }>;
+  /** 出错路由，按次数降序；client=4xx，server=5xx，count=两者之和。 */
+  byRoute: Array<{ route: string; count: number; client: number; server: number }>;
+}
+
 export interface CurrentMetrics {
   cpu: { percent: number; loadAvg: number[] };
   memory: { totalMb: number; usedMb: number; percent: number };
@@ -11,7 +20,14 @@ export interface CurrentMetrics {
   uptime: number;
   requestsLastMinute: number;
   requestsLastMinuteTotal: number;
+  /** 所有 >=400 的响应（包含 4xx 客户端错误）。 */
   errorsLastMinute: number;
+  /** 仅 4xx（参数校验、鉴权、限流、404 等，通常是客户端行为）。 */
+  clientErrorsLastMinute: number;
+  /** 仅 5xx（服务端异常，真正需要告警的部分）。 */
+  serverErrorsLastMinute: number;
+  /** 错误归因明细，供告警消息定位具体原因。 */
+  errorBreakdown: ErrorBreakdown;
   avgLatencyLastMinute: number;
 }
 
@@ -117,14 +133,35 @@ function takeCpuTimes(): { idle: number; total: number } {
 
 // ── Rolling Window (1 second granularity, 60 seconds) ─────────
 
+interface RouteErrorStat {
+  client: number;
+  server: number;
+}
+
 interface SecondSlot {
   count: number;
   errors: number;
+  clientErrors: number;
+  serverErrors: number;
   totalDuration: number;
+  byStatus: Map<number, number>;
+  byRoute: Map<string, RouteErrorStat>;
+}
+
+function emptySlot(): SecondSlot {
+  return {
+    count: 0,
+    errors: 0,
+    clientErrors: 0,
+    serverErrors: 0,
+    totalDuration: 0,
+    byStatus: new Map(),
+    byRoute: new Map()
+  };
 }
 
 function createSlots(): SecondSlot[] {
-  return Array.from({ length: 60 }, () => ({ count: 0, errors: 0, totalDuration: 0 }));
+  return Array.from({ length: 60 }, () => emptySlot());
 }
 
 // ── Factory ────────────────────────────────────────────────────
@@ -156,12 +193,12 @@ export function createMonitorStore(
     if (diff <= 0) return;
     for (let i = 0; i < diff; i++) {
       slotIndex = (slotIndex + 1) % 60;
-      slots[slotIndex] = { count: 0, errors: 0, totalDuration: 0 };
+      slots[slotIndex] = emptySlot();
     }
     // If we jumped more than 60 seconds, reset everything
     if (diff >= 60) {
       for (let i = 0; i < 60; i++) {
-        slots[i] = { count: 0, errors: 0, totalDuration: 0 };
+        slots[i] = emptySlot();
       }
       slotIndex = 0;
     }
@@ -173,16 +210,39 @@ export function createMonitorStore(
     return slots[slotIndex];
   }
 
-  function aggregateSlots(): { count: number; errors: number; totalDuration: number } {
+  function aggregateSlots(): {
+    count: number;
+    errors: number;
+    clientErrors: number;
+    serverErrors: number;
+    totalDuration: number;
+    byStatus: Map<number, number>;
+    byRoute: Map<string, RouteErrorStat>;
+  } {
     let count = 0;
     let errors = 0;
+    let clientErrors = 0;
+    let serverErrors = 0;
     let totalDuration = 0;
+    const byStatus = new Map<number, number>();
+    const byRoute = new Map<string, RouteErrorStat>();
+
     for (const s of slots) {
       count += s.count;
       errors += s.errors;
+      clientErrors += s.clientErrors;
+      serverErrors += s.serverErrors;
       totalDuration += s.totalDuration;
+      for (const [status, n] of s.byStatus) byStatus.set(status, (byStatus.get(status) ?? 0) + n);
+      for (const [route, stat] of s.byRoute) {
+        const cur = byRoute.get(route) ?? { client: 0, server: 0 };
+        cur.client += stat.client;
+        cur.server += stat.server;
+        byRoute.set(route, cur);
+      }
     }
-    return { count, errors, totalDuration };
+
+    return { count, errors, clientErrors, serverErrors, totalDuration, byStatus, byRoute };
   }
 
   function pushSystemSample(cpuPercent: number, memPercent: number): void {
@@ -201,8 +261,22 @@ export function createMonitorStore(
       const now = Date.now();
       const slot = getSlotFor(now);
       slot.count++;
-      if (rec.status >= 400) slot.errors++;
       slot.totalDuration += rec.durationMs;
+
+      // 4xx 与 5xx 分开累计：4xx 多为客户端/扫描器噪声，5xx 才是服务端故障。
+      // 全量 >=400 仍记进 errors，保持旧指标语义不变。
+      if (rec.status >= 400) {
+        slot.errors++;
+        const isServer = rec.status >= 500;
+        if (isServer) slot.serverErrors++;
+        else slot.clientErrors++;
+        slot.byStatus.set(rec.status, (slot.byStatus.get(rec.status) ?? 0) + 1);
+        const route = rec.route || "unknown";
+        const stat = slot.byRoute.get(route) ?? { client: 0, server: 0 };
+        if (isServer) stat.server++;
+        else stat.client++;
+        slot.byRoute.set(route, stat);
+      }
 
       // Write to JSONL
       const today = getToday();
@@ -296,6 +370,13 @@ export function createMonitorStore(
 
       const uptime = lastSystemData?.uptime ?? os.uptime();
 
+      const byStatus = [...agg.byStatus.entries()]
+        .map(([status, count]) => ({ status, count }))
+        .sort((a, b) => b.count - a.count || a.status - b.status);
+      const byRoute = [...agg.byRoute.entries()]
+        .map(([route, stat]) => ({ route, count: stat.client + stat.server, client: stat.client, server: stat.server }))
+        .sort((a, b) => b.count - a.count || a.route.localeCompare(b.route));
+
       return {
         cpu,
         memory,
@@ -304,6 +385,9 @@ export function createMonitorStore(
         requestsLastMinute: agg.count,
         requestsLastMinuteTotal: agg.count,
         errorsLastMinute: agg.errors,
+        clientErrorsLastMinute: agg.clientErrors,
+        serverErrorsLastMinute: agg.serverErrors,
+        errorBreakdown: { windowSeconds: 60, byStatus, byRoute },
         avgLatencyLastMinute: agg.count > 0 ? Math.round(agg.totalDuration / agg.count) : 0,
       };
     },

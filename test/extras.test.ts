@@ -21,7 +21,7 @@ describe("generateWechatExtras — 单资源失败不中断整包", () => {
 
     const client = {
       async generateImage(input: { prompt: string }) {
-        if (input.prompt.includes("感谢打赏")) {
+        if (input.prompt.includes("赞赏答谢横幅")) {
           throw Object.assign(new Error("模拟失败"), { statusCode: 502 });
         }
         const bytes = await sharp({

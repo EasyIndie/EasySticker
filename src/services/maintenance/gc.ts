@@ -113,6 +113,8 @@ export function collectReferencedAssetIds(dataDir: string, packIds?: string[]): 
       referenced.add(file.assetId);
       // 编辑图片用过的附加参考图也要算「被引用」，否则会被当孤儿素材回收掉
       if (file.editReferenceAssetId) referenced.add(file.editReferenceAssetId);
+      // 历史版本同样不能当孤儿回收，否则「查看历史版本」会变成空图
+      for (const version of file.versions ?? []) referenced.add(version.assetId);
     }
   }
   return referenced;
@@ -336,6 +338,7 @@ export async function deletePacksAndReclaim(
     for (const file of metadata?.files ?? []) {
       if (file.assetId) targetAssetIds.add(file.assetId);
       if (file.editReferenceAssetId) targetAssetIds.add(file.editReferenceAssetId);
+      for (const version of file.versions ?? []) targetAssetIds.add(version.assetId);
     }
   }
 

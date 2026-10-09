@@ -7,7 +7,8 @@ import { getPlatformPreset, resolveTargetSize } from "../platform/presets";
 import { createPack, EXTRA_ASSET_KEY_TO_ROLE, type PackFileRole } from "../pack/service";
 import { getAiProvider } from "../ai";
 import { buildMinimalClient } from "../ai/client";
-import { loadPromptConfig, compilePrompt } from "./promptConfig";
+import { loadPromptConfig, resolveEmotions } from "./promptConfig";
+import { buildStickerPrompt, resolveStyleName } from "./promptBuilder";
 import { convertToPlatformFormat } from "./convert";
 import { generateWechatExtras, type ExtrasResult } from "./extras";
 
@@ -18,6 +19,8 @@ export type PlatformGenerateRequest = {
   promptPreset?: string;
   /** 自定义补充提示词（可空）。 */
   promptCustom?: string;
+  /** 自定义提示词与预设的关系：append 追加（默认）/ override 覆盖（仅用自定义）。 */
+  promptMode?: "append" | "override";
   provider?: string;
   styles?: string[];
   stickerCount?: number;
@@ -42,7 +45,7 @@ export async function getPromptTemplate(referenceAssetId: string) {
     referenceAssetId,
     negativePrompt: promptConfig.global.negativePrompt,
     styles: promptConfig.global.styles,
-    promptPresets: presets.map((p) => ({ id: p.id, name: p.name, prompt: p.prompt }))
+    promptPresets: presets.map((p) => ({ id: p.id, name: p.name, prompt: p.prompt, style: p.style }))
   };
 }
 
@@ -62,7 +65,6 @@ export async function generateAssetsAndPack(
   const min = preset.minCount ?? 1;
   const max = preset.maxCount ?? 50;
   const count = Math.max(min, Math.min(max, Math.floor(req.stickerCount ?? 8)));
-  const styles = (req.styles?.filter(Boolean) ?? []).length ? (req.styles!.filter(Boolean) as string[]) : ["默认"];
   if (!req.referenceAssetId) throw createHttpError(400, "missing referenceAssetId");
   if (!req.prompt) throw createHttpError(400, "missing prompt");
 
@@ -70,6 +72,9 @@ export async function generateAssetsAndPack(
   const { width: targetW, height: targetH } = resolveTargetSize(preset);
 
   const promptConfig = loadPromptConfig();
+  const styles = (req.styles?.filter(Boolean) ?? []).length
+    ? (req.styles!.filter(Boolean) as string[])
+    : [resolveStyleName(promptConfig, null)];
   const providerId = req.provider ?? promptConfig.ai?.defaultProvider ?? "mock";
   const provider = getAiProvider(providerId);
   const client = buildMinimalClient(provider);
@@ -77,7 +82,7 @@ export async function generateAssetsAndPack(
   if (!reference) throw createHttpError(404, "reference asset not found");
   const referenceBytes = fs.readFileSync(reference.filePath);
   const referenceBase64 = referenceBytes.toString("base64");
-  const emotions = promptConfig.emotions;
+  const emotions = resolveEmotions(promptConfig, req.promptPreset);
 
   const referenceMode = promptConfig.ai?.referenceMode ?? "base64";
   const baseUrl = promptConfig.ai?.publicBaseUrl || "";
@@ -114,11 +119,7 @@ export async function generateAssetsAndPack(
     const emotion = emotions[i % emotions.length];
 
     emit?.("progress", { phase: "stickers", current: currentGenerated + 1, total: totalImageCount });
-    const compiledPrompt = compilePrompt(promptConfig.templates.sticker, {
-      prompt: req.prompt,
-      emotion,
-      style
-    });
+    const compiledPrompt = buildStickerPrompt(promptConfig, { prompt: req.prompt, emotion, style });
 
     const out = await client.generateImage(
       {
@@ -219,9 +220,11 @@ export async function generateAssetsAndPack(
     source: "ai-generate" as const,
     providerId,
     model: promptConfig.ai?.providers?.[providerId]?.model,
+    createdAt: new Date().toISOString(),
     prompt: req.prompt,
     promptPreset: req.promptPreset ?? null,
     promptCustom: req.promptCustom ?? null,
+    promptMode: req.promptMode ?? "append",
     negativePrompt: promptConfig.global.negativePrompt,
     styles,
     stickerCount: count,

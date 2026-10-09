@@ -278,4 +278,37 @@ test.describe("单图编辑", () => {
     await expect(page.locator("#editDialog")).toBeHidden({ timeout: 60_000 });
     await apiRequest(page.request, "delete", `/api/packs/${packId}`);
   });
+
+  test("编辑后可在「版本」面板查看并恢复历史版本", async ({ page }) => {
+    test.setTimeout(120000);
+    const { packId } = await seedGeneratedPack(page, 1);
+    await page.selectOption("#wechatAiProvider", "mock");
+
+    const card = page.locator("#wechatAiPreview .preview-item").first();
+    // 编辑前只有 1 版，没有版本入口
+    await expect(card.locator('[data-action="show-versions"]')).toHaveCount(0);
+
+    await card.locator('[data-action="edit-resource"]').click();
+    await page.fill("#editInstruction", "加一顶帽子");
+    await page.locator("#editDialogSubmit").click();
+    await expect(page.locator("#editDialog")).toBeHidden({ timeout: 60_000 });
+
+    // 编辑后出现「版本 2」入口
+    const versionBtn = card.locator('[data-action="show-versions"]');
+    await expect(versionBtn).toBeVisible();
+    await expect(versionBtn).toContainText("版本 2");
+
+    await versionBtn.click();
+    await expect(page.locator("#versionDialog")).toBeVisible();
+    await expect(page.locator("#versionDialogBody .version-item")).toHaveCount(2);
+    await expect(page.locator("#versionDialogBody .version-item-current")).toHaveCount(1);
+    await expect(page.locator("#versionDialogBody .version-instruction").first()).toContainText("加一顶帽子");
+
+    // 恢复非当前版本
+    await page.locator('#versionDialogBody .version-item:not(.version-item-current) button').first().click();
+    await expect(page.locator("#versionDialog")).toBeHidden();
+    await expect(page.locator("#globalNotice")).toContainText("已恢复");
+
+    await apiRequest(page.request, "delete", `/api/packs/${packId}`);
+  });
 });
