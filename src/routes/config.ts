@@ -115,7 +115,7 @@ export async function registerConfigRoutes(app: FastifyInstance) {
         defaultProvider,
         availableProviders,
         // 提示词预设（与「提示词自定义」互补）在页面加载时即可选，不必等上传后再拉。
-        promptPresets: (promptConfig.promptPresets ?? []).map((p) => ({ id: p.id, name: p.name, prompt: p.prompt }))
+        promptPresets: (promptConfig.promptPresets ?? []).map((p) => ({ id: p.id, name: p.name, prompt: p.prompt, style: p.style }))
       },
       // New format for multi-platform frontend
       platforms

@@ -62,6 +62,16 @@ export type PreviewDeps = {
   getAuthApi: () => (url: string, opts?: RequestInit) => Promise<Response>;
 };
 
+export type PreviewVersion = {
+  assetId: string;
+  createdAt: string;
+  kind: string;
+  instruction?: string;
+  prompt?: string;
+  style?: string;
+  emotion?: string;
+};
+
 export type StickerPreview = {
   label?: string;
   url?: string;
@@ -70,6 +80,7 @@ export type StickerPreview = {
   style?: string;
   emotion?: string;
   sourceAssetId?: string;
+  versions?: PreviewVersion[];
 };
 
 export type PackResult = {
@@ -155,6 +166,9 @@ const PLACEHOLDER_STATE_TEXT: Record<Tone, string> = {
 const EDIT_ICON_SVG =
   '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>';
 
+const VERSION_ICON_SVG =
+  '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l3 2"/></svg>';
+
 /** 标记「这一张是在原图基础上编辑过的」。 */
 function markEdited(card: HTMLElement): void {
   const title = card.querySelector(".preview-title");
@@ -165,10 +179,20 @@ function markEdited(card: HTMLElement): void {
   title.appendChild(tag);
 }
 
-/** 给成功生成的卡片挂上「编辑图片」入口（失败卡片走点击重新生成，不需要它）。 */
-function appendEditAction(card: HTMLElement): void {
+/** 给成功生成的卡片挂上「编辑图片」与（有历史时）「版本」入口。 */
+function appendEditAction(card: HTMLElement, versions?: PreviewVersion[]): void {
   const actions = document.createElement("div");
   actions.className = "preview-actions";
+
+  if (Array.isArray(versions) && versions.length > 1) {
+    const history = document.createElement("button");
+    history.type = "button";
+    history.className = "preview-action-btn";
+    history.dataset.action = "show-versions";
+    history.title = `查看这张图的 ${versions.length} 个历史版本`;
+    history.innerHTML = `${VERSION_ICON_SVG}<span>版本 ${versions.length}</span>`;
+    actions.appendChild(history);
+  }
 
   const edit = document.createElement("button");
   edit.type = "button";
@@ -377,7 +401,7 @@ function createPreviewCard(sticker: StickerPreview | null, tone: Tone, index?: n
   card.appendChild(media);
   if (hasImage) {
     if (sticker?.sourceAssetId) markEdited(card);
-    appendEditAction(card);
+    appendEditAction(card, sticker?.versions);
   }
   return card;
 }
@@ -537,7 +561,7 @@ function createExtraCard(item: ExtraAssetDef, extras: Record<string, any>, tone:
     card.appendChild(media);
     if (assetId && effectiveTone === "success") {
       if (extras?.[`${item.key}_sourceAssetId`]) markEdited(card);
-      appendEditAction(card);
+      appendEditAction(card, extras?.[`${item.key}_versions`]);
     }
 
   return card;

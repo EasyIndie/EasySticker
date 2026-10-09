@@ -7,7 +7,8 @@ import { getPlatformPreset, resolveTargetSize } from "../platform/presets";
 import { getAiProvider } from "../ai";
 import { buildMinimalClient } from "../ai/client";
 import type { AiReferenceImage } from "../ai/provider";
-import { loadPromptConfig, compilePrompt } from "./promptConfig";
+import { loadPromptConfig, resolveEmotions } from "./promptConfig";
+import { buildExtraPrompt, buildStickerPrompt, resolveStyleName } from "./promptBuilder";
 import { convertToPlatformFormat, toBannerPng, toRewardPng } from "./convert";
 
 export type ExtraAssetKey =
@@ -23,7 +24,10 @@ export type ResourceTarget =
 
 export type ResourceGenerateRequest = {
   referenceAssetId: string;
-  prompt: string;
+  /** 编辑模式可为空：主体以 sourceAssetId 图为准。 */
+  prompt?: string;
+  /** 选中的提示词预设 id（可空）；用于复用预设自带的情绪/动作参数。 */
+  promptPreset?: string;
   provider?: string;
   styles?: string[];
   target: ResourceTarget;
@@ -41,6 +45,8 @@ export type ResourceGenerateResult = {
   assetId: string;
   url: string;
   prompt: string;
+  /** 新版本产生时间（ISO），供前端写入历史版本。 */
+  createdAt: string;
   label?: string;
   key?: ExtraAssetKey;
   /** 本次使用的风格/情绪，以及最终落盘尺寸，便于写回 pack 的 metadata.json。 */
@@ -121,7 +127,9 @@ export async function generateSingleResource(
   if (!preset) throw createHttpError(400, `unknown presetId: ${presetId}`);
 
   const promptConfig = loadPromptConfig();
-  const styles = (req.styles?.filter(Boolean) ?? []).length ? (req.styles!.filter(Boolean) as string[]) : ["默认"];
+  const styles = (req.styles?.filter(Boolean) ?? []).length
+    ? (req.styles!.filter(Boolean) as string[])
+    : [resolveStyleName(promptConfig, null)];
   const providerId = req.provider ?? promptConfig.ai?.defaultProvider ?? "mock";
   const provider = getAiProvider(providerId);
   const client = buildMinimalClient(provider);
@@ -175,7 +183,7 @@ export async function generateSingleResource(
   const extraRefHint = additionalReferenceImages.length
     ? "\n参考图说明：除第 1 张待修改的图片外，另附一张参考图，请参考其中的主体形象与风格进行修改。"
     : "";
-  const basePrompt = `${req.prompt}${editSuffix}${extraRefHint}`;
+  const basePrompt = `${req.prompt ?? ""}${editSuffix}${extraRefHint}`;
 
   let compiledPrompt: string;
   let convert: (buf: Buffer) => Promise<Buffer>;
@@ -189,15 +197,11 @@ export async function generateSingleResource(
 
   if (req.target.kind === "sticker") {
     const index = req.target.index;
-    const emotions = promptConfig.emotions;
+    const emotions = resolveEmotions(promptConfig, req.promptPreset);
     if (!emotions.length) throw createHttpError(500, "emotions 未配置");
     const emotion = emotions[index % emotions.length];
     const style = styles[index % styles.length];
-    compiledPrompt = compilePrompt(promptConfig.templates.sticker, {
-      prompt: basePrompt,
-      emotion,
-      style
-    });
+    compiledPrompt = buildStickerPrompt(promptConfig, { prompt: basePrompt, emotion, style });
     const { width, height } = resolveTargetSize(preset);
     convert = (buf) => convertToPlatformFormat(buf, presetId, width, height);
     validatePreset = presetId;
@@ -210,9 +214,9 @@ export async function generateSingleResource(
     const spec = EXTRA_SPECS[req.target.key];
     targetKey = req.target.key;
     const style = styles[0];
-    compiledPrompt = compilePrompt(promptConfig.templates.extra, {
+    compiledPrompt = buildExtraPrompt(promptConfig, {
       prompt: basePrompt,
-      customPrompt: promptConfig.extraPrompts[spec.promptKey],
+      requirement: promptConfig.extraPrompts[spec.promptKey],
       style
     });
     convert = spec.convert;
@@ -251,6 +255,7 @@ export async function generateSingleResource(
     assetId: id,
     url: `/api/assets/${id}`,
     prompt: compiledPrompt,
+    createdAt: new Date().toISOString(),
     label,
     key: targetKey,
     // 编辑模式：记录这次是从哪一张改过来的、用了哪张附加参考图

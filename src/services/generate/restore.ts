@@ -15,6 +15,7 @@ import {
   readPackManifest,
   type PackFileMetadata,
   type PackFileRole,
+  type PackFileVersion,
   type PackGenerationInfo
 } from "../pack/service";
 
@@ -81,6 +82,7 @@ type ParsedPack = {
 type DeclaredFile = {
   role?: string;
   label?: unknown;
+  assetId?: unknown;
   filename?: unknown;
   zipPath?: unknown;
   prompt?: unknown;
@@ -88,6 +90,7 @@ type DeclaredFile = {
   emotion?: unknown;
   sourceAssetId?: unknown;
   editReferenceAssetId?: unknown;
+  versions?: unknown;
 };
 
 type RestoredFile = PackFileMetadata & { role: PackFileRole };
@@ -99,7 +102,69 @@ type StickerPayload = {
   emotion?: string;
   sourceAssetId?: string;
   editReferenceAssetId?: string;
+  versions?: PackFileVersion[];
 };
+
+/** 从不可信的 metadata.json 里安全地解析历史版本数组。 */
+function parseVersions(value: unknown): PackFileVersion[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  const kinds = new Set<PackFileVersion["kind"]>(["generate", "edit", "regenerate", "restore"]);
+  const out: PackFileVersion[] = [];
+  for (const raw of value) {
+    if (out.length >= 50) break;
+    if (!raw || typeof raw !== "object") continue;
+    const item = raw as Record<string, unknown>;
+    const assetId = cleanText(item.assetId);
+    const createdAt = cleanText(item.createdAt);
+    const kind = typeof item.kind === "string" && kinds.has(item.kind as PackFileVersion["kind"])
+      ? (item.kind as PackFileVersion["kind"])
+      : "generate";
+    if (!assetId || !createdAt) continue;
+    out.push({
+      assetId,
+      createdAt,
+      kind,
+      ...(cleanText(item.instruction) ? { instruction: String(item.instruction).trim() } : {}),
+      ...(cleanText(item.prompt) ? { prompt: String(item.prompt).trim() } : {}),
+      ...(cleanText(item.style) ? { style: String(item.style).trim() } : {}),
+      ...(cleanText(item.emotion) ? { emotion: String(item.emotion).trim() } : {}),
+      ...(cleanText(item.zipPath) ? { zipPath: String(item.zipPath).trim() } : {})
+    });
+  }
+  return out.length ? out : undefined;
+}
+
+/**
+ * 把 ZIP 里的历史版本图片重新入库，并把 assetId 重映射到新库里的 id。
+ * - 等于原当前版本的条目 → 指向刚入库的当前图；
+ * - 其余带 zipPath 的 → 从包内解出并入库；
+ * - 既非当前又无图（旧清单）→ 丢弃，避免留下悬空引用。
+ */
+function remapZipVersions(
+  assetStore: AssetStore,
+  entries: ZipEntry[],
+  file: DeclaredFile,
+  newCurrentAssetId: string
+): PackFileVersion[] | undefined {
+  const versions = parseVersions(file.versions);
+  if (!versions?.length) return undefined;
+  const originalCurrent = cleanText(file.assetId);
+  const out: PackFileVersion[] = [];
+  for (const version of versions) {
+    if (originalCurrent && version.assetId === originalCurrent) {
+      out.push({ ...version, assetId: newCurrentAssetId, zipPath: undefined });
+      continue;
+    }
+    if (!version.zipPath) continue;
+    const entry = findEntry(entries, version.zipPath);
+    if (!entry || !isImage(entry.name)) continue;
+    const ext = path.extname(entry.name).slice(1).toLowerCase();
+    const versionAssetId = nanoid();
+    assetStore.save(entry.content, versionAssetId, ext);
+    out.push({ ...version, assetId: versionAssetId, zipPath: undefined });
+  }
+  return out.length ? out : undefined;
+}
 
 async function readFileBuffer(file: NodeJS.ReadableStream): Promise<Buffer> {
   const chunks: Buffer[] = [];
@@ -177,11 +242,12 @@ function splitFiles(files: PackFileMetadata[]) {
       ...(f.style ? { style: f.style } : {}),
       ...(f.emotion ? { emotion: f.emotion } : {}),
       ...(f.sourceAssetId ? { sourceAssetId: f.sourceAssetId } : {}),
-      ...(f.editReferenceAssetId ? { editReferenceAssetId: f.editReferenceAssetId } : {})
+      ...(f.editReferenceAssetId ? { editReferenceAssetId: f.editReferenceAssetId } : {}),
+      ...(f.versions?.length ? { versions: f.versions } : {})
     }));
 
   const extraIds: Record<string, string> = {};
-  const extraDetails: Partial<Record<PackFileRole, { prompt?: string; style?: string }>> = {};
+  const extraDetails: Partial<Record<PackFileRole, { prompt?: string; style?: string; sourceAssetId?: string; editReferenceAssetId?: string; versions?: PackFileVersion[] }>> = {};
   for (const [role, key] of EXTRA_KEYS) {
     const file = files.find((f) => f.role === role);
     if (!file) continue;
@@ -190,7 +256,8 @@ function splitFiles(files: PackFileMetadata[]) {
       ...(file.prompt ? { prompt: file.prompt } : {}),
       ...(file.style ? { style: file.style } : {}),
       ...(file.sourceAssetId ? { sourceAssetId: file.sourceAssetId } : {}),
-      ...(file.editReferenceAssetId ? { editReferenceAssetId: file.editReferenceAssetId } : {})
+      ...(file.editReferenceAssetId ? { editReferenceAssetId: file.editReferenceAssetId } : {}),
+      ...(file.versions?.length ? { versions: file.versions } : {})
     };
     if (Object.keys(detail).length) extraDetails[role] = detail;
   }
@@ -211,7 +278,9 @@ function buildRestoreResponse(input: {
   files: PackFileMetadata[];
   stickers: StickerPayload[];
   extraIds: Record<string, string>;
-  extraDetails: Partial<Record<PackFileRole, { prompt?: string; style?: string }>>;
+  extraDetails: Partial<
+    Record<PackFileRole, { prompt?: string; style?: string; sourceAssetId?: string; editReferenceAssetId?: string; versions?: PackFileVersion[] }>
+  >;
   referenceAssetId: string | null;
   warnings: string[];
   restoredFrom: string | null;
@@ -420,6 +489,7 @@ async function restoreFromEntries(
     const ext = path.extname(entry.name).slice(1).toLowerCase();
     const assetId = nanoid();
     assetStore.save(entry.content, assetId, ext);
+    const versions = remapZipVersions(assetStore, entries, file, assetId);
     restored.push({
       role,
       assetId,
@@ -436,7 +506,8 @@ async function restoreFromEntries(
       ...(cleanText(file.style) ? { style: String(file.style) } : {}),
       ...(cleanText(file.emotion) ? { emotion: String(file.emotion) } : {}),
       ...(cleanText(file.sourceAssetId) ? { sourceAssetId: String(file.sourceAssetId) } : {}),
-      ...(cleanText(file.editReferenceAssetId) ? { editReferenceAssetId: String(file.editReferenceAssetId) } : {})
+      ...(cleanText(file.editReferenceAssetId) ? { editReferenceAssetId: String(file.editReferenceAssetId) } : {}),
+      ...(versions?.length ? { versions } : {})
     });
   }
 
@@ -450,7 +521,7 @@ async function restoreFromEntries(
   }
 
   const extraIds: Record<string, string> = {};
-  const extraDetails: Partial<Record<PackFileRole, { prompt?: string; style?: string }>> = {};
+  const extraDetails: Partial<Record<PackFileRole, { prompt?: string; style?: string; sourceAssetId?: string; editReferenceAssetId?: string; versions?: PackFileVersion[] }>> = {};
   for (const [role, key] of EXTRA_KEYS) {
     const file = restored.find((f) => f.role === role);
     if (!file) continue;
@@ -459,7 +530,8 @@ async function restoreFromEntries(
       ...(file.prompt ? { prompt: file.prompt } : {}),
       ...(file.style ? { style: file.style } : {}),
       ...(file.sourceAssetId ? { sourceAssetId: file.sourceAssetId } : {}),
-      ...(file.editReferenceAssetId ? { editReferenceAssetId: file.editReferenceAssetId } : {})
+      ...(file.editReferenceAssetId ? { editReferenceAssetId: file.editReferenceAssetId } : {}),
+      ...(file.versions?.length ? { versions: file.versions } : {})
     };
     if (Object.keys(detail).length) extraDetails[role] = detail;
   }
@@ -483,7 +555,13 @@ async function restoreFromEntries(
   const assetsPayload = stickerFiles.map((f, i) => ({
     label: f.label ?? String(i + 1).padStart(3, "0"),
     assetId: f.assetId,
-    role: "sticker" as const
+    role: "sticker" as const,
+    ...(f.prompt ? { prompt: f.prompt } : {}),
+    ...(f.style ? { style: f.style } : {}),
+    ...(f.emotion ? { emotion: f.emotion } : {}),
+    ...(f.sourceAssetId ? { sourceAssetId: f.sourceAssetId } : {}),
+    ...(f.editReferenceAssetId ? { editReferenceAssetId: f.editReferenceAssetId } : {}),
+    ...(f.versions?.length ? { versions: f.versions.map((v) => ({ ...v, zipPath: undefined })) } : {})
   }));
 
   const metadata: PackMetadataLike = {
@@ -549,7 +627,8 @@ async function restoreFromEntries(
       ...(stickerFiles[i]?.sourceAssetId ? { sourceAssetId: stickerFiles[i].sourceAssetId } : {}),
       ...(stickerFiles[i]?.editReferenceAssetId
         ? { editReferenceAssetId: stickerFiles[i].editReferenceAssetId }
-        : {})
+        : {}),
+      ...(stickerFiles[i]?.versions?.length ? { versions: stickerFiles[i].versions } : {})
     })),
     extraIds,
     extraDetails,

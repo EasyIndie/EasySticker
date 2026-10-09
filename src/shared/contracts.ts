@@ -32,6 +32,8 @@ export const generateSchema = z.object({
   promptPreset: z.string().optional(),
   /** 自定义补充提示词（可空字符串）；与 promptPreset 一起还原表单。 */
   promptCustom: z.string().optional(),
+  /** 自定义提示词与预设的关系：append 追加（默认）/ override 覆盖（仅用自定义）。 */
+  promptMode: z.enum(["append", "override"]).optional(),
   provider: z.string().optional(),
   styles: z.array(z.string().min(1)).optional(),
   stickerCount: z.number().int().min(1).max(50).optional(),
@@ -67,7 +69,10 @@ export type ResourceTarget = z.infer<typeof resourceTargetSchema>;
 export const resourceSchema = z.object({
   presetId: z.string().min(1).default("wechat_stickers"),
   referenceAssetId: z.string().min(1),
-  prompt: z.string().min(1),
+  /** 编辑（mode=edit）可留空：主体以 sourceAssetId 图片为准；重新生成仍要求非空。 */
+  prompt: z.string().optional(),
+  /** 选中提示词预设 id（可空）；用于复用预设自带的情绪/动作参数。 */
+  promptPreset: z.string().optional(),
   provider: z.string().optional(),
   styles: z.array(z.string().min(1)).optional(),
   stickerCount: z.number().int().min(1).max(50).optional(),
@@ -78,7 +83,18 @@ export const resourceSchema = z.object({
   instruction: z.string().min(1).optional(),
   /** 编辑时额外提供的一张参考图（与待修改的图一起送给模型）。 */
   editReferenceAssetId: z.string().min(1).optional()
-});
+})
+  .superRefine((value, ctx) => {
+    // 编辑是图生图（主体在 sourceAssetId 图里），没有基础提示也能做；
+    // 重新生成是「文字 + 参考图」，必须要有提示词。
+    if (value.mode !== "edit" && !(value.prompt && value.prompt.trim())) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["prompt"],
+        message: "prompt is required when mode is regenerate"
+      });
+    }
+  });
 export type ResourceGenerateRequest = z.infer<typeof resourceSchema>;
 
 /**
@@ -115,12 +131,25 @@ export const packFileRoleSchema = z.enum([
   "reference"
 ]);
 
+/** 单张资源的历史版本（初版 → 每次编辑/重生成/回退）。 */
+export const packFileVersionSchema = z.object({
+  assetId: z.string().min(1),
+  createdAt: z.string().min(1),
+  kind: z.enum(["generate", "edit", "regenerate", "restore"]),
+  instruction: z.string().optional(),
+  prompt: z.string().optional(),
+  style: z.string().optional(),
+  emotion: z.string().optional(),
+  zipPath: z.string().optional()
+});
+
 /** 单张扩展资源的生成细节。 */
 export const packExtraDetailSchema = z.object({
   prompt: z.string().optional(),
   style: z.string().optional(),
   sourceAssetId: z.string().optional(),
-  editReferenceAssetId: z.string().optional()
+  editReferenceAssetId: z.string().optional(),
+  versions: z.array(packFileVersionSchema).max(50).optional()
 });
 
 /** 生成上下文：随 pack 一起写入 metadata.json，便于 ZIP 再导入后编辑图片。 */
@@ -130,6 +159,9 @@ export const packGenerationSchema = z.object({
   model: z.string().optional(),
   prompt: z.string().optional(),
   negativePrompt: z.string().optional(),
+  promptPreset: z.string().nullable().optional(),
+  promptCustom: z.string().nullable().optional(),
+  promptMode: z.enum(["append", "override"]).nullable().optional(),
   styles: z.array(z.string()).optional(),
   stickerCount: z.number().int().optional(),
   emotions: z.array(z.string()).optional(),
@@ -151,6 +183,8 @@ export const packGenerationSchema = z.object({
 
 /** POST /api/packs */
 export const packSchema = z.object({
+  /** 重建时带上原 packId：命中且归属一致则原地更新清单（历史只留一条）。 */
+  packId: z.string().min(1).max(64).optional(),
   presetId: z.string().min(1),
   assetIds: z.array(z.string().min(1)).optional(),
   assets: z
@@ -164,7 +198,9 @@ export const packSchema = z.object({
         emotion: z.string().optional(),
         sourceAssetId: z.string().optional(),
         /** 编辑图片时额外提供的那张参考图，记录下来便于复现且不会被 GC 回收。 */
-        editReferenceAssetId: z.string().optional()
+        editReferenceAssetId: z.string().optional(),
+        /** 历史版本（含初版），用于查看与回退。 */
+        versions: z.array(packFileVersionSchema).max(50).optional()
       })
     )
     .optional(),

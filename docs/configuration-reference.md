@@ -131,7 +131,7 @@
 |------|------|--------|------|
 | `imageSize.width` | number | `1024` | 生成图宽度 |
 | `imageSize.height` | number | `1024` | 生成图高度 |
-| `settings.timeoutMs` | number | `60000` | 单次调用超时（毫秒） |
+| `settings.timeoutMs` | number | `60000` | 单次调用超时（毫秒）。超时会**真正 abort 底层请求**（不再放后台跑），避免 zombie 请求与重试叠加 |
 | `settings.retryMax` | number | `3` | 失败重试次数 |
 | `settings.retryBaseMs` | number | `1000` | 重试基础等待（毫秒，指数退避） |
 
@@ -171,22 +171,26 @@
 
 | 字段 | 默认值（节选） | 说明 |
 |------|---------------|------|
-| `global.prompt` | 「基于参考图中的人物主体，生成聊天场景可用的表情包贴纸。要求：单人主体，Q版大头…」 | 所有生成的基础正向提示词（平台中立，适用于微信/Telegram/WhatsApp） |
-| `global.negativePrompt` | 「文字、水印、二维码、品牌logo、复杂背景、多人、写实照片…」 | 负向提示词 |
-| `global.styles` | 12 个风格名（扁平插画 / 贴纸 / 3D 卡通 / 日系 Q 版 / 像素风 / 国潮风 / 手绘涂鸦 / 水彩风 / 软萌毛绒 / 黏土 3D / 极简线条 / 复古漫画） | 前端「风格选择」的可选项 |
+| `global.negativePrompt` | 「文字、水印、二维码、品牌logo、复杂背景…」 | 全局负向提示词。透明背景属于贴纸专用规则，写在 `templates.sticker` 里（避免污染封面/横幅/参考图） |
+| `global.styles` | 13 个风格名（扁平插画 / 贴纸 / 3D 卡通 / 日系 Q 版 / 像素风 / 国潮风 / 手绘涂鸦 / 水彩风 / 软萌毛绒 / 黏土 3D / 极简线条 / 复古漫画 / 极简蜡笔涂鸦） | 前端「风格选择」的可选项 |
+| `global.stylePrompts` | 风格名 → 详细风格描述（英文关键词 + 要点） | 编译时把模板里的 `{{style}}` 展开成它，**风格只在这一处描述一次**，预设不重复写画风 |
 
 ### 4.2 `emotions`
 
 24 个情绪/动作词，按顺序分配给每一张贴纸（第 N 张贴纸用第 N 个）。
 
+如果选中的提示词预设自带 `emotions`（见 §4.5），则用预设自己的这一组，**覆盖**全局 `emotions`；未选预设或预设未声明时回退到全局。这样「一个 IP + 一个模板 + N 组情绪参数」的系列预设可以自我描述，而不污染其它预设。
+
 ### 4.3 `templates`
 
 | 字段 | 模板 | 说明 |
 |------|------|------|
-| `templates.sticker` | `{{prompt}}\n当前表情主题与动作：{{emotion}}\n风格：{{style}}\n画面要求：…` | 每张贴纸的提示词模板 |
-| `templates.extra` | `{{prompt}}\n{{customPrompt}}\n风格：{{style}}` | 扩展资源（封面/图标/横幅/赞赏图）的模板 |
+| `templates.sticker` | `{{prompt}}\n表情与动作：{{emotion}}\n画面风格：{{style}}\n背景：纯透明背景（透明 PNG…）\n构图：正方形 1:1，主体居中，角色与动作完整、不裁切，辅助元素不超过 2 个…` | 每张贴纸的提示词模板。**背景透明与画面通用规则（1:1、居中/完整/元素上限）都写在这里**，预设不必重复；含「覆盖预设」只用自定义时也生效 |
+| `templates.extra` | `{{prompt}}\n{{customPrompt}}\n画面风格：{{style}}` | 扩展资源（封面/图标/横幅/赞赏图）的模板。资源差异（画面类型/构图/比例）写在 `extraPrompts`，与风格解耦 |
 
-占位符：`{{prompt}}`（基础提示词）、`{{emotion}}`、`{{style}}`、`{{customPrompt}}`（来自 `extraPrompts`）。
+占位符：`{{prompt}}`（基础提示词）、`{{emotion}}`、`{{style}}`、`{{styleName}}`、`{{customPrompt}}`（来自 `extraPrompts`）。
+
+> `{{style}}` 在编译时会经 `global.stylePrompts` 展开成**详细风格描述**（命中时），未配置映射的风格则回退为风格名本身；`{{styleName}}` 始终是原始风格名。所以「预设里不要写画风」——画风统一交给风格选项。
 
 > 生成的 metadata.json 会逐张记录**实际拼好的完整提示词**，所以改模板后仍可追溯每张图当时是怎么来的。
 
@@ -204,17 +208,68 @@
 
 ### 4.5 `promptPresets`
 
-多套提示词预设，与「提示词自定义」**互补**：最终提示词 = 预设内容 + 自定义内容（可只填其一），由前端拼接后提交。默认内置 12 套：日常聊天 / 职场吐槽 / 萌宠拟人 / 情侣互动 / 节日祝福 / 沙雕搞怪 / 校园学习 / 游戏电竞 / 吃货美食 / 运动健身 / 旅行出游 / 暖心治愈。
+多套提示词预设，与「提示词自定义」**互补**：最终提示词 = 预设内容 + 自定义内容（可只填其一），由前端拼接后提交。默认内置 13 套：日常聊天 / 职场吐槽 / 萌宠拟人 / 情侣互动 / 节日祝福 / 沙雕搞怪 / 校园学习 / 游戏电竞 / 吃货美食 / 运动健身 / 旅行出游 / 暖心治愈 / 极简蜡笔。
 
 | 字段 | 说明 |
 |------|------|
 | `id` | 唯一标识，用于下拉框选中项 |
 | `name` | 展示名 |
 | `prompt` | 选中后作为基础提示词，拼接到自定义提示词**之前** |
+| `style` | 可选。推荐风格（须是 `global.styles` 中的名字）；选中该预设时前端自动切到该风格 |
+| `emotions` | 可选。预设专属情绪/动作集；选中该预设时**覆盖**全局 `emotions`（见 §4.2） |
 
-`/api/config` 与 `POST /api/generate/prompt` 都只回传可选项，**不替用户随机选择**。整体替换：在 `prompt-config.json` 写 `promptPresets` 即完全覆盖默认 12 套。
+`/api/config` 与 `POST /api/generate/prompt` 都只回传可选项，**不替用户随机选择**。整体替换：在 `prompt-config.json` 写 `promptPresets` 即完全覆盖默认 13 套。
 
-生成时，选中的预设 id 与自定义文本会随包写进 `metadata.json` 的 `generation.promptPreset` / `generation.promptCustom`（风格则在 `generation.styles`），ZIP 还原 / 历史还原时会一并回填到表单。详见 [pack-format.md](pack-format.md)。
+#### 预设提示词结构（约定）
+
+为了便于扩展与维护，`prompt` **只写内容，不写画风/背景/构图**（那些分别由 `global.stylePrompts` 与 `templates.sticker` 统一注入），并统一按下列字段顺序书写：
+
+```
+主体：{主体来源与设定}；主题：{主题/场景}；动作：{动作/情绪覆盖}；元素：{道具/辅助元素}。
+```
+
+- `主体`：统一以参考图中的主体为准（如「以参考图中的主体为准，保持角色身份与特征一致」）。
+- `主题`：这套预设的场景/主题。
+- `动作`：覆盖的动作或情绪范围（真正逐张使用的是 `emotions` / 预设自带 `emotions`）。
+- `元素`：道具/辅助元素；通用的「辅助元素不超过 2 个」已在 `templates.sticker` 里，无需重复。
+
+新增预设时按同结构填写即可；`test/promptPresets.test.ts` 会校验四字段齐全且顺序一致。
+
+> `minimal-crayon`（极简蜡笔）是「参数化系列模板」的范例：一段统一结构的预设 + 24 组带 `眼睛/嘴巴/手臂/姿势/辅助/文字` 字段的情绪参数，并用 `style` 固定画风（画风描述在 `global.stylePrompts`）。**角色主体不写死**——一律以参考图为准，换成猫、人、吉祥物或任意 IP 都能复用。
+
+### 4.6 自定义提示词模式（`promptMode`）
+
+前端「自定义用法」下拉决定自定义文本与预设的关系，通过 `POST /api/generate/start` 的 `promptMode` 传入，并记入 `metadata.json` 的 `generation.promptMode` 供 ZIP / 历史还原：
+
+| 值 | 行为 |
+|----|------|
+| `append`（默认） | 最终提示词 = 预设 + `\n` + 自定义 |
+| `override` | 填了自定义时**忽略预设**，最终提示词 = 自定义 |
+
+> 「覆盖」只影响提示词，不会改变预设自带的 `emotions` / `style`（后端仍按 `promptPreset` 取预设参数）。
+
+生成时，选中的预设 id、自定义文本与模式会随包写进 `metadata.json` 的 `generation.promptPreset` / `generation.promptCustom` / `generation.promptMode`（风格则在 `generation.styles`），ZIP 还原 / 历史还原时会一并回填到表单。详见 [pack-format.md](pack-format.md)。
+
+### 4.7 最终提示词的拼接顺序
+
+所有生成路径都经过 `src/services/generate/promptBuilder.ts` 这一个入口，最终发往 AI 服务的提示词结构固定为「内容 → 画面约束 → 负面约束」：
+
+```
+{prompt}                        ← 预设 + 自定义（前端按 promptMode 拼好）
+表情与动作：{emotion}             ← templates.sticker
+画面风格：{style}                ← global.stylePrompts 展开的详细描述
+背景：…                          ← templates.sticker
+构图：…                          ← templates.sticker
+Avoid: {global.negativePrompt}    ← provider 统一追加（openai.ts: buildPrompt）
+```
+
+- **贴纸**：`buildStickerPrompt`。
+- **扩展资源（封面/图标/横幅/赞赏图）**：`buildExtraPrompt` = `{{prompt}}` + `extraPrompts[key]` + `画面风格`；**不含**贴纸专用的背景/构图段。
+- **参考图**：`buildReferencePrompt` = 用户描述 + `画面风格`；无风格时不追加以免污染。
+
+未选择风格时（`styles` 为空或占位值「默认」）自动回退到 `global.styles[0]`，避免把「默认」这种无意义词写进提示词。`{{style}}` 由 `global.stylePrompts` 展开成详细描述，`{{styleName}}` 保留原始风格名（供自定义模板使用）。
+
+> 部分接口没有独立的 `negative_prompt` 字段，所以负面提示词统一以 `Avoid:` 段追加在末尾；`gpt-image` 与 `generic`（豆包 Seedream 等）两条链路共用同一拼接逻辑。透明背景属于贴纸专用规则（在 `templates.sticker`），不进全局负面，以免误伤需要背景的封面/横幅/参考图。
 
 ---
 
@@ -250,11 +305,27 @@
 
 | 文件 | 内容 | 改法 |
 |------|------|------|
-| `data/alerts-config.json` | 告警规则、Webhook、通知间隔、监控保留天数 | 后台「设置」标签页 |
+| `data/alerts-config.json` | 告警规则、Webhook、通知间隔、监控保留天数 | 后台「设置」/「告警规则」标签页 |
 | `data/alerts-history.json` | 告警历史（含已确认/已解决状态） | 后台告警列表 |
 | `data/maintenance.json` | 保留期策略生效起点（**不要手改**） | 由 `retention.ts` 自动写入 |
 | `data/users.json` | 用户与密码哈希 | 后台「用户」标签页 |
 | `data/monitoring/*.jsonl` | 请求/系统/磁盘指标，按天分文件 | 自动 |
 | `data/uploads/.owners.jsonl` | 素材归属索引（`assetId → owner`，追加写） | 自动（硬删账号清理散图时用到） |
+
+### 6.1 告警规则可用指标
+
+`data/alerts-config.json` 里每条规则用 `metric` 选指标（后台「告警规则」可改）：
+
+| `metric` | 含义 | 建议 |
+|----------|------|------|
+| `serverErrorRate` | 5xx / 总请求（最近 60s） | **默认告警项**，阈值 0.02（2%） |
+| `clientErrorRate` | 4xx / 总请求 | 默认关闭；4xx 多为扫描器/鉴权/校验噪声 |
+| `errorRate` | 全部 >=400 / 总请求 | 保留兼容；想同时盯 4xx+5xx 才用 |
+| `cpu.percent` | CPU 使用率 | — |
+| `disk.usedMb` | `data/` 目录占用（MB） | — |
+| `avgLatencyMs` | 最近一分钟平均延迟 | — |
+| `requestsPerMinute` | 最近一分钟请求数 | — |
+
+规则字段：`threshold` 阈值、`duration` 需持续秒数、`silenceMs` 同一告警的提醒间隔、`enabled` 开关。实际提醒间隔取 `max(silenceMs, notificationInterval)`（后者在后台「设置 → 通知最小间隔」配置）；触发/恢复各推送一次。告警消息含出错路由、状态码分布与排查建议。
 
 完整的 HTTP 接口清单一律以 `/docs`（Swagger UI）与 `src/routes/*.ts` 为准。
