@@ -326,6 +326,6 @@ Avoid: {global.negativePrompt}    ← provider 统一追加（openai.ts: buildPr
 | `avgLatencyMs` | 最近一分钟平均延迟 | — |
 | `requestsPerMinute` | 最近一分钟请求数 | — |
 
-规则字段：`threshold` 阈值、`duration` 需持续秒数、`silenceMs` 同一告警的提醒间隔、`enabled` 开关。实际提醒间隔取 `max(silenceMs, notificationInterval)`（后者在后台「设置 → 通知最小间隔」配置）；触发/恢复各推送一次。告警消息含出错路由、状态码分布与排查建议。
+规则字段：`threshold` 阈值、`duration` 需持续秒数、`silenceMs` 同一告警的提醒间隔、`enabled` 开关；错误率类指标还可设 `minSamples`（窗口内最小请求数，默认 20，低于该值视为无数据），避免低流量下单个错误被放大成 100%。实际提醒间隔取 `max(silenceMs, notificationInterval)`（后者在后台「设置 → 通知最小间隔」配置）；触发/恢复各推送一次。告警消息含出错路由、状态码分布与排查建议。
 
 完整的 HTTP 接口清单一律以 `/docs`（Swagger UI）与 `src/routes/*.ts` 为准。

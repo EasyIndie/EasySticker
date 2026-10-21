@@ -210,6 +210,12 @@ export function createMonitorStore(
     return slots[slotIndex];
   }
 
+  // 窗口必须由时间驱动：只靠 recordRequest() 惰性推进的话，一旦没有
+  // /api/* 请求（健康检查不算），slot 会停在最后一次采样时刻，errorRate
+  // 冻结在旧值上，告警既不会恢复也不会停止提醒。定时器 unref，不阻塞退出。
+  const slotTimer = setInterval(() => advanceSlots(Date.now()), 1000);
+  slotTimer.unref?.();
+
   function aggregateSlots(): {
     count: number;
     errors: number;
@@ -354,6 +360,8 @@ export function createMonitorStore(
     },
 
     getCurrentSnapshot(): CurrentMetrics {
+      // 读快照时也推进一次，避免定时器漂移或事件循环繁忙时读到过期窗口。
+      advanceSlots(Date.now());
       const agg = aggregateSlots();
 
       const cpu = lastSystemData
@@ -393,6 +401,7 @@ export function createMonitorStore(
     },
 
     getTrends(minutes: number): TrendData {
+      advanceSlots(Date.now());
       const n = Math.min(minutes, cpuSamples.length);
       const requestsPerMinute: number[] = [];
       const errorRate: number[] = [];

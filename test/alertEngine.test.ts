@@ -74,6 +74,31 @@ describe("alertEngine — 错误率告警只针对 5xx 且消息可定位", () =
     expect(engine.getActiveAlerts()).toHaveLength(0);
   });
 
+  it("样本量不足时错误率视为 0，单个 5xx 不会在低流量下触发告警", () => {
+    const dir = makeDir();
+    const store = fakeStore(() =>
+      snapshot({ requestsLastMinute: 4, errorsLastMinute: 1, serverErrorsLastMinute: 1 })
+    );
+    const engine = createAlertEngine(writeConfig(dir, [SERVER_RULE]), store);
+
+    engine.evaluate();
+    expect(engine.getActiveAlerts()).toHaveLength(0);
+  });
+
+  it("可通过 minSamples 显式降低样本门槛", () => {
+    const dir = makeDir();
+    const rule: AlertRule = { ...SERVER_RULE, minSamples: 4 };
+    const store = fakeStore(() =>
+      snapshot({ requestsLastMinute: 4, errorsLastMinute: 1, serverErrorsLastMinute: 1 })
+    );
+    const engine = createAlertEngine(writeConfig(dir, [rule]), store);
+
+    engine.evaluate();
+    // 1/4 = 25% > 2%，样本量刚好达到自定义门槛
+    expect(engine.getActiveAlerts()).toHaveLength(1);
+    expect(engine.getActiveAlerts()[0].value).toBeCloseTo(0.25);
+  });
+
   it("5xx 超阈值触发，消息带单位/阈值/持续时间，details 带路由与状态码", () => {
     const dir = makeDir();
     const store = fakeStore(() =>
