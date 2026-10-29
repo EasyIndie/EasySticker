@@ -2,7 +2,7 @@
 #
 # EasySticker 生产镜像。构建产物会发布到 GHCR，可「无需源码」直接部署：
 #   docker run -d -p 3000:3000 -v $PWD/data:/app/data ghcr.io/easyindie/easysticker:latest
-# 详见 docs/operations.md §1.2。
+# 详见 docs/deployment.md。
 
 # ── 生产依赖（仅 dependencies，不含 tsup/vite/playwright 等）
 FROM node:20-bookworm-slim AS prod-deps

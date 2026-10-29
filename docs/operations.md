@@ -1,132 +1,34 @@
-# EasySticker 运维手册
+# 运维手册
 
-> 部署、日志、压测、数据清理与备份。配置项本身的含义见 [configuration-reference.md](configuration-reference.md)。
+> 本文负责**上线之后怎么维护**：日志、存储清理、备份、监控告警、压测与排障。
+> 部署步骤见 [部署指南](deployment.md)，配置项含义见 [配置参考](configuration-reference.md)。
 
 ---
 
-## 1. 部署
+## 1. 日常巡检
 
-### 1.1 本地 / 裸机
+每天 / 每周可以只看这几处：
 
-```bash
-git clone https://github.com/EasyIndie/EasySticker.git
-cd EasySticker
-npm install
-cp .env.example .env        # 按需填写，不填则以 Mock 模式启动
-npm run build               # 编译服务端（tsup → dist/）
-npm run web:build           # 编译前端（vite → public/js/）+ 写入内容哈希
-npm run prod                # NODE_ENV=production node dist/server.js
-```
-
-开发模式用 `npm run dev`（tsup --watch + node --watch）与 `npm run web:dev`（vite）。
-
-> **不需要**复制 `prompt-config.default.json` 为 `prompt-config.json`。
-> 后者是可选的覆盖文件，只写与默认不同的字段即可（见配置参考）。
-
-### 1.2 Docker
-
-**方式 A：免源码（推荐）** —— 拉取预构建镜像，不需要克隆仓库或 Node 环境：
-
-```bash
-curl -O https://raw.githubusercontent.com/EasyIndie/EasySticker/main/docker-compose.image.yml
-curl -o .env https://raw.githubusercontent.com/EasyIndie/EasySticker/main/.env.example
-# 编辑 .env：至少填 API_TOKEN / JWT_SECRET / ADMIN_PASSWORD
-docker compose -f docker-compose.image.yml up -d
-```
-
-- 镜像：`ghcr.io/easyindie/easysticker`（`linux/amd64` + `linux/arm64`，含 `:latest` 与版本 tag）。
-- 锁版本：在 `.env` 里设 `EASYSTICKER_TAG=0.3.0`。
-- 升级：`docker compose -f docker-compose.image.yml pull && docker compose -f docker-compose.image.yml up -d`。
-- 数据落在 `./data`（映射到容器内 `/app/data`）。
-
-不用 compose 也可以：
-
-```bash
-docker run -d --name easysticker -p 3000:3000 \
-  -v "$PWD/data:/app/data" \
-  -e API_TOKEN=... -e JWT_SECRET=... -e ADMIN_PASSWORD=... \
-  ghcr.io/easyindie/easysticker:latest
-```
-
-**方式 B：从源码构建**：
-
-```bash
-docker compose build
-docker compose up -d easysticker
-```
-
-容器内监听 `0.0.0.0:3000`（两种 compose 都映射到宿主 `3000`，可用 `.env` 的 `PORT` 改）。
-**不要直接暴露到公网**，前面加一层 HTTPS 反代。
-
-> 镜像内置 `prompt-config.default.json` 与前端产物；自定义配置优先用环境变量，
-> 需深度定制再挂载 `prompt-config.json`（**先创建宿主文件**，否则 Docker 会把该路径建成目录）。
-> 镜像以非 root 用户运行，`/app/data` 为可写卷。
-
-### 1.3 反向代理（Nginx）
-
-```nginx
-server {
-    listen 443 ssl;
-    server_name sticker.example.com;
-    ssl_certificate     /etc/letsencrypt/live/sticker.example.com/fullchain.pem;
-    ssl_certificate_key /etc/letsencrypt/live/sticker.example.com/privkey.pem;
-
-    add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
-    add_header X-Frame-Options "DENY" always;
-    add_header X-Content-Type-Options "nosniff" always;
-
-    client_max_body_size 10m;   # 参考图上限
-
-    location / {
-        proxy_pass http://127.0.0.1:3000;
-        proxy_set_header Host              $host;
-        proxy_set_header X-Real-IP         $remote_addr;
-        proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-
-        # SSE 必需 —— 否则进度/实时指标会被缓冲住，表现是「卡住不动」。
-        # 涉及两条流：/api/generate/stream（生成进度）与
-        # /api/admin/monitoring/stream（后台仪表盘实时数据）
-        proxy_buffering off;
-        proxy_cache off;
-        proxy_read_timeout 86400s;
-    }
-}
-```
-
-申请证书：`sudo certbot --nginx -d sticker.example.com`。
-
-### 1.4 反向代理（Caddy）
-
-```caddyfile
-sticker.example.com {
-    reverse_proxy 127.0.0.1:3000
-    request_body max_size 10mb
-}
-```
-
-Caddy 默认不缓冲流式响应，SSE 无需额外配置。
-
-### 1.5 防火墙与升级
-
-```bash
-sudo ufw allow 443/tcp && sudo ufw allow 22/tcp && sudo ufw deny 3000/tcp && sudo ufw enable
-
-# 升级
-git pull && docker compose up -d --build easysticker
-```
+| 检查项 | 方式 | 异常信号 |
+|--------|------|---------|
+| 服务存活 | `GET /health` | 非 200 |
+| 错误日志 | `docker compose logs` 或日志采集器 | 5xx、provider 报错、磁盘写入失败 |
+| 实时指标 | 后台「仪表盘」（SSE） | CPU / 内存持续高位、请求量异常 |
+| 告警 | 后台告警列表 / Webhook | 长时间 active、没有恢复通知 |
+| 存储 | 后台「存储」标签页 | 占用持续增长、孤儿素材变多 |
+| 备份 | 备份任务 / 恢复演练 | 备份失败、文件大小异常 |
 
 ---
 
 ## 2. 日志
 
-Pino 写 **JSON lines 到 stdout**，一行一个 JSON 对象，可直接被 Loki / Datadog / ELK / CloudWatch 采集。
+Pino 输出 **JSON lines 到 stdout**，一行一个对象，可直接被 Loki / Datadog / ELK / CloudWatch 采集。
 
 | 变量 | 默认 | 取值 |
 |------|------|------|
-| `LOG_LEVEL` | `info` | `fatal`/`error`/`warn`/`info`/`debug`/`trace`/`silent` |
+| `LOG_LEVEL` | `info` | `fatal` / `error` / `warn` / `info` / `debug` / `trace` / `silent` |
 
-`NODE_ENV !== "production"` 时用 `pino-pretty` 输出可读格式。
+`NODE_ENV !== "production"` 时使用 `pino-pretty` 输出可读格式。
 
 ```json
 {"level":30,"time":1717000000000,"pid":1,"hostname":"abc123","msg":"server started","port":3000}
@@ -134,17 +36,19 @@ Pino 写 **JSON lines 到 stdout**，一行一个 JSON 对象，可直接被 Lok
 
 ```bash
 docker compose logs -f easysticker
-docker compose logs easysticker | grep "Default admin"   # 找随机生成的管理员密码
+docker compose logs easysticker | grep "Default admin"   # 查找随机生成的管理员密码
 ```
 
-**Docker 日志轮转**（否则日志会撑满磁盘）—— 宿主机 `/etc/docker/daemon.json`：
+### Docker 日志轮转
+
+否则日志会撑满磁盘。宿主机 `/etc/docker/daemon.json`：
 
 ```json
 { "log-driver": "json-file", "log-opts": { "max-size": "10m", "max-file": "3" } }
 ```
 
-改完 `sudo systemctl restart docker`。若无法改 driver，用 logrotate 处理
-`/var/lib/docker/containers/*/*.log`（`rotate 7` / `daily` / `compress` / `copytruncate` / `maxsize 50M`）。
+修改后执行 `sudo systemctl restart docker`。若无法改 driver，可用 logrotate 处理
+`/var/lib/docker/containers/*/*.log`（`daily` / `rotate 7` / `compress` / `copytruncate` / `maxsize 50M`）。
 
 | 环境 | 建议级别 | 采集方式 |
 |------|---------|---------|
@@ -154,7 +58,7 @@ docker compose logs easysticker | grep "Default admin"   # 找随机生成的管
 
 ---
 
-## 3. 存储：清理与回收
+## 3. 存储清理与回收
 
 ### 3.1 存储模型
 
@@ -162,13 +66,13 @@ docker compose logs easysticker | grep "Default admin"   # 找随机生成的管
 
 ```
 data/uploads/<assetId>.<ext>     # 所有素材，只存一份
-data/packs/<packId>.json         # 包清单（几 KB），含逐张提示词/尺寸/角色/owner
+data/packs/<packId>.json         # 包清单（几 KB），含逐张提示词 / 尺寸 / 角色 / owner
 ```
 
-用户点「下载 ZIP」时才按清单现场打包、边打边发。因此单资源重生成、重建 ZIP 都只是写几 KB 清单，
-不会把整包图片再复制一遍。
+用户点「下载 ZIP」时才按清单现场打包、边打边发。单资源重生成、重建 ZIP 都只写几 KB 清单，
+不会复制整包图片。
 
-> 历史遗留：早期版本把整包 ZIP 存在 `packs/<packId>.zip`，造成「uploads 一份 + ZIP 一份」的双倍占用。
+> 历史遗留：早期版本把整包 ZIP 存在 `packs/<packId>.zip`，造成双倍占用。
 > 这些包会被 GC 转成清单（素材本来就在 uploads 里），下载链接不变。
 
 ### 3.2 自动巡检
@@ -182,6 +86,9 @@ data/packs/<packId>.json         # 包清单（几 KB），含逐张提示词/�
 | 清 `.orig` 备份 | `repair-pack` 的中间产物 |
 | 按保留期删包 | 默认 30 天，且**不追溯既往** |
 
+保留期语义：过期时间 = `max(包创建时间, 策略生效时间) + 保留天数`。
+所以今天才把 `packRetentionDays` 从 0 改成 30，不会立刻清空历史数据。
+
 ### 3.3 手动体检 / 清理
 
 ```bash
@@ -192,25 +99,17 @@ npm run gc -- --apply --keep-orig             # 保留 .orig 备份
 npm run gc -- --apply --orphan-min-age-hours 1
 ```
 
-> ⚠️ 不要用 `find data -mtime +N -delete` 这类按 mtime 的清理方式。
+> ⚠️ **不要**使用 `find data -mtime +N -delete` 这类按 mtime 的清理方式。
 > 素材的 mtime 与「是否仍被引用」无关，直接删会把包打坏（图片 404、ZIP 打不出来）。
 > 用 `npm run gc`，它按引用关系判断。
 
-后台「存储」标签页能看到占用、待回收量、全部包列表，支持**多选 / 全选 + 批量删除**（删除需二次确认，
-全选删除需输入 `DELETE`）；**删除后会立即回收该包素材**，不必等下一次巡检。
-
-后台「用户」标签页支持**软删（停用）**与**硬删**：
-
-- **停用**：账号保留，登录被拒；其已签发的 JWT 会**立即失效**（不必等 7 天）。
-- **硬删**（`DELETE /api/admin/users/:email`）：删除账号；加 `?purge=true` 时一并清理
-  其名下包（并回收素材）、用量日志、监控记录，以及**该用户上传但从未进入任何包的散图**
-  （依据素材归属索引 `data/uploads/.owners.jsonl` 精确匹配，不会误伤他人）。
-- 管理员账号受保护，不能停用 / 删除。
+后台「存储」标签页能看到占用、待回收量与全部包列表，支持多选 / 全选 + 批量删除
+（删除需二次确认，全选删除需输入 `DELETE`）；删除后立即回收该包素材，不必等下一次巡检。
 
 ### 3.4 修复历史包
 
-早期导出的 ZIP 里 `metadata.json` 缺尺寸/提示词，可用脚本就地升级（用 sharp 重新测量尺寸、
-补齐 `files[]`；`uploads/` 里还留着参考图就一并收进 `source/reference.*`）：
+早期导出的 ZIP 里 `metadata.json` 缺尺寸 / 提示词，可用脚本就地升级：
+用 Sharp 重新测量尺寸、补齐 `files[]`；`uploads/` 里还留着参考图就一并收进 `source/reference.*`。
 
 ```bash
 npm run repair-pack -- <packId>            # 修复单个包
@@ -218,32 +117,91 @@ npm run repair-pack -- --all               # 修复所有旧 schema 的包
 npm run repair-pack -- --all --dry-run     # 只看会改什么
 ```
 
-原包会备份成 `<packId>.zip.orig`，`packId` 与下载链接不变。生成上下文（原始提示词/风格/提供商）
-旧版本没落盘，只能从浏览器 localStorage 找回：
+原包会备份成 `<packId>.zip.orig`，`packId` 与下载链接不变。
+旧版本没有把生成上下文落盘，只能从浏览器 localStorage 找回：
 
 ```js
 // 项目页面 F12 → console
 copy(localStorage.getItem('easysticker:last-wechat-pack'))
 ```
 
-存成 `context.json` 后 `npm run repair-pack -- <packId> --context context.json` 写回 `generation` 与逐张提示词。
+存成 `context.json` 后执行 `npm run repair-pack -- <packId> --context context.json`，
+可写回 `generation` 与逐张提示词。
+
+### 3.5 账号与数据删除
+
+后台「用户」标签页支持：
+
+- **停用**：账号保留，登录被拒；已签发的 JWT **立即失效**。
+- **硬删**（`DELETE /api/admin/users/:email`）：删除账号；加 `?purge=true` 时一并清理
+  其名下包（并回收素材）、用量日志、监控记录，以及该用户上传但从未进入任何包的散图
+  （依据素材归属索引 `data/uploads/.owners.jsonl` 精确匹配）。
+- 管理员账号受保护，不能停用 / 删除。
 
 ---
 
-## 4. 备份
+## 4. 监控与告警
+
+### 4.1 指标采集
+
+| 类型 | 频率 | 位置 |
+|------|------|------|
+| 请求级 | 每次 API 请求（`/api/assets/*` 已排除） | 60 个 1 秒环形 slot |
+| 系统级 | 每 10 秒 | CPU / 内存 |
+| 磁盘 | 每 60 秒 | `data/` 占用 |
+
+按天写入 `data/monitoring/*.jsonl`。请求窗口由 1 秒定时器持续推进，
+**空闲期同样会过期**，不会冻结在最后一次请求上。
+
+### 4.2 告警规则
+
+默认规则：
+
+| 规则 | 指标 | 默认阈值 | 状态 |
+|------|------|---------|------|
+| 服务端错误率过高 | `serverErrorRate`（5xx） | 2% | 启用 |
+| 客户端错误率偏高 | `clientErrorRate`（4xx） | 20% | 关闭 |
+| CPU 过高 | `cpu.percent` | 80% | 启用 |
+| 磁盘空间不足 | `disk.usedMb` | 500 MB | 启用 |
+| 响应延迟过高 | `avgLatencyMs` | 5000 ms | 启用 |
+| 请求量异常激增 | `requestsPerMinute` | 100 | 关闭 |
+
+错误率规则还要求窗口内至少有 `minSamples` 个请求（默认 20），低于该值视为无数据，
+避免低流量下单个错误被放大成 100%。
+
+告警逻辑：
+
+- 条件需持续 `duration` 秒才触发；
+- 值回落到阈值即恢复（没有回滞死区）；
+- 同一条告警的提醒间隔为 `max(规则 silenceMs, 全局 notificationInterval)`；
+- 触发与恢复各推送一次，`lastNotifiedAt` / `notifyCount` 持久化，重启不会立即重推；
+- 消息带出错路由、5xx / 4xx 拆分、状态码分布与排查建议。
+
+规则、Webhook、通知间隔、监控保留天数在后台「设置」或 `data/alerts-config.json` 中配置；
+指标与字段说明见 [配置参考 · 告警规则](configuration-reference.md#61-告警规则)。
+
+### 4.3 通知
+
+- Webhook：飞书交互卡片或通用 JSON；
+- 本地日志；
+- 后台告警列表（含已确认 / 已解决状态）。
+
+---
+
+## 5. 备份与恢复
 
 所有持久化数据都在 `./data/`：
 
 | 路径 | 内容 |
 |------|------|
 | `data/users.json` | 用户账户（邮箱、密码哈希、角色） |
-| `data/uploads/` | **所有素材**（表情图、参考图、扩展资源） |
-| `data/uploads/.owners.jsonl` | 素材归属索引（`assetId → owner`，追加写）。硬删账号清理散图用；备份建议一并带上 |
-| `data/packs/` | 包清单（含逐张提示词/尺寸/owner） |
+| `data/uploads/` | 所有素材（表情图、参考图、扩展资源、历史版本） |
+| `data/uploads/.owners.jsonl` | 素材归属索引，硬删账号清理散图用；备份建议一并带上 |
+| `data/packs/` | 包清单（含逐张提示词 / 尺寸 / owner） |
 | `data/usage/` | 使用量统计 |
-| `data/monitoring/` | 请求/系统/磁盘指标 JSONL，按天分文件 |
+| `data/monitoring/` | 请求 / 系统 / 磁盘指标 JSONL |
 | `data/alerts-config.json` / `data/alerts-history.json` | 告警规则与历史 |
-| `data/maintenance.json` | 保留期策略生效起点（**恢复备份时一并带上**） |
+| `data/maintenance.json` | 保留期策略生效起点（**恢复时一并带上**） |
 
 ```bash
 # 手动备份
@@ -258,13 +216,14 @@ docker run --rm -v easysticker_data:/data -v /backups:/backup alpine \
   tar czf /backup/easysticker-$(date +%Y%m%d).tar.gz -C /data .
 ```
 
-> 恢复后请保留 `data/maintenance.json`，否则保留期策略会重新计时（包不会被立刻删，但窗口会重置）。
+> 恢复后请保留 `data/maintenance.json`，否则保留期策略会重新计时
+>（包不会被立刻删，但窗口会重置）。
 
 ---
 
-## 5. 压测
+## 6. 压测
 
-用 [autocannon](https://github.com/mcollina/autocannon)：`npm i -g autocannon`。
+使用 [autocannon](https://github.com/mcollina/autocannon)：`npm i -g autocannon`。
 
 ```bash
 autocannon -c 50 -d 30 http://localhost:3000/health
@@ -272,7 +231,7 @@ autocannon -c 20 -d 30 http://localhost:3000/
 autocannon -c 20 -d 30 -H "Authorization: Bearer <TOKEN>" http://localhost:3000/api/auth/me
 ```
 
-**注意**：限流默认 30 req/min、匿名日配额 10，压测/跑 e2e 前务必放宽，否则结果全是 429：
+限流默认 30 req/min、匿名日配额 10，压测 / e2e 前务必放宽，否则结果全是 429：
 
 ```bash
 RATE_LIMIT_MAX=600 DAILY_QUOTA_ANONYMOUS_MAX=500 node dist/server.js
@@ -282,16 +241,16 @@ RATE_LIMIT_MAX=600 DAILY_QUOTA_ANONYMOUS_MAX=500 node dist/server.js
 
 | 场景 | RPS | P99 |
 |------|-----|-----|
-| `/health`（50 并发） | ~850 | 113ms |
-| 首页静态（20 并发） | ~400 | 81ms |
-| 认证 API（20 并发） | ~260 | 177ms |
+| `/health`（50 并发） | ~850 | 113 ms |
+| 首页静态（20 并发） | ~400 | 81 ms |
+| 认证 API（20 并发） | ~260 | 177 ms |
 
-> 首页首次加载会把 `styles.css` 与 6 个 `js` 拉一遍，之后靠内容哈希长缓存命中（0 请求、0 字节）。
+> 首页首次加载会把 `styles.css` 与 6 个 JS 拉一遍，之后靠内容哈希长缓存命中。
 > 压测静态资源时注意区分「冷启动」与「已预热」。
 
 ---
 
-## 6. 排障速查
+## 7. 排障速查
 
 | 现象 | 多半是 |
 |------|--------|
@@ -300,8 +259,9 @@ RATE_LIMIT_MAX=600 DAILY_QUOTA_ANONYMOUS_MAX=500 node dist/server.js
 | 图片 404 / ZIP 打不出来 | 素材被按 mtime 的清理脚本删了，或包引用的素材缺失（`npm run gc` 能看到） |
 | 忘记管理员密码 | 设置 `ADMIN_PASSWORD` 重启；或删 `data/users.json` 里的对应用户重新注册为管理员 |
 | 重启后所有人被登出 | 未固定 `JWT_SECRET` |
-| 大量 429 | 限流/日配额太紧，或压测时没放宽（见 §5） |
-| 告警 webhook 太频繁 | ①「服务端错误率过高」现在只统计 5xx，4xx 噪声不再触发；若仍频繁，调大该规则的 `silenceMs` 或全局 `notificationInterval`（后台「设置」）。②告警恢复后会发一条恢复通知，不再反复推送。③旧配置启动时自动把 `error_rate_high` 从 `errorRate` 迁到 `serverErrorRate` |
-| 告警只说「错误率过高」 | 升级后消息会带出错路由、状态码分布与排查建议（后台告警列表 / webhook）；对应监控可在 `data/monitoring/request/*.jsonl` 按 route/status 搜索 |
-| 首页还在跑旧的前端代码 | 跑 `npm run web:build`（会同时刷新 HTML 里的内容哈希） |
-| 生成结果一直是随机图 | `ai.defaultProvider` 还是 `mock` |
+| 大量 429 | 限流 / 日配额太紧，或压测时没放宽（见 §6） |
+| 告警 webhook 太频繁 | ① 错误率默认只看 5xx；仍频繁就调大 `silenceMs` 或全局 `notificationInterval`；② 恢复后会发一条恢复通知，不再反复推送；③ 旧配置启动时会自动迁移 |
+| 告警只说「错误率过高」 | 升级后消息会带出错路由、状态码分布与排查建议；可在 `data/monitoring/request/*.jsonl` 按 route / status 搜索 |
+| 首页还在跑旧的前端代码 | 执行 `npm run web:build`（会同时刷新 HTML 里的内容哈希） |
+| 生成结果一直是随机图 | `ai.defaultProvider` 还是 `mock`，或没有可用 API Key |
+| 数据目录越来越大 | 检查 `packRetentionDays`、孤儿素材安全期与备份策略；先 `npm run gc` 体检 |

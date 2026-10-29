@@ -1,7 +1,7 @@
 # EasySticker —— 从源码构建部署。
 #
 # 如果不想克隆源码，直接用预构建镜像：见 docker-compose.image.yml
-# （或 docs/operations.md §1.2「方式 A：免源码」）。
+# （或 docs/deployment.md「Docker 部署」）。
 services:
   easysticker:
     build: .
