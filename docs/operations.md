@@ -237,15 +237,10 @@ autocannon -c 20 -d 30 -H "Authorization: Bearer <TOKEN>" http://localhost:3000/
 RATE_LIMIT_MAX=600 DAILY_QUOTA_ANONYMOUS_MAX=500 node dist/server.js
 ```
 
-参考量级（Mac mini M2，Docker 容器内，仅用于判断是否数量级异常）：
+RPS / P99 会随机器、容器、并发与预热状态大幅变化，不在文档里写死参考值；
+记录基线时注明硬件、并发与是否预热，并与同一环境的历史结果比较。
 
-| 场景 | RPS | P99 |
-|------|-----|-----|
-| `/health`（50 并发） | ~850 | 113 ms |
-| 首页静态（20 并发） | ~400 | 81 ms |
-| 认证 API（20 并发） | ~260 | 177 ms |
-
-> 首页首次加载会把 `styles.css` 与 6 个 JS 拉一遍，之后靠内容哈希长缓存命中。
+> 首页首次加载会拉取全部前端资源，之后靠内容哈希长缓存命中。
 > 压测静态资源时注意区分「冷启动」与「已预热」。
 
 ---
