@@ -3,7 +3,6 @@
 
 node_modules
 dist
-dist-web
 data
 coverage
 playwright-report
@@ -17,7 +16,7 @@ test-results
 .vscode
 .pi
 
-# 文档与业务材料不进镜像
+# 文档与开发材料不进镜像
 **/*.md
 docs
 !README.md
@@ -26,7 +25,6 @@ docs
 web
 test
 scripts
-comfy
 
 *.log
 .env

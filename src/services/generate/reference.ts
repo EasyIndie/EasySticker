@@ -102,12 +102,10 @@ export async function generateReferenceImage(
     height,
     ...(mainReference
       ? {
-          referenceImageTransport: referenceMode as "base64" | "url" | "assetId" | "multipart",
-          referenceImageBase64:
+            referenceImageBase64:
             referenceMode === "base64" || referenceMode === "multipart" ? mainReference.base64 : undefined,
           referenceImageUrl: referenceMode === "url" ? mainReference.url : undefined,
-          referenceImageMime: mainReference.mime,
-          referenceImageAssetId: referenceMode === "assetId" ? req.referenceImageAssetId : undefined
+          referenceImageMime: mainReference.mime
         }
       : {}),
     ...(additionalReferenceImages.length ? { additionalReferenceImages } : {})

@@ -11,11 +11,9 @@ export type AiGenerateInput = {
   style?: string;
   width: number;
   height: number;
-  referenceImageTransport?: "base64" | "url" | "assetId" | "multipart";
   referenceImageBase64?: string;
   referenceImageUrl?: string;
   referenceImageMime?: string;
-  referenceImageAssetId?: string;
   /**
    * 附加参考图，排在主参考图之后。
    * 只有部分模型支持多图输入 —— 为空时行为与以前完全一致（单图路径不变）。

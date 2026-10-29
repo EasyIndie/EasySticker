@@ -82,6 +82,7 @@ docker compose up -d easysticker
 | 项目 | 说明 |
 |------|------|
 | 数据目录 | 必须持久化；备份与迁移只需要这一个目录 |
+| 环境变量 | 两个 compose 文件都通过 `env_file: .env` 注入；新增变量不需要改 compose |
 | 配置文件 | 默认使用镜像内置的 `prompt-config.default.json`；深度定制时挂载 `prompt-config.json` |
 | 挂载注意事项 | 宿主机文件必须**先创建**，否则 Docker 会把不存在的路径建成目录 |
 | AI 密钥 | 推荐通过 `AI_<PROVIDER_ID>_API_KEY` 环境变量传入 |

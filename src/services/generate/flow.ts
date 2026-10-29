@@ -128,12 +128,10 @@ export async function generateAssetsAndPack(
         style,
         width: imageWidth,
         height: imageHeight,
-        referenceImageTransport: referenceMode as "base64" | "url" | "assetId" | "multipart",
         referenceImageBase64:
           referenceMode === "base64" || referenceMode === "multipart" ? referenceBase64 : undefined,
         referenceImageUrl: referenceMode === "url" ? referenceUrl : undefined,
-        referenceImageMime: "image/png",
-        referenceImageAssetId: referenceMode === "assetId" ? req.referenceAssetId : undefined
+        referenceImageMime: "image/png"
       },
       signal
     );
@@ -175,10 +173,9 @@ export async function generateAssetsAndPack(
           promptConfig,
           prompt: req.prompt,
           styles,
-          referenceMode: referenceMode as "base64" | "url" | "assetId" | "multipart",
+          referenceMode,
           referenceBase64,
           referenceUrl,
-          referenceImageAssetId: req.referenceAssetId,
           emit,
           isCanceled,
           signal

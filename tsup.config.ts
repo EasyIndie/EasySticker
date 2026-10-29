@@ -6,8 +6,5 @@ export default defineConfig({
   format: ["cjs"],
   sourcemap: true,
   clean: true,
-  dts: false,
-  splitting: false,
-  minify: false,
   target: "node20"
 });

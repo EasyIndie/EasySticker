@@ -18,10 +18,9 @@ export type ExtrasContext = {
   promptConfig: PromptConfig;
   prompt: string;
   styles: string[];
-  referenceMode: "base64" | "url" | "assetId" | "multipart";
+  referenceMode: "base64" | "url" | "multipart";
   referenceBase64: string;
   referenceUrl?: string;
-  referenceImageAssetId?: string;
   emit?: (event: string, data: unknown) => void;
   isCanceled?: () => boolean;
   signal?: AbortSignal;
@@ -90,12 +89,10 @@ export async function generateWechatExtras(ctx: ExtrasContext, opts: ExtrasOptio
         style,
         width: ctx.promptConfig.ai?.imageSize?.width ?? 1024,
         height: ctx.promptConfig.ai?.imageSize?.height ?? 1024,
-        referenceImageTransport: ctx.referenceMode,
         referenceImageBase64:
           ctx.referenceMode === "base64" || ctx.referenceMode === "multipart" ? ctx.referenceBase64 : undefined,
         referenceImageUrl: ctx.referenceMode === "url" ? ctx.referenceUrl : undefined,
-        referenceImageMime: "image/png",
-        referenceImageAssetId: ctx.referenceMode === "assetId" ? ctx.referenceImageAssetId : undefined
+        referenceImageMime: "image/png"
       },
       ctx.signal
     );

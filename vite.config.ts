@@ -1,13 +1,6 @@
 import { defineConfig } from "vite";
-import path from "node:path";
 
-// Frontend toolchain for the incremental migration of public/app.js to
-// TypeScript modules. The existing public/ app is untouched; this builds into
-// dist-web/ until the migration is complete.
+// 开发服务器（npm run web:dev）。生产切片由 web/vite.*.config.ts 构建。
 export default defineConfig({
-  root: "web",
-  build: {
-    outDir: path.resolve(process.cwd(), "dist-web"),
-    emptyOutDir: true
-  }
+  root: "web"
 });

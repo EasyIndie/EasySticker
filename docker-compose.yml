@@ -1,54 +1,35 @@
-# EasySticker —— 从源码构建部署。
-#
-# 如果不想克隆源码，直接用预构建镜像：见 docker-compose.image.yml
-# （或 docs/deployment.md「Docker 部署」）。
+# 从源码构建部署。免源码部署见 docker-compose.image.yml。
+# 首次使用：cp .env.example .env，填好 API_TOKEN / JWT_SECRET / ADMIN_PASSWORD。
 services:
   easysticker:
     build: .
     image: easysticker:local
-    container_name: easysticker
     ports:
-      - "3000:3000"
+      - "${PORT:-3000}:3000"
+    env_file:
+      - .env
     environment:
+      # 容器内固定端口与数据目录；其余变量由 .env 注入
       - PORT=3000
+      - HOST=0.0.0.0
       - NODE_ENV=production
-      # Production security — set these via .env or host env
-      - API_TOKEN=${API_TOKEN:-}
-      - JWT_SECRET=${JWT_SECRET:-}
-      - ADMIN_PASSWORD=${ADMIN_PASSWORD:-}
-      - RATE_LIMIT_MAX=${RATE_LIMIT_MAX:-30}
-      - DAILY_QUOTA_MAX=${DAILY_QUOTA_MAX:-100}
-      - CORS_ALLOW_ORIGIN=${CORS_ALLOW_ORIGIN:-}
-      - LOG_LEVEL=${LOG_LEVEL:-info}
-      - DATA_DIR=${DATA_DIR:-/app/data}
-      # AI provider keys (recommended: set in .env, not in prompt-config.json)
-      - AI_SEEDREAM_API_KEY=${AI_SEEDREAM_API_KEY:-}
-      - AI_OPENAI_API_KEY=${AI_OPENAI_API_KEY:-}
+      - DATA_DIR=/app/data
     volumes:
       - ./data:/app/data
-      # 提示词/情绪/风格默认用镜像内置的 prompt-config.default.json，无需挂载。
-      # AI Key 建议通过上面的环境变量传入（写进宿主机的 .env 即可）。
-      # 如需深度定制：先创建宿主文件，再取消下行注释（切勿在不创建文件时直接挂载——
-      # Docker 会把不存在的宿主路径建成目录，导致配置读取失败）。
+      # 深度定制时先创建宿主文件，再取消下一行注释
       # - ./prompt-config.json:/app/prompt-config.json:ro
     restart: unless-stopped
 
-  # Optional: 定时回收（默认不启用，用 profile 打开）
-  #
-  # 用 dist/cli/gc.js（与 `npm run gc` 同一实现）：它按**引用关系**判断孤儿素材，
-  # 并遵守保留期「不追溯既往」。不要用按 mtime 的 find/rm —— 素材的 mtime 与
-  # 「是否仍被引用」无关，直接删会把包打坏（图片 404、ZIP 打不出来）。
-  #
+  # 可选：一次性数据回收，默认不运行。
   #   docker compose --profile cleanup run --rm cleanup
-  #
-  # 只体检不删：去掉 --apply（并注意保留期的默认值是 30 天）
   cleanup:
     build: .
     image: easysticker:local
-    container_name: easysticker-cleanup
-    profiles:
-      - cleanup
+    profiles: [cleanup]
     command: node dist/cli/gc.js --apply
+    environment:
+      - NODE_ENV=production
+      - DATA_DIR=/app/data
     volumes:
       - ./data:/app/data
     restart: "no"

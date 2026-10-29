@@ -8,7 +8,11 @@
 
 ## [未发布]
 
-（暂无）
+### 变更
+
+- **简化配置流程**：`.env.example` 由 86 行压缩到约 50 行，按「安全 / 服务 / 限流 / AI / 邮件」分组；Compose 改用 `env_file: .env`，新增环境变量不再需要改 compose 文件。
+- **清理默认配置**：`prompt-config.default.json` 移除空占位密钥与重复开关（`apiToken` / `enableAuth` / `apiKey`），密钥统一走 `.env`；移除无效的 `ai.referenceMode = "assetId"` 选项与相关死代码。
+- 更新 `vite.config.ts`、`playwright.config.ts` 中的过期注释，移除未使用的 `dist-web` 构建配置。
 
 ## [0.4.0] - 2026-10-29
 

@@ -247,7 +247,6 @@ GET /api/packs/:id/download
 - `usage` 成功率恒为 100%：失败请求尚未计入。
 - `usageStore` / `monitorStore` 使用 `appendFileSync`：实测单次约 0.1ms，异步化会引入崩溃丢数据风险，暂不改。
 - 智能提示词并未真正分析参考图：`getPromptTemplate` 只是返回可选的预设列表，不替用户随机选。
-- `ai.referenceMode = "assetId"` 已无 provider 消费，仅 `base64` / `url` / `multipart` 有效。
 - auth 路由仍使用 Fastify JSON schema，尚未全部迁到共享 zod 契约。
 - `app.ts` 仍是单一插件编排文件，尚未拆成 security / monitoring / static / routes 多个 plugin。
 

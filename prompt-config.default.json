@@ -7,8 +7,6 @@
     "taskTtlMs": 3600000,
     "taskGcIntervalMs": 600000,
     "security": {
-      "apiToken": "",
-      "enableAuth": true,
       "trustProxy": false,
       "rateLimit": {
         "maxRequests": 30,
@@ -54,7 +52,6 @@
         "name": "OpenAI 兼容图片生成",
         "baseUrl": "https://api.openai.com/v1",
         "model": "gpt-image-1.5",
-        "apiKey": "",
         "background": "transparent",
         "quality": "auto",
         "outputFormat": "png",
@@ -66,7 +63,6 @@
         "name": "豆包 Seedream（火山方舟）",
         "baseUrl": "https://ark.cn-beijing.volces.com/api/v3",
         "model": "doubao-seedream-5-0-flash-260915",
-        "apiKey": "",
         "variant": "generic"
       }
     }

@@ -39,7 +39,7 @@
 }
 ```
 
-> 🔐 密钥（API Key、JWT secret）不要写进配置文件，放 `.env`。环境变量优先，`apiKey` 留空即可。
+> 🔐 密钥（API Key、JWT secret）不要写进配置文件，放 `.env`。环境变量优先，`apiKey` 不写即可。
 
 ---
 
@@ -60,8 +60,8 @@
 
 | 字段 | 类型 | 默认值 | 说明 |
 |------|------|--------|------|
-| `apiToken` | string | `""` | API Token（机器间认证），亦兼作邀请码。**留空时鉴权关闭**；仅在首次初始化（`data/` 为空）时会临时用管理员密码作为邀请码。可用 `API_TOKEN` |
-| `enableAuth` | boolean | `true` | 仅在 `apiToken` 非空时真正生效。`DISABLE_AUTH=true` 可强制关闭 |
+| `apiToken` | string | `""` | API Token（机器间认证），亦兼作邀请码。**留空时鉴权关闭**；仅在首次初始化（`data/` 为空）时会临时用管理员密码作为邀请码。推荐用 `API_TOKEN`，默认模板不写 |
+| `enableAuth` | boolean | `true` | 仅在 `apiToken` 非空时真正生效。一般用 `DISABLE_AUTH=true`，默认模板不写 |
 | `jwtSecret` | string | 随机生成 | JWT 签名密钥。生产环境**必须**固定，否则重启后所有 token 失效。可用 `JWT_SECRET` |
 | `jwtExpiresIn` | string | `"7d"` | Token 有效期，支持 `"24h"` / `"30d"` 或毫秒数 |
 | `trustProxy` | boolean | `false` | 反代场景开启，真实 IP 取自 `X-Forwarded-For` |
@@ -134,7 +134,7 @@
 | 字段 | 类型 | 默认值 | 说明 |
 |------|------|--------|------|
 | `defaultProvider` | string | `"mock"` | 默认提供商 ID（须存在于 `ai.providers`） |
-| `referenceMode` | string | `"base64"` | 参考图传递方式。实际被消费的只有 `base64` / `url` / `multipart`；`assetId` 已无 provider 实现 |
+| `referenceMode` | string | `"base64"` | 参考图传递方式：`base64` / `url` / `multipart` |
 | `publicBaseUrl` | string | `""` | 外网可访问的 base URL，`referenceMode: "url"` 时需要 |
 
 #### 尺寸与调用参数
@@ -163,7 +163,7 @@
 | `name` | string | 是 | 展示名称（前端下拉框） |
 | `baseUrl` | string | 否 | 兼容端点基础 URL（默认 `https://api.openai.com/v1`） |
 | `model` | string | 否 | 模型名（默认 `gpt-image-1.5`） |
-| `apiKey` | string | 否 | **推荐改用 `AI_<PROVIDER_ID>_API_KEY`**（环境变量优先） |
+| `apiKey` | string | 否 | **推荐改用 `AI_<PROVIDER_ID>_API_KEY`**（环境变量优先，默认模板不写） |
 | `variant` | string | 否 | `"gpt-image"`（默认）或 `"generic"`。generic 用于豆包 Seedream、硅基流动 FLUX 等 |
 | `size` | string | 否 | generic 变体输出尺寸（如 `"1024x1024"`、`"2K"`），默认 `"1024x1024"` |
 | `background` | string | 否 | `"transparent"` / `"opaque"` / `"auto"`（仅 gpt-image） |

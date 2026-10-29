@@ -170,7 +170,6 @@ data/packs/<packId>.json         # 包清单（几 KB），含逐张提示词 / 
 | `base64` | 读成 base64 内联进请求体（默认） | 有效 |
 | `url` | 用 `ai.publicBaseUrl` 拼出 `/api/assets/:id` 的 URL | 有效 |
 | `multipart` | 以 multipart 表单上传 | 有效 |
-| `assetId` | 只传资产 id | 无 provider 消费，保留待实现 |
 
 参考图也可以不来自上传：`POST /api/generate/reference` 能用文字直接生成一张参考图（文生图），
 也可传 `referenceImageAssetId`（主底图）+ `additionalReferenceImageAssetIds`（附加参考图）生成（图生图），

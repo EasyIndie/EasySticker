@@ -5,7 +5,7 @@ export interface PromptConfig {
   ai: {
     defaultProvider: string;
     publicBaseUrl?: string;
-    referenceMode?: "base64" | "url" | "assetId" | "multipart";
+    referenceMode?: "base64" | "url" | "multipart";
     imageSize?: {
       width: number;
       height: number;

@@ -232,12 +232,10 @@ export async function generateSingleResource(
     style: styles[0],
     width: imageWidth,
     height: imageHeight,
-    referenceImageTransport: referenceMode as "base64" | "url" | "assetId" | "multipart",
     referenceImageBase64:
       referenceMode === "base64" || referenceMode === "multipart" ? referenceBase64 : undefined,
     referenceImageUrl: referenceMode === "url" ? referenceUrl : undefined,
     referenceImageMime: referenceMime,
-    referenceImageAssetId: referenceMode === "assetId" ? referenceAssetId : undefined,
     ...(additionalReferenceImages.length ? { additionalReferenceImages } : {})
   });
 
