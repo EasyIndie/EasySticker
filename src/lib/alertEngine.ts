@@ -13,6 +13,8 @@ export interface AlertRule {
   duration: number;   // seconds the condition must persist before alert fires
   silenceMs: number;  // notification cooldown per rule (ms)
   enabled: boolean;
+  /** 错误率类指标的最小样本量（窗口内请求数），低于该值视为无数据，默认 20。 */
+  minSamples?: number;
 }
 
 export interface AlertRecord {
@@ -59,11 +61,14 @@ export interface AlertEngine {
 
 // ── Defaults ───────────────────────────────────────────────────
 
+/** 低流量下单个错误就能把比例放大到 100%，低于该样本量不参与错误率告警。 */
+const DEFAULT_MIN_SAMPLES = 20;
+
 const DEFAULT_RULES: AlertRule[] = [
   { id: "cpu_high", name: "CPU 过高", metric: "cpu.percent", operator: "gt", threshold: 80, duration: 60, silenceMs: 300_000, enabled: true },
   // 只对服务端错误（5xx）告警：4xx 多为参数校验/鉴权/限流/扫描器噪声，纳入会造成告警风暴。
-  { id: "error_rate_high", name: "服务端错误率过高（5xx）", metric: "serverErrorRate", operator: "gt", threshold: 0.02, duration: 120, silenceMs: 600_000, enabled: true },
-  { id: "client_error_rate_high", name: "客户端错误率偏高（4xx）", metric: "clientErrorRate", operator: "gt", threshold: 0.2, duration: 300, silenceMs: 900_000, enabled: false },
+  { id: "error_rate_high", name: "服务端错误率过高（5xx）", metric: "serverErrorRate", operator: "gt", threshold: 0.02, duration: 120, silenceMs: 600_000, enabled: true, minSamples: DEFAULT_MIN_SAMPLES },
+  { id: "client_error_rate_high", name: "客户端错误率偏高（4xx）", metric: "clientErrorRate", operator: "gt", threshold: 0.2, duration: 300, silenceMs: 900_000, enabled: false, minSamples: DEFAULT_MIN_SAMPLES },
   { id: "disk_full", name: "磁盘空间不足", metric: "disk.usedMb", operator: "gt", threshold: 500, duration: 60, silenceMs: 600_000, enabled: true },
   { id: "latency_high", name: "响应延迟过高", metric: "avgLatencyMs", operator: "gt", threshold: 5000, duration: 120, silenceMs: 600_000, enabled: true },
   { id: "request_surge", name: "请求量异常激增", metric: "requestsPerMinute", operator: "gt", threshold: 100, duration: 60, silenceMs: 300_000, enabled: false },
@@ -104,15 +109,19 @@ function writeJsonFile(filePath: string, data: unknown): void {
 /** Extract metric value from monitorStore snapshot. Returns undefined when data is unavailable. */
 function getMetricValue(snapshot: ReturnType<MonitorStore["getCurrentSnapshot"]>, rule: AlertRule): number {
   const total = snapshot.requestsLastMinute;
+  const minSamples = Math.max(0, rule.minSamples ?? DEFAULT_MIN_SAMPLES);
+  const rate = (numerator: number): number =>
+    total > 0 && total >= minSamples ? numerator / total : 0;
+
   switch (rule.metric) {
     case "cpu.percent":
       return snapshot.cpu.percent;
     case "errorRate":
-      return total > 0 ? snapshot.errorsLastMinute / total : 0;
+      return rate(snapshot.errorsLastMinute);
     case "serverErrorRate":
-      return total > 0 ? snapshot.serverErrorsLastMinute / total : 0;
+      return rate(snapshot.serverErrorsLastMinute);
     case "clientErrorRate":
-      return total > 0 ? snapshot.clientErrorsLastMinute / total : 0;
+      return rate(snapshot.clientErrorsLastMinute);
     case "disk.usedMb":
       return snapshot.disk.usedMb;
     case "avgLatencyMs":

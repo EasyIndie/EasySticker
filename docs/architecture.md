@@ -127,8 +127,8 @@ infrastructure（适配器）  providers 实现、fileAssetStore、mailer、moni
 
 ### 3.5 监控与告警
 
-- **指标采集**（`lib/monitorStore.ts`）：请求级每次 API 请求（`/api/assets/*` 已排除，否则一次页面加载几十张图会淹没真实调用）、系统级每 10 秒、磁盘每 60 秒，按天写 JSONL 到 `data/monitoring/`。
-- **告警引擎**（`lib/alertEngine.ts`）：阈值 + 持续时长 + 静默期防重复，值回落到阈值即恢复（不再有 90% 回滞死区）。错误率告警默认只看 5xx（`serverErrorRate`）——4xx（参数校验/鉴权/限流/扫描器）另设 `clientErrorRate` 规则且默认关闭，避免「错误率过高」被客户端噪声打爆；旧配置启动时自动迁移。告警消息与 webhook 会带上出错路由、状态码分布与排查建议；`lastNotifiedAt` / `notifyCount` 持久化，重启不会立即重推。默认规则见 [configuration-reference.md](configuration-reference.md)。历史存 `data/alerts-history.json`。
+- **指标采集**（`lib/monitorStore.ts`）：请求级每次 API 请求（`/api/assets/*` 已排除，否则一次页面加载几十张图会淹没真实调用）、系统级每 10 秒、磁盘每 60 秒，按天写 JSONL 到 `data/monitoring/`。请求指标使用 60 个 1 秒环形 slot，由 1 秒定时器持续推进（读快照时也会推进），**空闲期窗口同样会过期**，不会冻结在最后一次请求上。
+- **告警引擎**（`lib/alertEngine.ts`）：阈值 + 持续时长 + 静默期防重复，值回落到阈值即恢复（不再有 90% 回滞死区）。错误率告警默认只看 5xx（`serverErrorRate`）——4xx（参数校验/鉴权/限流/扫描器）另设 `clientErrorRate` 规则且默认关闭，避免「错误率过高」被客户端噪声打爆；错误率规则默认要求窗口内至少 20 个请求（`minSamples`），低流量下不会因单个错误误报。旧配置启动时自动迁移。告警消息与 webhook 会带上出错路由、状态码分布与排查建议；`lastNotifiedAt` / `notifyCount` 持久化，重启不会立即重推。默认规则见 [configuration-reference.md](configuration-reference.md)。历史存 `data/alerts-history.json`。
 - **通知**：Webhook（飞书交互卡片 / 通用 JSON）+ 本地日志。触发与恢复各推一次；告警持续期间按 `max(规则 silenceMs, 全局 notificationInterval)` 提醒。
 
 ---
