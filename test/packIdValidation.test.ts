@@ -2,6 +2,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
+import { buildApp } from "../src/app";
 import {
   findPackZipPath,
   isValidPackId,
@@ -44,5 +45,28 @@ describe("packId 路径安全", () => {
     const ids = listPacks(dir).map((p) => p.packId);
     expect(ids).not.toContain("../evil");
     expect(ids).toContain("ok-pack_1");
+  });
+});
+
+describe("packId 路径穿越的 HTTP 防护", () => {
+  it("编码后的 ../ 不会读到 packs 目录之外的文件", async () => {
+    const dir = makeDir();
+    const app = buildApp({
+      host: "127.0.0.1",
+      port: 0,
+      dataDir: dir,
+      logLevel: "silent",
+      security: {}
+    });
+    await app.ready();
+    try {
+      const res = await app.inject({
+        method: "GET",
+        url: "/api/packs/..%2F..%2Fetc%2Fpasswd"
+      });
+      expect([400, 404]).toContain(res.statusCode);
+    } finally {
+      await app.close();
+    }
   });
 });
