@@ -8,6 +8,12 @@
 
 ## [未发布]
 
+（暂无）
+
+## [0.4.1] - 2026-10-30
+
+维护版本：简化环境变量与 Compose 模板，清理无效配置项。
+
 ### 变更
 
 - **简化配置流程**：`.env.example` 由 86 行压缩到约 50 行，按「安全 / 服务 / 限流 / AI / 邮件」分组；Compose 改用 `env_file: .env`，新增环境变量不再需要改 compose 文件。
@@ -171,7 +177,8 @@
 Sharp 尺寸与格式转换，结构化 ZIP（含 `metadata.json`）导出，SSE 生成进度，
 管理后台（用户 / 存储 / 设置 / 监控告警），自托管部署（Docker + 反向代理）。
 
-[未发布]: https://github.com/EasyIndie/EasySticker/compare/v0.4.0...HEAD
+[未发布]: https://github.com/EasyIndie/EasySticker/compare/v0.4.1...HEAD
+[0.4.1]: https://github.com/EasyIndie/EasySticker/compare/v0.4.0...v0.4.1
 [0.4.0]: https://github.com/EasyIndie/EasySticker/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/EasyIndie/EasySticker/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/EasyIndie/EasySticker/compare/v0.1.0...v0.2.0
