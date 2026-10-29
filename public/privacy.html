@@ -36,21 +36,21 @@
           <li><strong>上传的参考图片</strong> — 您上传用于生成表情包的原始图片（PNG、JPG、WebP 等格式）。</li>
           <li><strong>AI 生成结果</strong> — 系统通过 AI 模型处理后生成的表情图、封面、图标、横幅及赞赏图等资源。</li>
           <li><strong>配置信息</strong> — 您输入的提示词、风格选择、表情包标题、作者名及版权信息等元数据。</li>
-          <li><strong>使用日志</strong> — 匿名化的操作记录（如上传时间、生成次数、错误类型），用于改善服务质量。</li>
+          <li><strong>使用日志</strong> — 访问 IP、请求路径、状态码、耗时与操作记录，用于限流、配额、故障排查与服务质量改进。</li>
         </ul>
-        <p>我们<strong>不会</strong>主动收集您的姓名、地址、电话号码、地理位置或设备标识符等个人身份信息，除非您通过邮箱注册账户时主动提供。</p>
+        <p>我们<strong>不会</strong>主动收集您的姓名、地址、电话号码或地理位置。注册时您会主动提供邮箱；未登录场景使用浏览器生成的随机 client id 关联历史记录，不包含个人身份信息。</p>
       </section>
 
       <section class="docs-card card" aria-labelledby="dataStorageTitle">
         <h2 id="dataStorageTitle">二、数据存储与安全</h2>
-        <p>所有数据均存储于您所部署的本地服务器中：</p>
+        <p>除为完成生成而发送给 AI 服务商的数据外，持久化数据均存储在您所部署的服务器中：</p>
         <ul class="spec-list">
           <li><strong>存储位置</strong> — 上传的图片和生成结果存储在服务器 <code>data/</code> 目录下。</li>
-          <li><strong>临时存储</strong> — 所有文件均设有时效缓存（TTL），默认 1 小时后自动清理。</li>
-          <li><strong>存储期限</strong> — 生成结果在服务器端仅临时保留，下载后请自行妥善保存。</li>
+          <li><strong>保留期</strong> — 默认包保留期为 30 天，服务端每 6 小时巡检一次；无人引用且超过安全期（默认 6 小时）的孤儿素材才会被回收。保留期可在部署配置或管理后台调整。</li>
+          <li><strong>主动删除</strong> — 管理员可在后台删除包或账号，相关素材会在删除流程或后续巡检中清理。</li>
           <li><strong>传输安全</strong> — 建议通过 HTTPS 部署本服务以保障数据传输过程中的安全性。</li>
         </ul>
-        <p class="muted">EasySticker 是自托管（self-hosted）应用，数据不会离开您自己的服务器。如果您使用第三方部署平台，请同时参考该平台的数据安全策略。</p>
+        <p class="muted">EasySticker 是自托管（self-hosted）应用，项目运营方不收集您的数据；但生成所需的参考图与提示词会发送给您配置的 AI 服务商。如果您使用第三方部署平台，请同时参考该平台的数据安全策略。</p>
       </section>
 
       <section class="docs-card card" aria-labelledby="cookieUsageTitle">
@@ -59,6 +59,7 @@
         <ul class="spec-list">
           <li><strong>主题偏好（theme）</strong> — 记录您选择的亮色/暗色模式。</li>
           <li><strong>身份令牌（token）</strong> — 登录后用于维持会话状态，不包含密码或其他敏感信息。</li>
+          <li><strong>客户端标识（client id）</strong> — 未登录时用于关联历史记录，不包含个人身份信息。</li>
         </ul>
         <p>您可以随时通过浏览器开发者工具清除 localStorage 数据，这不会影响应用的核心功能。</p>
       </section>
@@ -70,7 +71,7 @@
         <ul class="spec-list">
           <li>您上传的图片和生成的内容仅存在于您自己的服务器上。</li>
           <li>我们不使用第三方分析服务、广告网络或社交媒体追踪脚本。</li>
-          <li>如果使用了远程 AI 模型 API 服务（如 OpenAI、ComfyUI），相关数据将按该服务商的隐私政策处理。建议您在使用前查阅对应服务商的隐私条款。</li>
+          <li>如果使用了远程 AI 模型 API 服务（如 OpenAI、豆包 Seedream 等），生成所需的参考图与提示词会发送给对应服务商，相关数据按该服务商的隐私政策处理。建议您在使用前查阅对应服务商的隐私条款。</li>
         </ul>
       </section>
 
@@ -80,7 +81,7 @@
         <ul class="spec-list">
           <li><strong>访问权</strong> — 您可以要求了解我们收集了哪些与您相关的数据。</li>
           <li><strong>删除权</strong> — 您可以要求删除您的账户及相关数据。</li>
-          <li><strong>撤回同意</strong> — 您可以随时停止使用本服务，已上传的临时数据将在 TTL 到期后自动清理。</li>
+          <li><strong>撤回同意</strong> — 您可以随时停止使用本服务；已上传的数据会按上述保留期清理，或由管理员主动删除。</li>
         </ul>
         <div class="notice" data-tone="info">
           <strong>删除账户请求：</strong>如需删除账户及相关数据，请联系管理员处理。联系邮箱请参见服务页面或服务器部署说明。

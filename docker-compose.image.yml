@@ -8,7 +8,7 @@
 #   docker compose -f docker-compose.image.yml up -d
 #
 # 升级：docker compose -f docker-compose.image.yml pull && docker compose -f docker-compose.image.yml up -d
-# 锁定版本：在 .env 里设 EASYSTICKER_TAG=0.3.0（默认 latest）
+# 锁定版本：在 .env 里设 EASYSTICKER_TAG=<版本号>（默认 latest）
 
 services:
   easysticker:

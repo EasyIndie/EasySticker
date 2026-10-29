@@ -60,6 +60,10 @@
     "type": "git",
     "url": "https://github.com/EasyIndie/EasySticker.git"
   },
+  "homepage": "https://github.com/EasyIndie/EasySticker#readme",
+  "bugs": {
+    "url": "https://github.com/EasyIndie/EasySticker/issues"
+  },
   "keywords": [
     "wechat",
     "sticker",
