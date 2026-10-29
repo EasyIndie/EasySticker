@@ -56,7 +56,7 @@
 | `taskTtlMs` | number | `3600000` | 生成任务在内存中的 TTL（1 小时） |
 | `taskGcIntervalMs` | number | `600000` | 过期任务清理间隔（10 分钟） |
 
-### 2.2 安全 `server.security`
+### 2.2 安全 server.security
 
 | 字段 | 类型 | 默认值 | 说明 |
 |------|------|--------|------|
@@ -97,7 +97,7 @@
 |------|------|--------|------|
 | `mode` | string | `"invite"` | `"open"` 开放注册 / `"invite"` 需邀请码（即 `API_TOKEN`）/ `"closed"` 完全关闭 |
 
-### 2.3 数据清理 `server.maintenance`
+### 2.3 数据清理 server.maintenance
 
 | 字段 | 类型 | 默认值 | 说明 |
 |------|------|--------|------|
@@ -150,7 +150,7 @@
 > 生成尺寸与交付尺寸是两件事：`ai.imageSize` 是**生成**尺寸，交付尺寸由平台 preset 决定
 >（微信 240×240 / Telegram ≤512×512 / WhatsApp 512×512 WebP），转换在 `generate/convert.ts`。
 
-### 3.2 提供商 `ai.providers`
+### 3.2 提供商 ai.providers
 
 内置三个：`mock`（本地模拟，无需 Key）、`openai`（`variant: "gpt-image"`）、
 `seedream`（豆包，`variant: "generic"`）。
@@ -180,7 +180,7 @@
 
 这四段决定生成出什么。改文案就会改变产物，改完建议用 mock provider 跑一遍确认。
 
-### 4.1 `global`
+### 4.1 global
 
 | 字段 | 说明 |
 |------|------|
@@ -191,7 +191,7 @@
 内置风格：扁平插画 / 贴纸 / 3D 卡通 / 日系 Q 版 / 像素风 / 国潮风 / 手绘涂鸦 /
 水彩风 / 软萌毛绒 / 黏土 3D / 极简线条 / 复古漫画 / 极简蜡笔涂鸦。
 
-### 4.2 `emotions`
+### 4.2 emotions
 
 24 个情绪 / 动作词，按顺序分配给每一张贴纸（第 N 张贴纸用第 N 个）。
 
@@ -199,7 +199,7 @@
 未选预设或预设未声明时回退到全局。这样「一个 IP + 一个模板 + N 组情绪参数」的系列预设
 可以自我描述，而不污染其它预设。
 
-### 4.3 `templates`
+### 4.3 templates
 
 | 字段 | 说明 |
 |------|------|
@@ -215,7 +215,7 @@
 
 > 生成的 `metadata.json` 会逐张记录**实际拼好的完整提示词**，改模板后仍可追溯每张图当时是怎么来的。
 
-### 4.4 `extraPrompts`
+### 4.4 extraPrompts
 
 每个扩展资源额外追加的 `{{customPrompt}}`，按 key 覆盖：
 
@@ -227,7 +227,7 @@
 | `rewardGuide` | 赞赏引导图（仅微信） |
 | `rewardThanks` | 赞赏答谢图（仅微信） |
 
-### 4.5 `promptPresets`
+### 4.5 promptPresets
 
 多套提示词预设，与「提示词自定义」**互补**：最终提示词 = 预设内容 + 自定义内容（可只填其一），
 由前端拼接后提交。默认内置 13 套：日常聊天 / 职场吐槽 / 萌宠拟人 / 情侣互动 / 节日祝福 /
@@ -264,7 +264,7 @@
 > 24 组带 `眼睛 / 嘴巴 / 手臂 / 姿势 / 辅助 / 文字` 字段的情绪参数，并用 `style` 固定画风。
 > **角色主体不写死**——一律以参考图为准，换成猫、人、吉祥物或任意 IP 都能复用。
 
-### 4.6 自定义提示词模式 `promptMode`
+### 4.6 自定义提示词模式 promptMode
 
 前端「自定义用法」下拉决定自定义文本与预设的关系，通过 `POST /api/generate/start` 的
 `promptMode` 传入，并记入 `metadata.json` 的 `generation.promptMode` 供 ZIP / 历史还原：

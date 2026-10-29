@@ -34,11 +34,10 @@
 EasySticker 把这条流水线压缩成四步：**选择平台 → 准备参考图 → 配置并生成 → 预览下载**。
 
 它面向**自托管**场景：参考图、生成结果和运营数据都留在你自己的服务器上。后端使用
-Node.js + Fastify + Sharp，前端是 Vite 构建的轻量页面，可用 Docker 一条命令启动。
+Node.js + Fastify + Sharp，前端是 Vite 构建的轻量页面，可用 Docker 快速启动。
 
-| 选择创建方式与平台 | 配置提示词与风格 | 预览、编辑与下载 |
-|:---:|:---:|:---:|
-| <img src="docs/screenshots/home.png" width="300" alt="选择平台与创建方式" /> | <img src="docs/screenshots/config.png" width="240" alt="配置与信息" /> | <img src="docs/screenshots/preview.png" width="300" alt="预览与下载" /> |
+> 界面会随版本迭代。本文不嵌入截图，避免文档长期滞后；需要预览可本地启动，或查看
+> [使用手册](docs/usage.md) 了解完整功能流程。
 
 ---
 
@@ -48,7 +47,8 @@ Node.js + Fastify + Sharp，前端是 Vite 构建的轻量页面，可用 Docker
 
 - 图生图：上传角色参考图，按情绪批量生成整套表情。
 - AI 生成参考图：没有现成图片时，先用文字生成参考图（文生图），再据此生成整套；也支持「主底图 + 最多 3 张附加参考图」的图生图。
-- 13 种内置风格 + 13 套提示词预设，支持自定义追加或覆盖；预设可自带推荐风格与情绪集。
+- 多套内置风格与提示词预设，支持自定义追加或覆盖；预设可自带推荐风格与情绪集。
+  完整清单见 [配置参考](docs/configuration-reference.md#45-promptpresets)。
 - 统一透明背景提示词，适配亮色 / 暗色主题。
 - SSE 实时进度；单张失败可单独重生成，已成功的图不会丢。
 
@@ -114,7 +114,7 @@ docker compose -f docker-compose.image.yml up -d
 ```
 
 镜像 `ghcr.io/easyindie/easysticker` 提供 `linux/amd64` 与 `linux/arm64`，
-含 `:latest` 和版本 tag。锁版本可在 `.env` 中设置 `EASYSTICKER_TAG=0.3.0`。
+含 `:latest` 和版本 tag。锁版本可在 `.env` 中设置 `EASYSTICKER_TAG=<版本号>`。
 
 ### 方式二：源码运行
 

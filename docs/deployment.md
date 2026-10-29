@@ -49,7 +49,7 @@ docker compose -f docker-compose.image.yml up -d
 打开 `http://服务器地址:3000/`。
 
 - 镜像：`ghcr.io/easyindie/easysticker`（`linux/amd64` + `linux/arm64`）。
-- 默认使用 `:latest`；在 `.env` 中设置 `EASYSTICKER_TAG=0.3.0` 可锁定版本。
+- 默认使用 `:latest`；在 `.env` 中设置 `EASYSTICKER_TAG=<版本号>` 可锁定版本。
 - 数据默认映射到 `./data`。
 
 不用 Compose 也可以：

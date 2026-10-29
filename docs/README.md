@@ -79,6 +79,7 @@ EasySticker 的文档按**读者任务**组织，而不是按代码目录堆文�
 | 全部环境变量与默认值 | `.env.example` |
 | HTTP 路由清单 | `src/routes/*.ts` |
 | 平台规格 | `src/services/platform/presets.ts` |
+| 界面文案与布局 | `public/*.html`、`web/src/` |
 | 测试现状 | `npm test` / `npm run test:e2e` 的输出（文档不写死数量） |
 
 ---
@@ -100,7 +101,10 @@ EasySticker 的文档按**读者任务**组织，而不是按代码目录堆文�
 - 用相对链接；带章节锚点时必须能在目标文件里找到对应标题。
 - 配置默认值只写在 [configuration-reference.md](configuration-reference.md)，
   其它文档引用它，避免同一默认值在多个地方漂移。
-- 不写死测试数量、RPS 等易过期数字；需要时给命令或标注测量环境。
+- 不写死测试数量、RPS、功能数量、默认模型、版本号等易变信息；需要时给命令、
+  标注测量环境，或直接引用 [配置参考](configuration-reference.md) / [CHANGELOG](../CHANGELOG.md)。
+- **不嵌入界面截图 / 录屏**：UI 迭代快，截图会迅速过期。需要演示时放到 GitHub Release
+  或外部图床，并在发布说明中标注版本；文档只描述稳定的行为与流程。
 
 ### 文档体检
 
