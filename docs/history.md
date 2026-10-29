@@ -74,11 +74,11 @@
 **后来调整的部分**：
 
 - 🔁 后台仪表盘从 `setInterval(loadDashboard, 15000)` 轮询改为 SSE 长连接
-  （详见 [architecture.md §3.4](architecture.md#34-实时通信sse两处)）。
+  （详见 [架构设计 · SSE](architecture.md#45-sse)）。
 - 🔁 `/api/assets/*` 从监控中排除 —— 结果页一次加载几十张图，会把真实调用淹掉。
 - 🔁 管理后台的 CSP 要求：内联 `onclick` 全部改为 `data-action` 事件委托。
 
-现状见 [architecture.md §3.5](architecture.md) 与 [configuration-reference.md](configuration-reference.md)。
+现状见 [架构设计 · 监控与告警](architecture.md#59-监控与告警) 与 [配置参考](configuration-reference.md)。
 
 ---
 
@@ -89,7 +89,10 @@
 
 **做法**：按**功能垂直切片**迁到 `web/src/`，每个切片作为独立 IIFE 构建到 `public/js/`：
 
-`auth` / `preview` / `generator-api` / `ui` / `app` / `admin` / `theme`
+`auth` / `preview` / `generator-api` / `ui` / `app` / `admin`
+
+另有 `public/js/theme.js`：用于首屏主题与静态页主题切换，**手写并提交到仓库**，
+不是 Vite 构建产物。
 
 **关键约束（决定了现在的写法）**：
 

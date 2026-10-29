@@ -21,5 +21,5 @@ labels: ["enhancement"]
 
 相关截图、竞品做法、参考链接等。
 
-> 也可以先看 [docs/architecture.md](../../docs/architecture.md) §4「待迁移」——
-> 里面已有明确的演进清单，欢迎认领。
+> 也可以先看 [docs/roadmap.md](../../docs/roadmap.md) ——
+> 里面已有按优先级整理的演进清单，欢迎认领。

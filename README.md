@@ -1,21 +1,21 @@
 <p align="center">
-  <img src="docs/assets/logo.svg" width="120" alt="EasySticker" />
+  <img src="docs/assets/logo.svg" width="112" alt="EasySticker" />
 </p>
 
 <h1 align="center">EasySticker</h1>
 
 <p align="center">
-  <strong>表情包 AI 自动化生产线</strong>
-  <br />
+  <strong>表情包 AI 自动化生产线</strong><br />
   参考图 → AI 生成 / 批量导入 → 自动标准化 → 一键下载 ZIP
 </p>
 
 <p align="center">
-  <a href="#-quick-start">快速开始</a> •
-  <a href="#-docker-部署">Docker 部署</a> •
-  <a href="#-features">功能</a> •
-  <a href="#-faq">FAQ</a> •
-  <a href="docs/README.md">文档</a>
+  <a href="#快速开始">快速开始</a> ·
+  <a href="#核心能力">核心能力</a> ·
+  <a href="#支持平台">支持平台</a> ·
+  <a href="#ai-提供商">AI 提供商</a> ·
+  <a href="docs/README.md">文档中心</a> ·
+  <a href="#常见问题">FAQ</a>
 </p>
 
 <p align="center">
@@ -26,323 +26,216 @@
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache--2.0-blue" alt="License" /></a>
 </p>
 
-<p align="center">
-  <span>⚡ 开源 · 自托管 · Node.js · 微信 / Telegram / WhatsApp</span>
-</p>
+---
+
+## 什么是 EasySticker
+
+做一套表情包，通常要经历「设计 → 切图 → 调尺寸 → 补封面/图标/横幅 → 写元数据 → 校验 → 打包」。
+EasySticker 把这条流水线压缩成四步：**选择平台 → 准备参考图 → 配置并生成 → 预览下载**。
+
+它面向**自托管**场景：参考图、生成结果和运营数据都留在你自己的服务器上。后端使用
+Node.js + Fastify + Sharp，前端是 Vite 构建的轻量页面，可用 Docker 一条命令启动。
+
+| 选择创建方式与平台 | 配置提示词与风格 | 预览、编辑与下载 |
+|:---:|:---:|:---:|
+| <img src="docs/screenshots/home.png" width="300" alt="选择平台与创建方式" /> | <img src="docs/screenshots/config.png" width="240" alt="配置与信息" /> | <img src="docs/screenshots/preview.png" width="300" alt="预览与下载" /> |
 
 ---
 
-## 📸 界面
+## 核心能力
 
-<p align="center">
-  <img src="docs/screenshots/home.png" width="880" alt="选择平台与创建方式" />
-  <br />
-  <sub>选择目标平台与创建方式 —— 微信 / Telegram / WhatsApp，或改为批量导入已有图片</sub>
-</p>
+**AI 生成**
 
-<p align="center">
-  <img src="docs/screenshots/config.png" width="620" alt="配置与信息" />
-  <br />
-  <sub>逐卡片配置：提供商、提示词、风格、数量、标题作者、赞赏信息</sub>
-</p>
+- 图生图：上传角色参考图，按情绪批量生成整套表情。
+- AI 生成参考图：没有现成图片时，先用文字生成参考图（文生图），再据此生成整套；也支持「主底图 + 最多 3 张附加参考图」的图生图。
+- 13 种内置风格 + 13 套提示词预设，支持自定义追加或覆盖；预设可自带推荐风格与情绪集。
+- 统一透明背景提示词，适配亮色 / 暗色主题。
+- SSE 实时进度；单张失败可单独重生成，已成功的图不会丢。
 
-<p align="center">
-  <img src="docs/screenshots/preview.png" width="880" alt="预览与下载" />
-  <br />
-  <sub>预览逐张标注实际使用的提示词 / 情绪 / 风格，每张都能单独重新生成或编辑</sub>
-</p>
+**导入与还原**
 
----
+- 批量导入 PNG / JPG / WebP / GIF，自动缩放、居中、补透明边并转换为平台规格。
+- 导入本站导出的 ZIP 可读回提示词、风格、情绪、参考图与历史版本，继续编辑。
+- 历史记录一键还原生成现场；已登录用户的历史按账号存服务端。
 
-## 🎯 解决的问题
+**编辑与版本**
 
-制作一套表情包要经历「设计 → 切图 → 调尺寸 → 补封面/图标/横幅 → 写元数据 → 校验 → 打包」。
-EasySticker 把整个过程压缩为 **选择平台 → 准备参考图 → 配置与生成 → 预览与下载**。
+- 任一已生成图片都能「编辑图片」：以当前图为源，只重做这一张，可再附一张参考图。
+- 每次编辑或重生成都会保留旧版本，可查看并回退到任意一版。
+- 历史版本随 ZIP 一起导出，重新导入不会丢。
 
-**核心价值：**
+**导出与校验**
 
-- ⏱ **从 2-3 小时 → 5 分钟**：手工做一套 24 张表情包至少 2 小时，AI 生成只需几分钟
-- 📐 **自动平台合规**：微信 240×240 PNG、Telegram 512×512 PNG、WhatsApp 512×512 WebP，全部自动处理
-- 🧩 **配套资源一站式补齐**：封面图、聊天面板图标、详情页横幅、赞赏引导图/答谢图
-- 🔐 **数据不外传**：自托管部署，参考图和生成结果全部留在你自己的服务器
+- 按平台自动转换尺寸与格式，WebP 自动控制体积，PNG 超限自动量化。
+- 结构化 ZIP：主表情 + 封面 / 图标 / 横幅 + 参考图 + `metadata.json`。
+- 微信扩展资源（封面、图标、横幅、赞赏引导 / 答谢图）可勾选生成。
+- 完整 OpenAPI 文档（`/docs`）。
 
----
+**自托管与管理**
 
-## ✨ Features
-
-### 🎨 AI 生成流程
-
-| 功能 | 说明 |
-|------|------|
-| **图生图** | 上传参考人物/角色，AI 基于角色生成多组情绪表情 |
-| **AI 生成参考图** | 没有现成图片？用文字描述让 AI 先生成一张参考图（文生图）；也可以再传底图走图生图（参考图 + 文字，支持 1 张主底图 + 3 张附加参考图），再据此生成整套 |
-| **多风格** | 13 种内置风格：扁平插画、贴纸、3D 卡通、日系 Q 版、像素风、国潮风、手绘涂鸦、水彩风、软萌毛绒、黏土 3D、极简线条、复古漫画、极简蜡笔涂鸦（可自定义） |
-| **提示词预设** | 13 套内置预设（日常聊天 / 职场吐槽 / … / 极简蜡笔），支持自定义提示词**追加或覆盖**预设 |
-| **透明背景** | 所有提示词预设与模板统一要求透明底（透明 PNG / alpha），适配亮色与暗色主题 |
-| **多 AI 后端** | 统一 OpenAI 兼容接口，可对接 OpenAI 或任意兼容网关，自由切换 |
-| **SSE 实时推送** | 生成进度逐张展示，含进度条和百分比 |
-| **智能提示词** | 参考图就绪后自动生成推荐提示词 |
-| **赞赏图** | 可选开启赞赏，自动生成引导图和答谢图 |
-| **单资源重生成** | 某张失败时只重生成这一张，不重跑整包 |
-| **单图二次编辑** | 任一已生成的图都能「编辑图片」：填一句要求只重做这一张，还可再附一张参考图 |
-
-### 📦 导入已有图片
-
-| 功能 | 说明 |
-|------|------|
-| **批量导入** | PNG/JPG/WebP/GIF 批量导入，自动缩放 |
-| **自动补齐** | 补全封面、图标、横幅、赞赏图 |
-| **元数据编辑** | 标题、作者、版权、版本号、赞赏语，完整可编辑 |
-| **导入 ZIP 还原** | 选择本站下载的 ZIP 即可读回提示词 / 风格 / 情绪 / 参考图，接着单张重生成或编辑 |
-| **历史一键还原** | 历史记录每条都带「还原现场」，按 `packId` 从服务端还原 |
-| **历史跟着账号走** | 已登录用户的历史存服务端（按邮箱归属）；未登录按设备标识尽力保留 |
-
-### 🔧 导出与校验
-
-| 功能 | 说明 |
-|------|------|
-| **多平台校验** | 微信 240×240 PNG、Telegram 512×512 PNG、WhatsApp 512×512 WebP |
-| **结构化 ZIP** | 主表情 + 封面/图标/横幅 + 参考图 + `metadata.json`，开箱即提交 |
-| **尺寸自动控制** | WebP 质量递减至 ≤100KB，PNG 超限自动 palette 量化 |
-| **Swagger API** | 完整的 OpenAPI 文档（`/docs`） |
-
-### 💾 存储与管理后台
-
-**素材只存一份、ZIP 不落盘**：包只存几 KB 的清单，用户点下载时才现场打包。
-服务端每 6 小时自动巡检（压缩旧包 / 清孤儿素材 / 清备份 / 按保留期删包，保留期默认 30 天且**不追溯既往**）。
-后台提供实时仪表盘（SSE）、统计图表、用户与存储管理，并支持批量删包 + 立即回收素材。
-
-> 详细存储模型、ZIP 结构与 `metadata.json` 字段见 [docs/pack-format.md](docs/pack-format.md)。
+- 素材只存一份，ZIP 按清单现场打包，不额外落盘。
+- 每 6 小时自动巡检：压缩旧包、清孤儿素材、按保留期删包（默认 30 天，不追溯既往）。
+- 管理后台：实时仪表盘、统计图表、用户与存储管理、告警规则与 Webhook。
+- 公网服务器 / 本地 Docker 均可部署，数据目录可直接备份迁移。
 
 ---
 
-## 🚀 Quick Start
+## 支持平台
 
-### 前置条件
+| 平台 | 数量 | 交付规格 | 扩展资源 |
+|------|------|---------|---------|
+| 微信表情包 | 8–24 张 | 240 × 240 PNG | 封面 / 图标 / 横幅 / 赞赏图 |
+| Telegram 静态贴纸 | 1–50 张 | ≤ 512 × 512 PNG | — |
+| WhatsApp 贴纸 | 1–30 张 | 512 × 512 WebP | — |
 
-- Node.js 20+（或直接用 [Docker](#-docker-部署)）
-- npm
+平台差异只体现在尺寸、格式、数量与扩展资源；提示词本身是平台中立的。
 
-### 1. 克隆并安装
+---
+
+## 快速开始
+
+### 方式一：Docker（推荐，无需源码）
+
+```bash
+# 1. 准备 compose 文件与环境变量模板
+curl -O https://raw.githubusercontent.com/EasyIndie/EasySticker/main/docker-compose.image.yml
+curl -o .env https://raw.githubusercontent.com/EasyIndie/EasySticker/main/.env.example
+
+# 2. 至少填写 API_TOKEN / JWT_SECRET / ADMIN_PASSWORD
+# 3. 启动
+docker compose -f docker-compose.image.yml up -d
+```
+
+打开 <http://localhost:3000/>。数据默认落在 `./data`，升级只需：
+
+```bash
+docker compose -f docker-compose.image.yml pull
+docker compose -f docker-compose.image.yml up -d
+```
+
+镜像 `ghcr.io/easyindie/easysticker` 提供 `linux/amd64` 与 `linux/arm64`，
+含 `:latest` 和版本 tag。锁版本可在 `.env` 中设置 `EASYSTICKER_TAG=0.3.0`。
+
+### 方式二：源码运行
 
 ```bash
 git clone https://github.com/EasyIndie/EasySticker.git
 cd EasySticker
 npm install
+cp .env.example .env      # 本地开发可原样使用：development + Mock 模式
+npm run dev               # 后端 http://localhost:3000/
+npm run web:dev           # 前端 http://localhost:5173/（另开一个终端）
 ```
 
-### 2. 创建环境变量文件
+生产模式：
 
 ```bash
-cp .env.example .env
+npm run build && npm run web:build && npm run prod
 ```
 
-本地开发无需修改（默认 `development` + Mock 模式，可直接跑起来）。
+### 方式三：不用 AI，直接导入
 
-### 3. 配置 AI 提供商（可选）
+启动后选择「导入已有图片」，批量上传成品图即可完成标准化、补全扩展资源和打包，
+不需要配置任何 AI 提供商。
 
-不配置也能以 Mock 模式启动。默认模板已内置 `mock` / `seedream` / `openai` 三个 provider。
+### 配置 AI 提供商
 
-`prompt-config.json` **只需写要覆盖的字段**，其余自动继承默认值：
+不配置也能启动，但生成结果是 Mock 本地模拟图。启用真实模型只需两步：
 
-```json
-{
-  "ai": { "defaultProvider": "seedream" }
-}
-```
+1. 在 `prompt-config.json` 中指定默认提供商（只写要覆盖的字段）：
 
-要自定义模型/端点，只覆盖对应字段即可：
+   ```json
+   {
+     "ai": { "defaultProvider": "seedream" }
+   }
+   ```
 
-```json
-{
-  "ai": {
-    "defaultProvider": "seedream",
-    "providers": {
-      "seedream": {
-        "type": "openai",
-        "name": "豆包 Seedream（火山方舟）",
-        "baseUrl": "https://ark.cn-beijing.volces.com/api/v3",
-        "model": "doubao-seedream-5-0-flash-260915",
-        "variant": "generic"
-      }
-    }
-  }
-}
-```
+2. 把密钥放进 `.env`（推荐，不要写进配置文件）：
 
-> 🔐 **推荐**：API Key 不要写进 `prompt-config.json`，而是放到 `.env`：
-> ```bash
-> AI_SEEDREAM_API_KEY=你的火山方舟KEY
-> ```
-> 命名规则 `AI_<PROVIDER_ID>_API_KEY`，环境变量优先于配置文件，密钥不会随配置分享/备份/镜像泄露。
+   ```bash
+   AI_SEEDREAM_API_KEY=你的密钥
+   ```
 
-> 💡 **不想手改文件？** 命令行向导 `npm run setup`，或启动后进管理后台 →「设置 → AI 提供商」可视化编辑并一键测试连通。
+命名规则为 `AI_<PROVIDER_ID>_API_KEY`，环境变量优先于配置文件。
+也可以运行 `npm run setup` 交互式向导，或启动后进入**管理后台 → 设置 → AI 提供商**
+可视化编辑并测试连通。
 
-### 4. 启动
-
-```bash
-npm run dev      # 开发模式（热更新）
-npm run prod     # 生产模式（先 npm run build && npm run web:build）
-```
-
-打开 http://localhost:3000/ 即可使用。完整开发命令见 [docs/development.md](docs/development.md)。
+> 完整配置项、提示词模板与合并规则见 [配置参考](docs/configuration-reference.md)。
 
 ---
 
-## 🐳 Docker 部署
+## AI 提供商
 
-### 方式 A：免源码（推荐）
-
-直接拉取预构建镜像，**不需要克隆仓库、不需要 Node 环境**：
-
-```bash
-# 1. 准备两个文件
-curl -O https://raw.githubusercontent.com/EasyIndie/EasySticker/main/docker-compose.image.yml
-curl -o .env https://raw.githubusercontent.com/EasyIndie/EasySticker/main/.env.example
-
-# 2. 编辑 .env，至少填写 API_TOKEN / JWT_SECRET / ADMIN_PASSWORD
-
-# 3. 启动
-docker compose -f docker-compose.image.yml up -d
-```
-
-镜像 `ghcr.io/easyindie/easysticker` 同时提供 `linux/amd64` 与 `linux/arm64`，
-含 `:latest` 与版本 tag（如 `:0.3.0`）。数据落在 `./data`。
-
-升级 / 锁版本：
-
-```bash
-# 升级到最新
-docker compose -f docker-compose.image.yml pull && docker compose -f docker-compose.image.yml up -d
-# 锁定版本：在 .env 里设 EASYSTICKER_TAG=0.3.0
-```
-
-不想用 compose，一条 `docker run` 也可以：
-
-```bash
-docker run -d --name easysticker -p 3000:3000 \
-  -v "$PWD/data:/app/data" \
-  -e API_TOKEN=换成随机串 -e JWT_SECRET=换成随机串 -e ADMIN_PASSWORD=你的密码 \
-  ghcr.io/easyindie/easysticker:latest
-```
-
-### 方式 B：从源码构建
-
-```bash
-docker compose build
-docker compose up -d
-```
-
-> 面向公网部署时，**不要直接暴露 3000 端口**，请在前面加一层 HTTPS 反向代理（Nginx/Caddy 示例见
-> [docs/operations.md](docs/operations.md)），并设置 `server.security.trustProxy`。
-
----
-
-## 🔧 支持的 AI 提供商
-
-所有真实生图统一走 **OpenAI 兼容 Images API**（`/images/generations`），`baseUrl` 可指向任意兼容端点，
-通过 `variant` 切换参数画像：
+所有真实生图统一走 **OpenAI 兼容 Images API**，通过 `variant` 切换参数画像：
 
 | 提供商 | 类型 / variant | 说明 | 透明底 |
-|--------|---------------|------|--------|
-| **OpenAI gpt-image-1.x** | `openai` / `gpt-image` | 参考图生图、文字改图、文字生图全覆盖 | ✅ 原生 |
-| **豆包 Seedream（火山方舟）** | `openai` / `generic` | 国内模型，支付宝/对公付费 | ❌ 实底 |
-| **任意 OpenAI 兼容端点**（硅基流动 FLUX 等） | `openai` / `generic` | 换 `baseUrl`/`model` 即可接入 | 视模型 |
-| **本地模拟 (Mock)** | `mock` | 无需 API Key，用于功能测试 | — |
+|--------|----------------|------|--------|
+| OpenAI gpt-image | `openai` / `gpt-image` | 文生图、图生图、文字改图全覆盖 | 原生支持 |
+| 豆包 Seedream（火山方舟） | `openai` / `generic` | 国内模型，支持支付宝 / 对公付费 | 实底 |
+| 任意 OpenAI 兼容端点 | `openai` / `generic` | 换 `baseUrl` / `model` 即可接入（如硅基流动 FLUX） | 视模型 |
+| 本地模拟（Mock） | `mock` | 无需 Key，用于开发与功能验证 | — |
+
+新增提供商只需在 `src/services/ai/providers/` 注册一个实现，详见
+[架构设计](docs/architecture.md#6-扩展点)。
 
 ---
 
-## 🏗 架构
+## 部署到公网
 
-```
-┌─────────────┐    ┌──────────────────┐    ┌──────────────────────┐
-│   Web UI    │    │   Fastify API    │    │     AI Provider      │
-│ (TS + Vite) │───▶│  (Node.js + TS)  │────│      (插件化)        │
-│             │    │                  │    │ ┌──────────────────┐ │
-│  · 参考图    │    │  · 图生图流水线   │    │ │ OpenAI 兼容 API  │ │
-│  · 预览下载  │    │  · 表情校验      │    │ │ (任意兼容端点)    │ │
-│  · 历史记录  │    │  · ZIP 打包     │    │ │ Mock (本地模拟)   │ │
-│  · 管理后台  │    │  · SSE 流推送   │    │ └──────────────────┘ │
-└─────────────┘    │  · 元数据注入    │    └──────────────────────┘
-                   └───────┬──────────┘
-                           ▼
-                   ┌──────────────┐
-                   │  Sharp 图片   │
-                   │  处理引擎     │
-                   └──────────────┘
-```
+面向公网部署时，至少做到：
 
-**技术栈：** Node.js 20 · TypeScript · Fastify · Sharp · SSE · Vite · Docker
+- 不要直接暴露 3000 端口，前面加一层 HTTPS 反向代理（Nginx / Caddy）。
+- 固定设置 `API_TOKEN`、`JWT_SECRET`、`ADMIN_PASSWORD`。
+- 反向代理下开启 `server.security.trustProxy`，让限流拿到真实 IP。
+- 为 SSE 关闭代理缓冲，否则生成进度和后台实时指标会「卡住不动」。
 
-设计取舍与模块边界见 [docs/architecture.md](docs/architecture.md)。
+完整的 Compose / 裸机 / 反向代理 / 升级与安全基线见 [部署指南](docs/deployment.md)。
 
 ---
 
-## 📋 配置
+## 文档
 
-所有系统参数通过 `prompt-config.json` 集中管理（不存在则用 `prompt-config.default.json`），
-密钥等敏感项通过 `.env` 覆盖。完整清单见
-[docs/configuration-reference.md](docs/configuration-reference.md)。
-
-常用项：
-
-- `server.port` / `server.host`：监听地址
-- `server.dataDir`：数据目录（默认 `data`）
-- `ai.defaultProvider` / `ai.providers`：默认提供商与端点 / 模型
-- `ai.imageSize`：生成图宽高（默认 1024×1024）
-- `emotions`：情绪词列表，按序分配给每张贴纸
-
----
-
-## 🤔 FAQ
-
-**Q: 需要自己的 AI API Key 吗？**
-A: 不需要也能启动（Mock 模式）。想要真正的 AI 生成能力，配置一个 OpenAI 兼容提供商并填入密钥即可。
-
-**Q: 生成的图片存在哪里？怎么清理？**
-A: 全部在服务器 `data/` 目录（素材只存一份，ZIP 不落盘）。服务端每 6 小时自动巡检，
-也可手动 `npm run gc`（默认只体检，`--apply` 才执行）。⚠️ **不要**用 `find data -mtime +N -delete`
-这类按 mtime 的清理方式——素材 mtime 与「是否仍被引用」无关，会删坏包。
-详见 [docs/operations.md §3](docs/operations.md#3-存储清理与回收)。
-
-**Q: 支持微信表情开放平台提审吗？**
-A: 输出 ZIP 完全符合上架规范，可直接提交审核；目前不支持自动提审。
-
-**Q: 支持商用吗？**
-A: 采用 Apache-2.0，可自由使用和修改。生成图片的版权取决于底层 AI 模型服务条款。
-
-**Q: 生图质量不满意怎么办？**
-A: 调整提示词 / 风格 / 提供商；某张不满意就点该预览卡片单张重生成或编辑，无需整包重跑。
-
-**Q: 早期导出的 ZIP 缺尺寸 / 提示词，能补回来吗？**
-A: 用 `npm run repair-pack` 就地升级到最新 schema。详见
-[docs/operations.md §3.4](docs/operations.md#34-修复历史包)。
+| 想了解 | 看这里 |
+|--------|--------|
+| 文档总览与阅读路径 | [文档中心](docs/README.md) |
+| 怎么使用各项功能 | [使用手册](docs/usage.md) |
+| 怎么部署上线 | [部署指南](docs/deployment.md) |
+| 每个配置项 / 环境变量 | [配置参考](docs/configuration-reference.md) |
+| 日志、备份、清理、排障 | [运维手册](docs/operations.md) |
+| 本地开发与测试 | [开发指南](docs/development.md) |
+| 代码分层与设计决策 | [架构设计](docs/architecture.md) |
+| 后续演进计划 | [路线图](docs/roadmap.md) |
+| ZIP 与 `metadata.json` | [包格式](docs/pack-format.md) |
 
 ---
 
-## 📚 文档
+## 常见问题
 
-| 文档 | 内容 |
-|------|------|
-| [docs/README.md](docs/README.md) | 文档索引与维护规则（先看这个） |
-| [docs/development.md](docs/development.md) | 本地开发：环境、命令、目录、测试 |
-| [docs/configuration-reference.md](docs/configuration-reference.md) | 全部配置项、提示词模板、环境变量 |
-| [docs/pack-format.md](docs/pack-format.md) | 存储模型、ZIP 结构、`metadata.json` 字段 |
-| [docs/operations.md](docs/operations.md) | 部署、反向代理、日志、存储回收、备份、压测、排障 |
-| [docs/architecture.md](docs/architecture.md) | 架构分层、模块边界、设计决策与待办 |
-| [docs/history.md](docs/history.md) | 改造历史与关键决策（只读） |
-| [CHANGELOG.md](CHANGELOG.md) | 版本更新日志 |
-| [CONTRIBUTING.md](CONTRIBUTING.md) | 如何贡献 |
-| [SECURITY.md](SECURITY.md) | 安全策略与漏洞上报 |
+**需要自己的 AI API Key 吗？**
+不需要也能启动（Mock 模式）。想要真实生成能力，配置一个 OpenAI 兼容提供商即可。
+
+**生成的图片存在哪里？怎么清理？**
+全部在服务器 `data/` 目录。素材只存一份，ZIP 不落盘。服务端每 6 小时自动巡检，
+也可手动 `npm run gc`（默认只体检，`--apply` 才执行）。**不要**用按 mtime 的
+`find data -delete` 清理，会删坏包。详见 [运维手册](docs/operations.md#3-存储清理与回收)。
+
+**支持微信表情开放平台提审吗？**
+输出的 ZIP 符合上架规范，可直接提交审核；目前不做自动提审。
+
+**可以商用吗？**
+代码采用 Apache-2.0，可自由使用和修改。生成图片的版权取决于底层模型服务条款。
+
+**生成质量不满意怎么办？**
+调整提示词 / 风格 / 提供商；某张不满意就单张重生成或编辑，不必整包重跑。
+
+**很早以前导出的 ZIP 缺尺寸 / 提示词，能补回来吗？**
+可以，用 `npm run repair-pack` 就地升级到最新 schema。详见
+[运维手册](docs/operations.md#34-修复历史包)。
 
 ---
 
-## 📄 License
+## License
 
 Apache-2.0 © 2025-2026 EasySticker Contributors
 
----
-
-<p align="center">
-  <sub>Made with ❤️ for the sticker community</sub>
-</p>
+<p align="center"><sub>Made with ❤️ for the sticker community</sub></p>
