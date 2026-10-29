@@ -232,9 +232,19 @@ function assertPackId(packId: string): void {
   if (!isValidPackId(packId)) throw createHttpError(400, "invalid packId");
 }
 
-function packInfoPath(dataDir: string, packId: string) {
+function packFilePath(dataDir: string, packId: string, ext: string): string {
   assertPackId(packId);
-  return path.join(packsDir(dataDir), `${packId}.json`);
+  const base = path.resolve(packsDir(dataDir));
+  const filePath = path.resolve(base, `${packId}${ext}`);
+  const rel = path.relative(base, filePath);
+  if (rel.startsWith("..") || path.isAbsolute(rel)) {
+    throw createHttpError(400, "invalid packId");
+  }
+  return filePath;
+}
+
+function packInfoPath(dataDir: string, packId: string) {
+  return packFilePath(dataDir, packId, ".json");
 }
 
 /** 读取图片尺寸/格式/体积；失败时返回 null 而不是中断打包。 */
@@ -494,7 +504,7 @@ export function createPackArchive(assetStore: AssetStore, manifest: PackManifest
 
 export function findPackZipPath(dataDir: string, packId: string): string | null {
   if (!isValidPackId(packId)) return null;
-  const filePath = path.join(packsDir(dataDir), `${packId}.zip`);
+  const filePath = packFilePath(dataDir, packId, ".zip");
   return fs.existsSync(filePath) ? filePath : null;
 }
 
