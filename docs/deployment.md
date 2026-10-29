@@ -51,6 +51,8 @@ docker compose -f docker-compose.image.yml up -d
 - 镜像：`ghcr.io/easyindie/easysticker`（`linux/amd64` + `linux/arm64`）。
 - 默认使用 `:latest`；在 `.env` 中设置 `EASYSTICKER_TAG=<版本号>` 可锁定版本。
 - 数据默认映射到 `./data`。
+- 如果拉取镜像返回 401 / 404，通常是 GHCR 包尚未设为 public：请让发布者把包可见性改为
+  Public，或改用「从源码构建镜像」。
 
 不用 Compose 也可以：
 
