@@ -42,8 +42,11 @@ export function writeEnvValues(
 }
 
 function formatEnvValue(value: string): string {
+  if (/[\r\n]/.test(value)) {
+    throw new Error("env value must not contain newlines");
+  }
   if (/[\s#"']/.test(value)) {
-    return `"${value.replace(/"/g, '\\"')}"`;
+    return `"${value.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`;
   }
   return value;
 }

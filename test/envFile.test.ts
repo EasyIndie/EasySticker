@@ -37,4 +37,12 @@ describe("writeEnvValues", () => {
     expect(fs.readFileSync(file, "utf-8")).toContain('SOME_KEY="a b"');
     delete process.env.SOME_KEY;
   });
+
+  it("escapes backslashes and rejects newline injection", () => {
+    const file = tmpEnv();
+    writeEnvValues({ SOME_KEY: 'a\\"b' }, file);
+    expect(fs.readFileSync(file, "utf-8")).toContain('SOME_KEY="a\\\\\\"b"');
+    expect(() => writeEnvValues({ BAD_KEY: "a\nb" }, file)).toThrow(/newlines/);
+    delete process.env.SOME_KEY;
+  });
 });

@@ -218,7 +218,22 @@ function buildDownloadFilename(req: PackRequest, packId: string) {
   return `${base || req.presetId || "easysticker-pack"}-${packId}.zip`;
 }
 
+/**
+ * packId 由 nanoid 生成（URL 安全字符），也允许旧数据里的 - / _。
+ * 这里做白名单校验，防止 `../` 之类的路径穿越进入 packs 目录。
+ */
+const PACK_ID_PATTERN = /^[A-Za-z0-9_-]{6,64}$/;
+
+export function isValidPackId(packId: string): boolean {
+  return PACK_ID_PATTERN.test(packId);
+}
+
+function assertPackId(packId: string): void {
+  if (!isValidPackId(packId)) throw createHttpError(400, "invalid packId");
+}
+
 function packInfoPath(dataDir: string, packId: string) {
+  assertPackId(packId);
   return path.join(packsDir(dataDir), `${packId}.json`);
 }
 
@@ -286,6 +301,9 @@ export async function createPack(
   // 命中且归属一致 → 原地更新清单（保留 createdAt），历史天然只有一条；
   // 未命中 / 归属不符 / 未提供 → 新建，避免覆盖他人的包或让客户端任意指定 ID。
   const requestedPackId = req.packId?.trim();
+  if (requestedPackId && !isValidPackId(requestedPackId)) {
+    throw createHttpError(400, "invalid packId");
+  }
   const existing = requestedPackId ? readPackManifest(dataDir, requestedPackId) : null;
   const canOverwrite = Boolean(existing && (existing.owner ?? null) === (owner ?? null));
   const packId = canOverwrite ? requestedPackId! : nanoid();
@@ -475,6 +493,7 @@ export function createPackArchive(assetStore: AssetStore, manifest: PackManifest
 }
 
 export function findPackZipPath(dataDir: string, packId: string): string | null {
+  if (!isValidPackId(packId)) return null;
   const filePath = path.join(packsDir(dataDir), `${packId}.zip`);
   return fs.existsSync(filePath) ? filePath : null;
 }
@@ -546,6 +565,7 @@ export function listPacks(
 
   const out: PackSummary[] = [];
   for (const packId of ids) {
+    if (!isValidPackId(packId)) continue;
     const manifest = readPackManifest(dataDir, packId);
     const zipPath = findPackZipPath(dataDir, packId);
     const zipBytes = zipPath ? fs.statSync(zipPath).size : 0;
