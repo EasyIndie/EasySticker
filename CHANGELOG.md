@@ -8,6 +8,12 @@
 
 ## [未发布]
 
+（暂无）
+
+## [0.4.0] - 2026-10-29
+
+首个公开版本：仓库与 GHCR 镜像转为 Public，补齐许可证、隐私政策、安全扫描与发布流程。
+
 ### 新增
 
 - **图片编辑历史版本（查看 / 回退 / 随包导出）**：单张图每次编辑或重生成都会记录上一版，卡片上的「版本 N」可打开历史面板查看每一版（缩略图、时间、修改要求）并回退到任意一版（回退只移动当前指针，不新增版本）。历史版本随 ZIP 一起导出到 `history/<名称>/vN.<ext>`（`metadata.json` 的 `files[].versions[]` 记录），重新导入会重新入库并重映射 `assetId`；GC 也会保护这些版本，不会被当孤儿清理。
@@ -161,7 +167,8 @@
 Sharp 尺寸与格式转换，结构化 ZIP（含 `metadata.json`）导出，SSE 生成进度，
 管理后台（用户 / 存储 / 设置 / 监控告警），自托管部署（Docker + 反向代理）。
 
-[未发布]: https://github.com/EasyIndie/EasySticker/compare/v0.3.0...HEAD
+[未发布]: https://github.com/EasyIndie/EasySticker/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/EasyIndie/EasySticker/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/EasyIndie/EasySticker/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/EasyIndie/EasySticker/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/EasyIndie/EasySticker/releases/tag/v0.1.0

@@ -238,4 +238,6 @@ npm run build && npm run web:build && npm run prod
 
 Apache-2.0 © 2025-2026 EasySticker Contributors
 
+第三方依赖与 LGPL（sharp / libvips）说明见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。
+
 <p align="center"><sub>Made with ❤️ for the sticker community</sub></p>
