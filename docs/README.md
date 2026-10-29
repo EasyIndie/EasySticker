@@ -63,8 +63,8 @@ EasySticker 的文档按**读者任务**组织，而不是按代码目录堆文�
 | 文档 | 说明 |
 |------|------|
 | [history.md](history.md) | 已落地的改造与关键决策记录；细节看 `git log` |
-| [business/](business/) | 市场调研与运营策略，日期即调研时点 |
-| [internal/HANDOFF.md](internal/HANDOFF.md) | 内部会话交接说明，不属于公开产品文档 |
+
+> 商业策略、竞品调研与内部交接材料不进入公开仓库，单独维护在私有位置。
 
 ---
 

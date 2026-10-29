@@ -58,7 +58,11 @@
   "license": "Apache-2.0",
   "repository": {
     "type": "git",
-    "url": "ssh://gogit@gogs.home.jokerhub.cn:3333/joker/EasySticker.git"
+    "url": "https://github.com/EasyIndie/EasySticker.git"
+  },
+  "homepage": "https://github.com/EasyIndie/EasySticker#readme",
+  "bugs": {
+    "url": "https://github.com/EasyIndie/EasySticker/issues"
   },
   "keywords": [
     "wechat",
