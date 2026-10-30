@@ -38,6 +38,25 @@ describe("promptBuilder：统一的提示词拼接入口", () => {
     expect(resolveStyleName(config, "贴纸")).toBe("贴纸");
   });
 
+  it("omitStyle：补齐时明确不选风格，完全不写「画面风格」段", () => {
+    const sticker = buildStickerPrompt(config, {
+      prompt: "主体：橘猫",
+      emotion: "开心",
+      omitStyle: true
+    });
+    const extra = buildExtraPrompt(config, {
+      prompt: "主体：橘猫",
+      requirement: config.extraPrompts.banner,
+      omitStyle: true
+    });
+
+    expect(sticker).not.toContain("画面风格");
+    expect(sticker).not.toContain("{{style}}");
+    expect(extra).not.toContain("画面风格");
+    expect(extra).not.toContain("{{style}}");
+    expect(extra).toContain("画面类型：详情页横幅");
+  });
+
   it("扩展资源提示词：内容 → 资源要求 → 画面风格，且不含贴纸专用的背景/构图规则", () => {
     const prompt = buildExtraPrompt(config, {
       prompt: "主体：以参考图中的主体为准；主题：日常聊天；动作：挥手；元素：星星。",

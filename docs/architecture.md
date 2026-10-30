@@ -91,6 +91,14 @@ POST /api/generate/import-pack  （本站导出的 ZIP）
 - 单张重生成：`POST /api/generate/resource`，按 `target` 只重做一张。
 - 编辑图片：`mode="edit"`，以当前图为参考图，把修改要求追加进提示词；
   可再附一张参考图，记入 `editReferenceAssetId` 并纳入 GC 引用。
+- 参考图可选：整包生成没有 `referenceAssetId` 时走纯文生图；导入成品没有原包参考图时，
+  单张重生成回退到包内已有图片，编辑则直接以 `sourceAssetId` 为源图。
+- 补齐统一流程：前端先选「图片来源」（包内已有图片 / 上传新图片），再选「处理方式」（AI 生成 / 直接使用原图）。
+  AI 方式把所选图片作为 `referenceAssetId` 逐张调用 `/api/generate/resource`；
+  上传原图方式调用 `POST /api/uploads?presetId=<id>&role=<role>`，由 Sharp 按平台 / 资源规格
+  旋转、补边或裁切并转成目标格式，返回可直接入库的 `assetId`；前端把结果按 `kind="upload"` 追加或替换，
+  再重建同一份清单。两种方式都由客户端带上原 `packId` 重建，已有图片不被覆盖。
+  AI 方式若来源是上传图，会先以 `role=reference` 规范化为 PNG，作为一次性参考图，不写进包内。
 - 历史版本：每次编辑 / 重生成把上一版写进 `metadata.files[].versions[]`；
   回退只移动当前指针，不新增版本。
 - 重建 ZIP：前端带上原 `packId`，服务端命中且归属一致就**原地更新清单**并保留 `createdAt`，

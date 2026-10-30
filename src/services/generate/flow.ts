@@ -13,7 +13,8 @@ import { convertToPlatformFormat } from "./convert";
 import { generateWechatExtras, type ExtrasResult } from "./extras";
 
 export type PlatformGenerateRequest = {
-  referenceAssetId: string;
+  /** 可选：没有参考图时走纯文生图。 */
+  referenceAssetId?: string;
   prompt: string;
   /** 选中的提示词预设 id（可空）；随 metadata.json 一同导出，便于完整还原。 */
   promptPreset?: string;
@@ -65,7 +66,6 @@ export async function generateAssetsAndPack(
   const min = preset.minCount ?? 1;
   const max = preset.maxCount ?? 50;
   const count = Math.max(min, Math.min(max, Math.floor(req.stickerCount ?? 8)));
-  if (!req.referenceAssetId) throw createHttpError(400, "missing referenceAssetId");
   if (!req.prompt) throw createHttpError(400, "missing prompt");
 
   // Determine resize target
@@ -78,17 +78,26 @@ export async function generateAssetsAndPack(
   const providerId = req.provider ?? promptConfig.ai?.defaultProvider ?? "mock";
   const provider = getAiProvider(providerId);
   const client = buildMinimalClient(provider);
-  const reference = assetStore.find(req.referenceAssetId);
-  if (!reference) throw createHttpError(404, "reference asset not found");
-  const referenceBytes = fs.readFileSync(reference.filePath);
-  const referenceBase64 = referenceBytes.toString("base64");
+  const configuredReferenceMode = promptConfig.ai?.referenceMode ?? "base64";
+  const baseUrl = promptConfig.ai?.publicBaseUrl || "";
+
+  let referenceBase64: string | undefined;
+  let referenceUrl: string | undefined;
+  if (req.referenceAssetId) {
+    const reference = assetStore.find(req.referenceAssetId);
+    if (!reference) throw createHttpError(404, "reference asset not found");
+    const referenceBytes = fs.readFileSync(reference.filePath);
+    if (configuredReferenceMode === "base64" || configuredReferenceMode === "multipart") {
+      referenceBase64 = referenceBytes.toString("base64");
+    }
+    if (configuredReferenceMode === "url" && baseUrl) {
+      referenceUrl = `${baseUrl.replace(/\/+$/, "")}/api/assets/${req.referenceAssetId}`;
+    }
+  }
   const emotions = resolveEmotions(promptConfig, req.promptPreset);
 
-  const referenceMode = promptConfig.ai?.referenceMode ?? "base64";
-  const baseUrl = promptConfig.ai?.publicBaseUrl || "";
-  const referenceUrl = baseUrl
-    ? `${baseUrl.replace(/\/+$/, "")}/api/assets/${req.referenceAssetId}`
-    : undefined;
+  // 没有参考图时明确标记 none，便于前端/还原逻辑区分「未使用参考图」。
+  const referenceMode = req.referenceAssetId ? configuredReferenceMode : "none";
 
   const imageWidth = promptConfig.ai?.imageSize?.width ?? 1024;
   const imageHeight = promptConfig.ai?.imageSize?.height ?? 1024;
@@ -228,7 +237,7 @@ export async function generateAssetsAndPack(
     emotions,
     imageSize: { width: imageWidth, height: imageHeight },
     targetSize: { width: targetW, height: targetH },
-    referenceAssetId: req.referenceAssetId,
+    referenceAssetId: req.referenceAssetId ?? null,
     referenceMode,
     include: {
       cover: Boolean(req.includeCover),
@@ -268,7 +277,7 @@ export async function generateAssetsAndPack(
       copyright: req.metadata?.copyright ?? null,
       rewardMessage: req.metadata?.rewardMessage ?? null,
       rewardEnabled: Boolean(req.enableReward),
-      referenceAssetId: req.referenceAssetId,
+      referenceAssetId: req.referenceAssetId ?? null,
       referenceMode,
       presetId
     },

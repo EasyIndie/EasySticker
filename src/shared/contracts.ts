@@ -26,7 +26,11 @@ export type PromptRequest = z.infer<typeof promptSchema>;
 /** POST /api/generate/start */
 export const generateSchema = z.object({
   presetId: z.string().min(1).default("wechat_stickers"),
-  referenceAssetId: z.string().min(1),
+  /**
+   * 可选：没有参考图时走纯文生图。
+   * 导入过成品的用户也可以把其中一张图作为 referenceAssetId 传给后端。
+   */
+  referenceAssetId: z.string().min(1).optional(),
   prompt: z.string().min(1),
   /** 选中的提示词预设 id（空字符串表示未用预设）；随包导出以便完整还原生成现场。 */
   promptPreset: z.string().optional(),
@@ -68,7 +72,8 @@ export type ResourceTarget = z.infer<typeof resourceTargetSchema>;
  */
 export const resourceSchema = z.object({
   presetId: z.string().min(1).default("wechat_stickers"),
-  referenceAssetId: z.string().min(1),
+  /** 可选：没有原包参考图时，编辑用 sourceAssetId、重生成用 sourceAssetId 或其他已有图片兜底。 */
+  referenceAssetId: z.string().min(1).optional(),
   /** 编辑（mode=edit）可留空：主体以 sourceAssetId 图片为准；重新生成仍要求非空。 */
   prompt: z.string().optional(),
   /** 选中提示词预设 id（可空）；用于复用预设自带的情绪/动作参数。 */
@@ -87,6 +92,13 @@ export const resourceSchema = z.object({
   .superRefine((value, ctx) => {
     // 编辑是图生图（主体在 sourceAssetId 图里），没有基础提示也能做；
     // 重新生成是「文字 + 参考图」，必须要有提示词。
+    if (value.mode === "edit" && !value.sourceAssetId) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["sourceAssetId"],
+        message: "sourceAssetId is required when mode is edit"
+      });
+    }
     if (value.mode !== "edit" && !(value.prompt && value.prompt.trim())) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
@@ -135,7 +147,7 @@ export const packFileRoleSchema = z.enum([
 export const packFileVersionSchema = z.object({
   assetId: z.string().min(1),
   createdAt: z.string().min(1),
-  kind: z.enum(["generate", "edit", "regenerate", "restore"]),
+  kind: z.enum(["generate", "fill", "upload", "edit", "regenerate", "restore"]),
   instruction: z.string().optional(),
   prompt: z.string().optional(),
   style: z.string().optional(),

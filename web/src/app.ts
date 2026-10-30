@@ -103,6 +103,40 @@ const editInstruction = req<HTMLTextAreaElement>("editInstruction");
 const editChips = req("editChips");
 const editReference = req<HTMLInputElement>("editReference");
 const editUseOriginalRef = req<HTMLInputElement>("editUseOriginalRef");
+const fillDialog = byId("fillDialog");
+const fillDialogBackdrop = byId("fillDialogBackdrop");
+const fillDialogClose = byId("fillDialogClose");
+const fillDialogCancel = byId<HTMLButtonElement>("fillDialogCancel");
+const fillDialogSubmit = byId<HTMLButtonElement>("fillDialogSubmit");
+const fillDialogImage = byId<HTMLImageElement>("fillDialogImage");
+const fillDialogPlaceholder = byId("fillDialogPlaceholder");
+const fillDialogPlaceholderText = byId("fillDialogPlaceholderText");
+const fillDialogTitle = byId("fillDialogTitle");
+const fillDialogDescription = byId("fillDialogDescription");
+const fillDialogReferenceInfo = byId("fillDialogReferenceInfo");
+const fillReferenceSelect = byId<HTMLSelectElement>("fillReferenceSelect");
+const fillCount = byId<HTMLInputElement>("fillCount");
+const fillCountHint = byId("fillCountHint");
+const fillPrompt = byId<HTMLTextAreaElement>("fillPrompt");
+const fillStyle = byId<HTMLSelectElement>("fillStyle");
+const fillSourceExisting = byId<HTMLInputElement>("fillSourceExisting");
+const fillSourceUpload = byId<HTMLInputElement>("fillSourceUpload");
+const fillSourceHint = byId("fillSourceHint");
+const fillReferenceField = byId("fillReferenceField");
+const fillUploadFields = byId("fillUploadFields");
+const fillUploadFile = byId<HTMLInputElement>("fillUploadFile");
+const fillUploadHint = byId("fillUploadHint");
+const fillUploadFileName = byId("fillUploadFileName");
+const fillActionAi = byId<HTMLInputElement>("fillActionAi");
+const fillActionDirect = byId<HTMLInputElement>("fillActionDirect");
+const fillActionDirectOption = byId("fillActionDirectOption");
+const fillActionHint = byId("fillActionHint");
+const fillActionSelector = byId("fillActionSelector");
+const fillAiSettingsStep = byId("fillAiSettingsStep");
+const fillCountField = byId("fillCountField");
+const fillPromptField = byId("fillPromptField");
+const fillStyleField = byId("fillStyleField");
+const fillDialogStatus = byId("fillDialogStatus");
 const versionDialog = byId("versionDialog");
 const versionDialogBackdrop = byId("versionDialogBackdrop");
 const versionDialogClose = byId("versionDialogClose");
@@ -119,6 +153,7 @@ const aiConfigFields = byId("aiConfigFields");
 const wechatAiForm = req<HTMLFormElement>("wechatAiForm");
 const generateSubmit = req<HTMLButtonElement>("generateSubmit");
 const regenerateSubmit = req<HTMLButtonElement>("regenerateSubmit");
+const fillStickersBtn = byId<HTMLButtonElement>("fillStickersBtn");
 const resetSubmit = req<HTMLButtonElement>("resetSubmit");
 const cancelGenerate = byId<HTMLButtonElement>("cancelGenerate");
 const generateState = req("generateState");
@@ -199,6 +234,12 @@ let lastPackResult: any = null;
 let currentStickers: any[] = [];
 let currentExtras: Record<string, any> = {};
 let resourceRegenerating = false;
+// 补齐时的参考图：优先使用用户选中的已有图片，不要求本包必须有上传参考图。
+let fillReferenceAssetId: string | null = null;
+// 上传补齐时用于预览的 object URL；关闭弹窗 / 重新选文件时必须释放。
+let fillUploadObjectUrls: string[] = [];
+// null = 追加主表情；否则 = 补齐某一张扩展资源（封面 / 图标 / 横幅 / 赞赏图）。
+let fillDialogTarget: ResourceTarget | null = null;
 let currentTaskId: string | null = null;
 let sseAbortController: AbortController | null = null;
 let cancelRequested = false;
@@ -698,6 +739,26 @@ function restorePersistedPackResult(): boolean {
     currentPlatform = restored.platform;
     setSelectedPlatform(currentPlatform);
     currentUploadId = restored.uploadId;
+    // 兼容旧 localStorage：补齐曾把选中的图写成整包参考图，这里一并清掉。
+    if ((restored.result?.meta?.referenceMode ?? restored.result?.generation?.referenceMode) === "fill") {
+      const stickerIds = new Set(
+        (restored.result.stickers ?? [])
+          .map((sticker: any) => (typeof sticker?.assetId === "string" ? sticker.assetId : ""))
+          .filter(Boolean)
+      );
+      if (currentUploadId && stickerIds.has(currentUploadId)) {
+        currentUploadId = null;
+        restored.uploadId = null;
+        if (restored.result.generation) {
+          restored.result.generation.referenceAssetId = null;
+          restored.result.generation.referenceMode = "none";
+        }
+        if (restored.result.meta) {
+          restored.result.meta.referenceAssetId = null;
+          restored.result.meta.referenceMode = "none";
+        }
+      }
+    }
     if (restored.provider) currentAiProvider = restored.provider;
     currentStyles = restored.styles.length ? restored.styles : [...DEFAULT_STYLE_OPTIONS];
     currentRewardEnabled = Boolean(restored.rewardEnabled || restored.result?.meta?.rewardEnabled);
@@ -1085,11 +1146,30 @@ function toggleHistory(expand?: boolean): void {
 
 // ── Buttons / creation mode ─────────────────────────────────────────────────
 function canRegenerate(): boolean {
-  return currentCreationMode === "ai" && Boolean(currentUploadId && getEffectivePrompt() && hasGenerationAttempted);
+  // 没有参考图也能重试：整包生成已支持纯文生图，单张重生成会回退到包内已有图片。
+  return currentCreationMode === "ai" && Boolean(getEffectivePrompt() && hasGenerationAttempted);
 }
+/** 「补齐」属于表情主图资源组，只在有主图且未达上限时显示。 */
+function syncFillStickersButton(): void {
+  if (!fillStickersBtn) return;
+  const available = canFill();
+  fillStickersBtn.hidden = !available;
+  fillStickersBtn.disabled = !available || resourceRegenerating;
+}
+
 function syncRegenerateButton(): void {
-  regenerateSubmit.disabled = canRegenerate() ? false : true;
+  syncFillStickersButton();
+  // 生成 / 补齐进行中时保留 setBusy 写入的文案，避免被这里的静态标签覆盖。
+  if (generateSubmit.disabled || resourceRegenerating) {
+    regenerateSubmit.disabled = true;
+    return;
+  }
+  // 「重新生成」只用于 AI 模式下整包重做；导入模式的主图补齐入口在预览区。
   regenerateSubmit.hidden = currentCreationMode !== "ai";
+  if (currentCreationMode === "ai") {
+    window._ui!.setButtonLabel(regenerateSubmit, "重新生成");
+    regenerateSubmit.disabled = !canRegenerate();
+  }
 }
 // 点击生成失败的预览卡片时重试：行为与「开始生成 / 重新生成 / 导入并打包」一致。
 function retryFromFailedPreview(): void {
@@ -1098,10 +1178,7 @@ function retryFromFailedPreview(): void {
     return;
   }
   if (!canRegenerate()) {
-    window._ui!.setNotice(
-      currentUploadId ? "请先补充提示词，再重新生成。" : "请先上传参考图，再重新生成。",
-      "info"
-    );
+    window._ui!.setNotice("请先补充提示词，再重新生成。", "info");
     return;
   }
   void generatePlatformPack();
@@ -1124,6 +1201,21 @@ const EXTRA_ROLE_BY_KEY: Record<string, string> = {
   rewardGuideAssetId: "reward-guide",
   rewardThanksAssetId: "reward-thanks"
 };
+
+/** 当前可用的 AI 参考图：原包参考图 → 指定资源 → 包内第 1 张。 */
+function getAiReferenceAssetId(target?: ResourceTarget): string | null {
+  if (currentUploadId) return currentUploadId;
+  if (target) {
+    const id = resourceAssetId(target);
+    if (id) return id;
+  }
+  return currentStickers[0]?.assetId ?? null;
+}
+
+/** 导入 / 已生成过内容的包是否还能继续补齐。 */
+function canFill(): boolean {
+  return currentStickers.length > 0 && currentStickers.length < MAX_STICKER_COUNT;
+}
 
 /** 汇总当前预览中已有的资源（含生成上下文），用于重新打包。 */
 function collectPackAssets(): {
@@ -1207,7 +1299,8 @@ async function rebuildPackFromState(): Promise<void> {
       ...(lastPackResult ?? {}),
       packId: res.packId,
       downloadUrl: res.downloadUrl,
-      downloadFilename: res.downloadFilename
+      downloadFilename: res.downloadFilename,
+      ...(typeof res.metadataJson === "string" ? { metadataJson: res.metadataJson } : {})
     };
     window._preview!.renderDownload(res.packId, res.downloadUrl, res.downloadFilename);
   } catch {
@@ -1249,9 +1342,9 @@ function resourceAssetId(target: ResourceTarget): string | null {
 
 /** 追加一个新的历史版本；若无历史则先用当前图补一条「初版」。 */
 function buildNextVersions(
-  existing: { assetId?: string; prompt?: string; style?: string; emotion?: string; versions?: any[] },
+  existing: { assetId?: string; prompt?: string; style?: string; emotion?: string; versions?: any[] } | undefined,
   res: any,
-  kind: "edit" | "regenerate",
+  kind: "generate" | "fill" | "upload" | "edit" | "regenerate",
   instruction?: string
 ): any[] {
   const versions =
@@ -1286,30 +1379,39 @@ function buildNextVersions(
 function applyResourceResult(
   target: ResourceTarget,
   res: any,
-  meta: { kind: "edit" | "regenerate"; instruction?: string } = { kind: "regenerate" }
+  meta: { kind: "generate" | "fill" | "upload" | "edit" | "regenerate"; instruction?: string } = { kind: "regenerate" }
 ): void {
   const url = res.url || `/api/assets/${res.assetId}`;
   if (target.kind === "sticker" && typeof target.index === "number") {
     const index = target.index;
     const existing = currentStickers[index];
-    if (!existing) return;
+    // index === 当前长度说明这是「补齐」追加的新图，而不是替换已有图。
+    const isAppend = !existing && index === currentStickers.length;
+    if (!existing && !isAppend) return;
     const versions = buildNextVersions(existing, res, meta.kind, meta.instruction);
     currentStickers[index] = {
-      ...existing,
-      label: res.label ?? existing.label,
+      ...(existing ?? {}),
+      label: res.label ?? existing?.label ?? String(index + 1).padStart(3, "0"),
       assetId: res.assetId,
       url,
       prompt: res.prompt,
-      style: res.style ?? existing.style,
-      emotion: res.emotion ?? existing.emotion,
+      // 补齐时用户可能明确选择「不使用风格」，此时不能沿用上一版的 style。
+      style: meta.kind === "fill" || meta.kind === "upload" ? res.style : (res.style ?? existing?.style),
+      emotion: meta.kind === "upload" ? res.emotion : (res.emotion ?? existing?.emotion),
       versions,
       ...(res.sourceAssetId ? { sourceAssetId: res.sourceAssetId } : {}),
       ...(res.editReferenceAssetId ? { editReferenceAssetId: res.editReferenceAssetId } : {})
     };
+    // 上传成品图是整张替换，旧的「编辑来源 / 附加参考图」不再适用于新图。
+    if (meta.kind === "upload") {
+      delete currentStickers[index].sourceAssetId;
+      delete currentStickers[index].editReferenceAssetId;
+    }
     // lastPackResult 也要同步，否则「刷新后恢复」与「重建 ZIP」读到的还是旧图
-    if (lastPackResult?.stickers && lastPackResult.stickers[index]) {
+    if (!lastPackResult?.stickers) lastPackResult = { ...(lastPackResult ?? {}), stickers: [] };
+    if (lastPackResult?.stickers) {
       lastPackResult.stickers[index] = {
-        ...lastPackResult.stickers[index],
+        ...(lastPackResult.stickers[index] ?? {}),
         label: currentStickers[index].label,
         assetId: currentStickers[index].assetId,
         url: currentStickers[index].url,
@@ -1324,9 +1426,14 @@ function applyResourceResult(
     // 定点替换这一张。整组重建会让 20+ 张图重新请求与解码，
     // 实测多出一次网络往返并产生 100ms+ 长任务，这里只换一个节点。
     if (!window._preview!.updatePreviewCard(index, currentStickers[index], "success")) {
-      // 兜底：卡片已经被重建过（比如换平台），退化为整组渲染
-      wechatAiPreview.innerHTML = "";
-      window._preview!.renderPreview(currentStickers, "success");
+      if (isAppend) {
+        // renderPreview 只追加缺失的卡片，不会重绘已有图片。
+        window._preview!.renderPreview(currentStickers, "success");
+      } else {
+        // 兜底：卡片已经被重建过（比如换平台），退化为整组渲染
+        wechatAiPreview.innerHTML = "";
+        window._preview!.renderPreview(currentStickers, "success");
+      }
     }
     return;
   }
@@ -1340,11 +1447,20 @@ function applyResourceResult(
     };
     const versions = buildNextVersions(existing, res, meta.kind, meta.instruction);
     currentExtras[key] = res.assetId;
-    currentExtras[`${key}_prompt`] = res.prompt;
-    if (res.style) currentExtras[`${key}_style`] = res.style;
+    if (meta.kind === "upload") {
+      // 上传成品图与旧的生成上下文无关，清掉避免 metadata 里留下误导信息。
+      delete currentExtras[`${key}_prompt`];
+      delete currentExtras[`${key}_style`];
+      delete currentExtras[`${key}_sourceAssetId`];
+      delete currentExtras[`${key}_editReferenceAssetId`];
+    } else {
+      currentExtras[`${key}_prompt`] = res.prompt;
+      if (meta.kind === "fill" && !res.style) delete currentExtras[`${key}_style`];
+      else if (res.style) currentExtras[`${key}_style`] = res.style;
+      if (res.sourceAssetId) currentExtras[`${key}_sourceAssetId`] = res.sourceAssetId;
+      if (res.editReferenceAssetId) currentExtras[`${key}_editReferenceAssetId`] = res.editReferenceAssetId;
+    }
     currentExtras[`${key}_versions`] = versions;
-    if (res.sourceAssetId) currentExtras[`${key}_sourceAssetId`] = res.sourceAssetId;
-    if (res.editReferenceAssetId) currentExtras[`${key}_editReferenceAssetId`] = res.editReferenceAssetId;
     delete currentExtras[`${key}_error`];
     if (lastPackResult?.extras) {
       lastPackResult.extras = { ...lastPackResult.extras, [key]: res.assetId };
@@ -1370,7 +1486,7 @@ async function runSingleResource(
     headers: { "content-type": "application/json" },
     body: JSON.stringify({
       presetId: currentPlatform,
-      referenceAssetId: currentUploadId,
+      referenceAssetId: getAiReferenceAssetId(target) ?? undefined,
       prompt: resolveBasePrompt(),
       promptPreset: currentPresetId || undefined,
       provider: wechatAiProvider ? wechatAiProvider.value : undefined,
@@ -1401,6 +1517,8 @@ async function runSingleResource(
 
 const VERSION_KIND_LABEL: Record<string, string> = {
   generate: "初版",
+  fill: "AI 补齐",
+  upload: "上传补齐",
   edit: "编辑",
   regenerate: "重新生成",
   restore: "回退"
@@ -1592,10 +1710,6 @@ async function uploadReferenceFile(file: File): Promise<string> {
 /** 只重生成失败的那一张资源（贴纸或扩展图），不重跑整包。 */
 async function regenerateResource(target: ResourceTarget): Promise<void> {
   if (resourceRegenerating) return;
-  if (!currentUploadId) {
-    window._ui!.setNotice("请先上传参考图。", "error");
-    return;
-  }
   if (!resolveBasePrompt()) {
     window._ui!.setNotice("请先补充提示词，再重新生成。", "error");
     return;
@@ -1610,6 +1724,140 @@ async function regenerateResource(target: ResourceTarget): Promise<void> {
     window._ui!.setNotice(error instanceof Error ? error.message : "重新生成失败，请稍后重试。", "error");
   } finally {
     resourceRegenerating = false;
+  }
+}
+
+/** 扩展资源 key → generation.include 字段。 */
+function extraIncludeField(key: string): "cover" | "icon" | "banner" | "reward" | null {
+  if (key === "coverAssetId") return "cover";
+  if (key === "iconAssetId") return "icon";
+  if (key === "bannerAssetId") return "banner";
+  if (key === "rewardGuideAssetId" || key === "rewardThanksAssetId") return "reward";
+  return null;
+}
+
+/** 删除资源后统一重建当前包，并同步本地持久化 / 历史记录。 */
+async function finalizeAfterResourceDeletion(): Promise<void> {
+  if (!lastPackResult) return;
+  const previousPackId = lastPackResult.packId;
+  await rebuildPackFromState();
+  persistLastPackPayload(lastPackResult);
+  addToPackHistory(lastPackResult, previousPackId);
+  window._preview!.renderExportInfo(lastPackResult);
+  window._preview!.renderMetadataPreview(lastPackResult);
+}
+
+/**
+ * 从当前表情包里删除一张资源。
+ *
+ * 只移动清单指针，不立即删磁盘文件；素材被移出包后由常规 GC 回收。
+ * 这样用户可以反复筛选，误删的图也还能通过历史版本 / 补齐找回。
+ */
+async function deleteResource(target: ResourceTarget): Promise<void> {
+  if (resourceRegenerating || generateSubmit.disabled) return;
+
+  if (target.kind === "sticker" && typeof target.index === "number") {
+    if (currentStickers.length <= 1) {
+      window._ui!.setNotice("至少保留 1 张主表情；如需全部重来，请使用「一键重置」。", "info");
+      return;
+    }
+    const index = target.index;
+    const removed = currentStickers[index];
+    if (!removed?.assetId) return;
+    const label = resourceLabel(target);
+    if (!window.confirm(`确定删除${label}？\n\n删除后会从当前表情包移除，可稍后用补齐重新生成或上传成品图。`)) return;
+
+    resourceRegenerating = true;
+    try {
+      const removedAssetId = removed.assetId;
+      currentStickers.splice(index, 1);
+      if (Array.isArray(lastPackResult?.stickers)) lastPackResult.stickers.splice(index, 1);
+      // 重新编号，保证下载 ZIP 与 metadata 中的主图序号连续。
+      currentStickers.forEach((sticker, i) => {
+        sticker.label = String(i + 1).padStart(3, "0");
+      });
+      if (Array.isArray(lastPackResult?.stickers)) {
+        lastPackResult.stickers.forEach((sticker: any, i: number) => {
+          if (sticker) sticker.label = String(i + 1).padStart(3, "0");
+        });
+      }
+      if (lastPackResult?.meta) lastPackResult.meta.count = currentStickers.length;
+
+      // 如果删掉的正好是本包参考图，换用剩余第一张，避免 ZIP 里继续带着被删的图。
+      if (currentUploadId === removedAssetId) {
+        currentUploadId = currentStickers[0]?.assetId ?? null;
+        if (currentUploadId) {
+          originalPreview.src = window._preview!.buildAssetUrl(currentUploadId);
+        } else {
+          originalPreview.removeAttribute("src");
+        }
+        syncOriginalPreviewSlot();
+        if (lastPackResult?.generation) lastPackResult.generation.referenceAssetId = currentUploadId;
+        if (lastPackResult?.meta) lastPackResult.meta.referenceAssetId = currentUploadId;
+      }
+
+      // 索引会整体前移，卡片上的 data-target 也必须重建。
+      wechatAiPreview.innerHTML = "";
+      window._preview!.renderPreview(currentStickers, "success");
+      await finalizeAfterResourceDeletion();
+
+      if (currentStickers.length < MIN_STICKER_COUNT) {
+        window._ui!.setNotice(
+          `已删除${label}，当前 ${currentStickers.length} 张，低于平台最低 ${MIN_STICKER_COUNT} 张，可用补齐补足。`,
+          "info"
+        );
+      } else {
+        window._ui!.setNotice(`已删除${label}，当前共 ${currentStickers.length} 张。`, "success");
+      }
+    } catch (error) {
+      window._ui!.setNotice(error instanceof Error ? error.message : "删除失败，请稍后重试。", "error");
+    } finally {
+      resourceRegenerating = false;
+      syncRegenerateButton();
+    }
+    return;
+  }
+
+  if (target.kind === "extra" && target.key) {
+    const key = target.key;
+    if (!currentExtras[key]) return;
+    const label = resourceLabel(target);
+    if (!window.confirm(`确定删除${label}？\n\n删除后会从当前表情包移除，可稍后点击空白卡片重新补齐。`)) return;
+
+    resourceRegenerating = true;
+    try {
+      delete currentExtras[key];
+      for (const suffix of ["prompt", "style", "sourceAssetId", "editReferenceAssetId", "versions", "error"]) {
+        delete currentExtras[`${key}_${suffix}`];
+      }
+      if (lastPackResult?.extras) delete lastPackResult.extras[key];
+      const role = EXTRA_ROLE_BY_KEY[key];
+      if (role && lastPackResult?.extraDetails) delete lastPackResult.extraDetails[role];
+
+      const includeField = extraIncludeField(key);
+      const hasRewardAsset = Boolean(currentExtras.rewardGuideAssetId || currentExtras.rewardThanksAssetId);
+      if (includeField && lastPackResult?.generation) {
+        lastPackResult.generation.include = {
+          ...(lastPackResult.generation.include ?? {}),
+          [includeField]: includeField === "reward" ? hasRewardAsset : false
+        };
+      }
+      if (includeField === "reward" && lastPackResult?.meta && !hasRewardAsset) {
+        lastPackResult.meta.rewardEnabled = false;
+        currentRewardEnabled = false;
+        wechatAiRewardEnabled.checked = false;
+        syncRewardFields();
+      }
+
+      window._preview!.renderExtraAssets(currentExtras, "success");
+      await finalizeAfterResourceDeletion();
+      window._ui!.setNotice(`已删除${label}，可点击空白卡片重新补齐。`, "success");
+    } catch (error) {
+      window._ui!.setNotice(error instanceof Error ? error.message : "删除失败，请稍后重试。", "error");
+    } finally {
+      resourceRegenerating = false;
+      syncRegenerateButton();
+    }
   }
 }
 
@@ -1646,10 +1894,6 @@ function renderEditChips(): void {
 
 function openEditDialog(target: ResourceTarget): void {
   if (resourceRegenerating) return;
-  if (!currentUploadId) {
-    window._ui!.setNotice("请先上传参考图，再编辑图片。", "error");
-    return;
-  }
   const assetId = resourceAssetId(target);
   if (!assetId) return;
 
@@ -1660,8 +1904,10 @@ function openEditDialog(target: ResourceTarget): void {
   editInstruction.value = "";
   editReference.value = "";
   editReference.dispatchEvent(new Event("change"));
+  // 导入包里通常没有「上传的原始参考图」；此时编辑仍以当前图为准，
+  // 只是不能再勾选原始参考图。
   editUseOriginalRef.checked = false;
-  editUseOriginalRef.disabled = false;
+  editUseOriginalRef.disabled = !currentUploadId;
   if (editDialogStatus) editDialogStatus.textContent = "";
   renderEditChips();
   editDialog.hidden = false;
@@ -1775,9 +2021,699 @@ function mountEditDialog(): void {
   });
 }
 
-function setGenerateButtonsBusy(busy: boolean): void {
-  window._ui!.setBusy(generateSubmit, busy, currentCreationMode === "import" ? "导入中..." : "生成中...");
-  window._ui!.setBusy(regenerateSubmit, busy, "重新生成中...");
+// ── 补齐：统一流程（选择图片来源 → 选择处理方式） ─────────────────────
+type FillSource = "existing" | "upload";
+type FillAction = "ai" | "direct";
+
+function getFillSource(): FillSource {
+  return fillSourceUpload?.checked ? "upload" : "existing";
+}
+
+function getFillAction(): FillAction {
+  return fillActionDirect?.checked ? "direct" : "ai";
+}
+
+/** 当前弹窗是否针对单张资源（空白扩展图 / 替换已有图片）。 */
+function fillTargetIsSingle(): boolean {
+  const target = fillDialogTarget;
+  if (!target) return false;
+  if (target.kind === "extra" && target.key) return true;
+  return Boolean(
+    target.kind === "sticker" &&
+      typeof target.index === "number" &&
+      target.index >= 0 &&
+      target.index < currentStickers.length
+  );
+}
+
+/** 上传成品图时按目标资源选择规范化规格。 */
+function fillUploadRole(): string {
+  const target = fillDialogTarget;
+  if (target?.kind === "extra" && target.key) {
+    return EXTRA_ROLE_BY_KEY[target.key] ?? "sticker";
+  }
+  return "sticker";
+}
+
+function fillReferenceCandidates(): Array<{ assetId: string; label: string }> {
+  const candidates: Array<{ assetId: string; label: string }> = [];
+  const seen = new Set<string>();
+  const add = (assetId: unknown, label: string) => {
+    if (typeof assetId !== "string" || !assetId || seen.has(assetId)) return;
+    seen.add(assetId);
+    candidates.push({ assetId, label });
+  };
+  if (currentUploadId) add(currentUploadId, "原包上传的参考图");
+  currentStickers.forEach((sticker, index) => {
+    add(sticker?.assetId, `第 ${index + 1} 张${sticker?.label ? `（${sticker.label}）` : ""}`);
+  });
+  return candidates;
+}
+
+/** 左侧预览：有图显示图片，无图显示虚线占位，避免出现浏览器破图图标。 */
+function showFillDialogPreview(url: string | null, placeholderText = "选择图片后显示预览"): void {
+  if (fillDialogImage) {
+    if (url) {
+      fillDialogImage.src = url;
+      fillDialogImage.hidden = false;
+    } else {
+      fillDialogImage.removeAttribute("src");
+      fillDialogImage.hidden = true;
+    }
+  }
+  if (fillDialogPlaceholder) fillDialogPlaceholder.hidden = Boolean(url);
+  if (fillDialogPlaceholderText && !url) fillDialogPlaceholderText.textContent = placeholderText;
+}
+
+function syncFillReferencePreview(): void {
+  const assetId = fillReferenceSelect?.value || fillReferenceAssetId || "";
+  fillReferenceAssetId = assetId || null;
+  showFillDialogPreview(assetId ? window._preview!.buildAssetUrl(assetId) : null, "选择参考图后显示预览");
+  if (fillDialogReferenceInfo) {
+    fillDialogReferenceInfo.textContent = assetId
+      ? "新图片会参考这张图的主体形象与画风。"
+      : "请选择一张已有图片作为参考。";
+  }
+}
+
+function clearFillUploadPreviewUrls(): void {
+  for (const url of fillUploadObjectUrls) URL.revokeObjectURL(url);
+  fillUploadObjectUrls = [];
+}
+
+function clearFillUploadSelection(): void {
+  clearFillUploadPreviewUrls();
+  if (fillUploadFile) fillUploadFile.value = "";
+}
+
+function selectedFillUploadFiles(): File[] {
+  return Array.from(fillUploadFile?.files ?? []);
+}
+
+function syncFillUploadFileName(): void {
+  if (!fillUploadFileName) return;
+  const files = selectedFillUploadFiles();
+  fillUploadFileName.textContent = !files.length
+    ? "点击选择图片"
+    : files.length === 1
+      ? files[0]!.name
+      : `已选择 ${files.length} 张图片`;
+}
+
+/** 上传模式下的本地预览；真正上传发生在提交时。 */
+function syncFillUploadPreview(): void {
+  syncFillUploadFileName();
+  if (getFillSource() !== "upload") {
+    clearFillUploadPreviewUrls();
+    syncFillReferencePreview();
+    return;
+  }
+
+  clearFillUploadPreviewUrls();
+  const files = selectedFillUploadFiles();
+  const action = getFillAction();
+  if (!files.length) {
+    showFillDialogPreview(null, action === "direct" ? "选择图片后显示预览" : "选择参考图后显示预览");
+    if (fillDialogReferenceInfo) {
+      fillDialogReferenceInfo.textContent = action === "direct"
+        ? "请选择要直接补进表情包的图片。"
+        : "请选择一张图片作为 AI 生成的参考图。";
+    }
+    return;
+  }
+
+  // 和已有图片模式共用同一个预览组件：只显示第 1 张，多选时用下方文案说明总数。
+  const url = URL.createObjectURL(files[0]!);
+  fillUploadObjectUrls.push(url);
+  showFillDialogPreview(url, "选择图片后显示预览");
+  if (fillDialogReferenceInfo) {
+    fillDialogReferenceInfo.textContent = action === "direct"
+      ? files.length > 1
+        ? `已选择 ${files.length} 张图片，预览显示第 1 张；提交后会按当前平台规格自动规范化。`
+        : "已选择 1 张图片，提交后会按当前平台规格自动规范化。"
+      : files.length > 1
+        ? `当前选择了 ${files.length} 张，AI 参考图只会使用第 1 张。`
+        : "会用这张上传图片作为参考，按提示词生成新图。";
+  }
+}
+
+function syncFillFlowFields(): void {
+  const source = getFillSource();
+  const isSingle = fillTargetIsSingle();
+  if (source === "existing" && getFillAction() === "direct" && fillActionAi) {
+    // 「直接使用原图」只适用于上传；切回已有图片时自动回到 AI 生成。
+    fillActionAi.checked = true;
+  }
+  const action = getFillAction();
+  const usesAiParams = action === "ai";
+
+  if (fillReferenceField) fillReferenceField.hidden = source !== "existing";
+  if (fillUploadFields) fillUploadFields.hidden = source !== "upload";
+  if (fillActionDirectOption) fillActionDirectOption.hidden = source !== "upload";
+  if (fillActionSelector) fillActionSelector.classList.toggle("fill-choice-grid-single", source !== "upload");
+  if (fillAiSettingsStep) fillAiSettingsStep.hidden = !usesAiParams;
+  if (fillCountField) fillCountField.hidden = isSingle || !usesAiParams;
+  if (fillPromptField) fillPromptField.hidden = !usesAiParams;
+  if (fillStyleField) {
+    fillStyleField.hidden = !usesAiParams;
+    fillStyleField.classList.toggle("field-full", isSingle);
+  }
+  if (fillUploadFile) {
+    // 直接使用原图可以一次补多张；作为 AI 参考图时一次只生成一张。
+    fillUploadFile.multiple = source === "upload" && action === "direct" && !isSingle;
+  }
+
+  if (fillSourceHint) {
+    fillSourceHint.textContent = source === "existing"
+      ? "从当前表情包里选一张图，保持角色与画风一致。"
+      : "从本地上传图片；既可直接补进包，也可作为 AI 参考图。";
+  }
+  if (fillActionHint) {
+    fillActionHint.textContent = action === "ai"
+      ? "以所选图片为参考，按提示词与风格生成新图。"
+      : "不经过 AI，上传图片规范化后直接补进表情包。";
+  }
+  if (fillUploadHint) {
+    const role = fillUploadRole();
+    const appendDirect = !isSingle && action === "direct";
+    fillUploadHint.textContent = action === "direct"
+      ? appendDirect
+        ? "支持 PNG、JPG、WebP、GIF；可一次选择多张，会统一规范为当前平台尺寸。"
+        : role === "sticker"
+          ? "选择 1 张图片；会按当前平台规格统一尺寸与格式后补进表情包。"
+          : "选择 1 张图片；会按该资源的固定尺寸裁切 / 补边后补进表情包。"
+      : "选择 1 张图片；上传后会作为 AI 参考图，不会原样写进包内。";
+  }
+
+  if (fillDialogSubmit) {
+    fillDialogSubmit.textContent = action === "direct" ? "上传补齐" : "开始补齐";
+  }
+  syncFillUploadPreview();
+}
+
+const FILL_EXTRA_DEFAULT_PROMPTS: Record<string, string> = {
+  coverAssetId: "为这套表情包生成封面图：主角居中、构图完整，适合正方形封面展示",
+  iconAssetId: "为这套表情包生成聊天面板图标：主体居中、简洁清晰，适合小尺寸缩略图",
+  bannerAssetId: "为这套表情包生成详情页横幅：突出主角形象与整体风格，横向构图",
+  rewardGuideAssetId: "为这套表情包生成赞赏引导图：画面友好，预留赞赏引导语的位置",
+  rewardThanksAssetId: "为这套表情包生成赞赏感谢图：表达感谢，画面温暖友好"
+};
+
+function openFillDialog(target?: ResourceTarget): void {
+  if (resourceRegenerating) return;
+  const isExtra = Boolean(target && target.kind === "extra" && target.key);
+  const isReplaceSticker = Boolean(
+    target &&
+      target.kind === "sticker" &&
+      typeof target.index === "number" &&
+      target.index >= 0 &&
+      target.index < currentStickers.length
+  );
+  const isSingle = isExtra || isReplaceSticker;
+  fillDialogTarget = isSingle ? target! : null;
+
+  if (!currentStickers.length) {
+    window._ui!.setNotice("请先导入或生成至少一张图片，再使用补齐。", "error");
+    return;
+  }
+  if (!isSingle && currentStickers.length >= MAX_STICKER_COUNT) {
+    window._ui!.setNotice(`当前平台最多 ${MAX_STICKER_COUNT} 张，已达到上限。`, "info");
+    return;
+  }
+
+  const candidates = fillReferenceCandidates();
+  if (!candidates.length) {
+    window._ui!.setNotice("找不到可用的参考图片，请先导入一张图片。", "error");
+    return;
+  }
+
+  if (fillReferenceSelect) {
+    fillReferenceSelect.innerHTML = "";
+    for (const candidate of candidates) {
+      const option = document.createElement("option");
+      option.value = candidate.assetId;
+      option.textContent = candidate.label;
+      fillReferenceSelect.appendChild(option);
+    }
+    const preferred = fillReferenceAssetId && candidates.some((c) => c.assetId === fillReferenceAssetId)
+      ? fillReferenceAssetId
+      : candidates[0].assetId;
+    fillReferenceSelect.value = preferred;
+  }
+
+  const remaining = MAX_STICKER_COUNT - currentStickers.length;
+  if (fillCount) {
+    fillCount.min = "1";
+    fillCount.max = String(isSingle ? 1 : remaining);
+    const suggested = isSingle
+      ? 1
+      : Math.max(1, Math.min(DEFAULT_STICKER_COUNT - currentStickers.length, remaining));
+    fillCount.value = String(suggested);
+  }
+  if (fillCountHint) {
+    fillCountHint.textContent = isReplaceSticker
+      ? "重新补齐会替换这张图片的当前版本，并保留历史版本。"
+      : isExtra
+        ? "空白资源一次补齐一张。"
+        : `当前已有 ${currentStickers.length} 张，最多还能补 ${remaining} 张。`;
+  }
+
+  if (fillStyle) {
+    const styles = availableStyles.length ? availableStyles : DEFAULT_STYLE_OPTIONS;
+    fillStyle.innerHTML = "";
+    const defaultOption = document.createElement("option");
+    defaultOption.value = "";
+    defaultOption.textContent = "不指定（不使用风格）";
+    fillStyle.appendChild(defaultOption);
+    for (const style of styles) {
+      const option = document.createElement("option");
+      option.value = style;
+      option.textContent = style;
+      fillStyle.appendChild(option);
+    }
+    // 替换已有图片时优先预选这张图原来的风格；否则用包里记录的风格。
+    // 都没有就保持「不指定」，不替用户挑风格。
+    const targetStyle = isExtra
+      ? currentExtras[`${target!.key}_style`]
+      : isReplaceSticker
+        ? currentStickers[target!.index!]?.style
+        : null;
+    const storedStyles = Array.isArray(lastPackResult?.generation?.styles)
+      ? lastPackResult.generation.styles.filter((style: unknown): style is string => typeof style === "string" && Boolean(style))
+      : [];
+    const preferredStyle = typeof targetStyle === "string" && styles.includes(targetStyle)
+      ? targetStyle
+      : storedStyles.find((style: string) => styles.includes(style));
+    fillStyle.value = preferredStyle ?? "";
+  }
+
+  if (fillDialogTitle) {
+    fillDialogTitle.textContent = isExtra
+      ? `补齐${resourceLabel(target!)}`
+      : isReplaceSticker
+        ? `重新补齐${resourceLabel(target!)}`
+        : "补齐表情";
+  }
+  if (fillDialogDescription) {
+    fillDialogDescription.textContent = isExtra
+      ? "只补齐这一张空白资源，不影响其它素材；可以 AI 生成，也可以直接上传成品图。"
+      : isReplaceSticker
+        ? "替换这一张表情的当前版本，并保留历史记录；可以 AI 生成，也可以直接上传成品图。"
+        : "用 AI 生成或上传成品图，把缺少的表情补进当前表情包，已有图片不会被覆盖。";
+  }
+  if (fillPrompt) {
+    const stored = lastPackResult?.generation?.promptCustom || lastPackResult?.generation?.prompt || getEffectivePrompt();
+    const fallback = isExtra
+      ? FILL_EXTRA_DEFAULT_PROMPTS[target!.key ?? ""] ?? "根据参考图中的主角与画风生成这张资源"
+      : "";
+    if (isExtra) {
+      // 扩展资源在整体提示词后追加该资源的构图要求，保证主体与整套一致。
+      fillPrompt.value = typeof stored === "string" && stored.trim()
+        ? `${stored.trim()}；${fallback}`
+        : fallback;
+    } else {
+      fillPrompt.value = typeof stored === "string" && stored.trim() ? stored.trim() : "";
+    }
+  }
+  if (fillDialogStatus) fillDialogStatus.textContent = "";
+  clearFillUploadSelection();
+  if (fillSourceExisting) fillSourceExisting.checked = true;
+  if (fillActionAi) fillActionAi.checked = true;
+  syncFillFlowFields();
+  if (fillDialog) fillDialog.hidden = false;
+  fillDialogSubmit!.disabled = false;
+  if (fillDialogCancel) fillDialogCancel.disabled = false;
+  fillPrompt?.focus();
+}
+
+function closeFillDialog(): void {
+  if (fillDialog) fillDialog.hidden = true;
+  if (fillDialogStatus) fillDialogStatus.textContent = "";
+  clearFillUploadSelection();
+  fillDialogTarget = null;
+}
+
+async function uploadFillFile(file: File, role: string): Promise<string> {
+  const form = new FormData();
+  form.append("file", file, file.name);
+  const params = new URLSearchParams({ presetId: currentPlatform, role });
+  const json = await requestJson(`/api/uploads?${params.toString()}`, {
+    method: "POST",
+    body: form
+  });
+  if (!json?.uploadId) throw new Error("图片上传失败，请重试。");
+  return json.uploadId as string;
+}
+
+/** 补齐成功后统一写回包信息、重建 ZIP 与持久化。 */
+async function finalizeFillResult(options: {
+  singleTarget: ResourceTarget | null;
+  extraTarget: ResourceTarget | null;
+  appendPrompt?: string;
+  appendStyle?: string;
+}): Promise<void> {
+  const { singleTarget, extraTarget, appendPrompt } = options;
+  if (!lastPackResult) return;
+
+  if (singleTarget) {
+    // 只补一张资源：保留整套表情原本的提示词 / 参考图 / 风格 / 数量，
+    // 只更新该资源是否已包含。补齐时选的参考图只服务这一次生成，
+    // 不会升级成整包的参考图。
+    const includeField = extraTarget && extraTarget.key ? extraIncludeField(extraTarget.key) : null;
+    const include = { ...(lastPackResult.generation?.include ?? {}) };
+    if (includeField) include[includeField] = true;
+    lastPackResult.generation = {
+      ...(lastPackResult.generation ?? {}),
+      include
+    };
+    lastPackResult.meta = {
+      ...(lastPackResult.meta ?? {}),
+      ...(includeField === "reward" ? { rewardEnabled: true } : {})
+    };
+    if (includeField === "reward") {
+      currentRewardEnabled = true;
+      wechatAiRewardEnabled.checked = true;
+      syncRewardFields();
+    }
+  } else if (typeof appendPrompt === "string") {
+    // AI 补齐会更新整套的提示词 / 风格；直接上传成品图只更新数量。
+    lastPackResult.generation = {
+      ...(lastPackResult.generation ?? {}),
+      prompt: appendPrompt,
+      promptCustom: appendPrompt,
+      promptMode: "override",
+      ...(options.appendStyle ? { styles: [options.appendStyle] } : {}),
+      stickerCount: currentStickers.length
+    };
+    lastPackResult.meta = {
+      ...(lastPackResult.meta ?? {}),
+      count: currentStickers.length,
+      ...(options.appendStyle ? { styles: [options.appendStyle] } : {})
+    };
+  } else {
+    lastPackResult.generation = {
+      ...(lastPackResult.generation ?? {}),
+      stickerCount: currentStickers.length
+    };
+    lastPackResult.meta = {
+      ...(lastPackResult.meta ?? {}),
+      count: currentStickers.length
+    };
+  }
+
+  const previousPackId = lastPackResult.packId;
+  await rebuildPackFromState();
+  persistLastPackPayload(lastPackResult);
+  addToPackHistory(lastPackResult, previousPackId);
+  window._preview!.renderExportInfo(lastPackResult);
+  window._preview!.renderMetadataPreview(lastPackResult);
+}
+
+async function submitDirectUpload(
+  singleTarget: ResourceTarget | null,
+  extraTarget: ResourceTarget | null,
+  replaceStickerTarget: ResourceTarget | null,
+  files: File[]
+): Promise<void> {
+  const isSingle = Boolean(singleTarget);
+  const remaining = MAX_STICKER_COUNT - currentStickers.length;
+  const label = singleTarget ? resourceLabel(singleTarget) : "表情";
+  if (files.length < 1) {
+    if (fillDialogStatus) fillDialogStatus.textContent = "请先选择要上传的图片。";
+    fillUploadFile?.focus();
+    return;
+  }
+  if (isSingle && files.length !== 1) {
+    if (fillDialogStatus) fillDialogStatus.textContent = "补齐单张资源时只能上传 1 张图片。";
+    return;
+  }
+  if (!isSingle && files.length > remaining) {
+    if (fillDialogStatus) fillDialogStatus.textContent = `最多还能补 ${remaining} 张，请减少上传数量。`;
+    return;
+  }
+
+  const role = fillUploadRole();
+  resourceRegenerating = true;
+  setGenerateButtonsBusy(true, "fill");
+  fillDialogSubmit!.disabled = true;
+  if (fillDialogCancel) fillDialogCancel.disabled = true;
+  window._ui!.setStatus(generateState, `上传补齐中 (0/${files.length})`, "loading");
+  window._ui!.updateGenerationProgress(0, files.length);
+
+  let uploaded = 0;
+  let failure: string | null = null;
+  try {
+    for (let i = 0; i < files.length; i++) {
+      if (fillDialogStatus) {
+        fillDialogStatus.textContent = isSingle
+          ? `正在上传${label}…`
+          : `正在上传第 ${i + 1}/${files.length} 张…`;
+      }
+      const assetId = await uploadFillFile(files[i]!, role);
+      const target: ResourceTarget = singleTarget ?? { kind: "sticker", index: currentStickers.length };
+      applyResourceResult(
+        target,
+        { assetId, url: `/api/assets/${assetId}` },
+        { kind: "upload" }
+      );
+      uploaded += 1;
+      window._ui!.setStatus(
+        generateState,
+        isSingle ? `上传补齐${label}中 (${uploaded}/1)` : `上传补齐中 (${uploaded}/${files.length})`,
+        "loading"
+      );
+      window._ui!.updateGenerationProgress(uploaded, files.length);
+    }
+  } catch (error) {
+    failure = error instanceof Error ? error.message : "图片上传失败，请稍后重试。";
+  } finally {
+    resourceRegenerating = false;
+    fillDialogSubmit!.disabled = false;
+    if (fillDialogCancel) fillDialogCancel.disabled = false;
+    window._ui!.resetGenerationProgress();
+    setGenerateButtonsBusy(false, "fill");
+  }
+
+  if (uploaded > 0) {
+    await finalizeFillResult({ singleTarget, extraTarget });
+  }
+
+  if (failure) {
+    if (fillDialogStatus) {
+      fillDialogStatus.textContent = uploaded > 0
+        ? `已上传补齐 ${uploaded} 张，后续上传失败：${failure}`
+        : `上传补齐失败：${failure}`;
+    }
+    window._ui!.setStatus(generateState, uploaded > 0 ? "部分补齐" : "补齐失败", "error");
+    window._ui!.setNotice(
+      uploaded > 0 ? `已上传补齐 ${uploaded} 张，还有图片失败，可再次补齐。` : failure,
+      "error"
+    );
+    return;
+  }
+
+  closeFillDialog();
+  window._ui!.setStatus(generateState, "补齐完成", "success");
+  window._ui!.setNotice(
+    replaceStickerTarget
+      ? `${label}已重新补齐，可预览后下载。`
+      : singleTarget
+        ? `${label}已补齐，可预览后下载。`
+        : `已上传补齐 ${uploaded} 张，当前共 ${currentStickers.length} 张，可预览后下载。`,
+    "success"
+  );
+}
+
+async function submitAiFill(
+  singleTarget: ResourceTarget | null,
+  extraTarget: ResourceTarget | null,
+  replaceStickerTarget: ResourceTarget | null
+): Promise<void> {
+  const usingUploadedReference = getFillSource() === "upload";
+  const files = selectedFillUploadFiles();
+  const remaining = MAX_STICKER_COUNT - currentStickers.length;
+  const count = singleTarget ? 1 : Number(fillCount?.value || 0);
+  const prompt = fillPrompt?.value.trim() ?? "";
+  // 风格可选：留空时显式传空数组，表示不写入任何风格描述。
+  const style = fillStyle?.value.trim() ?? "";
+  let referenceId = usingUploadedReference
+    ? ""
+    : fillReferenceSelect?.value || fillReferenceAssetId || getAiReferenceAssetId() || "";
+
+  if (usingUploadedReference) {
+    if (!files.length) {
+      if (fillDialogStatus) fillDialogStatus.textContent = "请先选择一张图片作为参考图。";
+      fillUploadFile?.focus();
+      return;
+    }
+  } else if (!referenceId) {
+    if (fillDialogStatus) fillDialogStatus.textContent = "请选择一张已有图片作为参考。";
+    return;
+  }
+  if (!singleTarget && (!Number.isInteger(count) || count < 1 || count > remaining)) {
+    if (fillDialogStatus) fillDialogStatus.textContent = `补齐张数需在 1-${remaining} 张之间。`;
+    fillCount?.focus();
+    return;
+  }
+  if (!prompt) {
+    if (fillDialogStatus) {
+      fillDialogStatus.textContent = singleTarget ? "请描述这张图要生成的内容。" : "请描述要补齐的表情内容。";
+    }
+    fillPrompt?.focus();
+    return;
+  }
+  const label = singleTarget ? resourceLabel(singleTarget) : "表情";
+  const totalTarget = singleTarget ? currentStickers.length : currentStickers.length + count;
+  resourceRegenerating = true;
+  setGenerateButtonsBusy(true, "fill");
+  fillDialogSubmit!.disabled = true;
+  if (fillDialogCancel) fillDialogCancel.disabled = true;
+  window._ui!.setStatus(generateState, singleTarget ? `补齐${label}中...` : `补齐中 (0/${count})`, "loading");
+  window._ui!.updateGenerationProgress(0, count);
+
+  let generated = 0;
+  let failure: string | null = null;
+  // 未选风格时，后端会返回它实际采用的默认风格，用于写回包信息。
+  let usedStyle = style;
+  try {
+    if (usingUploadedReference) {
+      if (fillDialogStatus) fillDialogStatus.textContent = "正在上传参考图…";
+      referenceId = await uploadFillFile(files[0]!, "reference");
+    }
+    for (let i = 0; i < count; i++) {
+      if (fillDialogStatus) {
+        fillDialogStatus.textContent = singleTarget
+          ? `正在生成${label}…`
+          : `正在生成第 ${i + 1}/${count} 张…`;
+      }
+      const target: ResourceTarget = singleTarget ?? { kind: "sticker", index: currentStickers.length };
+      const res = await requestJson("/api/generate/resource", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          presetId: currentPlatform,
+          referenceAssetId: referenceId,
+          prompt,
+          promptPreset: currentPresetId || undefined,
+          provider: wechatAiProvider ? wechatAiProvider.value : undefined,
+          styles: style ? [style] : [],
+          stickerCount: totalTarget,
+          metadata: getMetadataPayload(),
+          target,
+          mode: "regenerate"
+        })
+      });
+      applyResourceResult(target, res, { kind: "fill" });
+      if (typeof res.style === "string" && res.style) usedStyle = res.style;
+      generated += 1;
+      window._ui!.setStatus(
+        generateState,
+        singleTarget ? `补齐${label}中 (${generated}/1)` : `补齐中 (${generated}/${count})`,
+        "loading"
+      );
+      window._ui!.updateGenerationProgress(generated, count);
+    }
+  } catch (error) {
+    failure = error instanceof Error ? error.message : "生成失败，请稍后重试。";
+  } finally {
+    resourceRegenerating = false;
+    fillDialogSubmit!.disabled = false;
+    if (fillDialogCancel) fillDialogCancel.disabled = false;
+    window._ui!.resetGenerationProgress();
+    setGenerateButtonsBusy(false, "fill");
+  }
+
+  if (generated > 0) {
+    await finalizeFillResult({
+      singleTarget,
+      extraTarget,
+      ...(singleTarget ? {} : { appendPrompt: prompt, appendStyle: usedStyle })
+    });
+  }
+
+  if (failure) {
+    if (fillDialogStatus) {
+      fillDialogStatus.textContent = generated > 0
+        ? `已补齐 ${generated} 张，后续生成失败：${failure}`
+        : `${singleTarget ? label : "表情"}补齐失败：${failure}`;
+    }
+    window._ui!.setStatus(generateState, generated > 0 ? "部分补齐" : "补齐失败", "error");
+    window._ui!.setNotice(
+      generated > 0 ? `已补齐 ${generated} 张，还有图片生成失败，可再次补齐。` : failure,
+      "error"
+    );
+    return;
+  }
+
+  closeFillDialog();
+  window._ui!.setStatus(generateState, "补齐完成", "success");
+  window._ui!.setNotice(
+    replaceStickerTarget
+      ? `${label}已重新补齐，可预览后下载。`
+      : singleTarget
+        ? `${label}已补齐，可预览后下载。`
+        : `已补齐 ${generated} 张，当前共 ${currentStickers.length} 张，可预览后下载。`,
+    "success"
+  );
+}
+
+async function submitFillDialog(): Promise<void> {
+  if (resourceRegenerating) return;
+  const extraTarget =
+    fillDialogTarget && fillDialogTarget.kind === "extra" && fillDialogTarget.key
+      ? fillDialogTarget
+      : null;
+  const replaceStickerTarget =
+    fillDialogTarget && fillDialogTarget.kind === "sticker" && typeof fillDialogTarget.index === "number"
+      ? fillDialogTarget
+      : null;
+  const singleTarget = extraTarget ?? replaceStickerTarget;
+
+  if (getFillSource() === "upload" && getFillAction() === "direct") {
+    await submitDirectUpload(singleTarget, extraTarget, replaceStickerTarget, selectedFillUploadFiles());
+    return;
+  }
+  await submitAiFill(singleTarget, extraTarget, replaceStickerTarget);
+}
+
+function mountFillDialog(): void {
+  fillDialogBackdrop?.addEventListener("click", closeFillDialog);
+  fillDialogClose?.addEventListener("click", closeFillDialog);
+  fillDialogCancel?.addEventListener("click", closeFillDialog);
+  fillDialogSubmit?.addEventListener("click", () => void submitFillDialog());
+  fillSourceExisting?.addEventListener("change", syncFillFlowFields);
+  fillSourceUpload?.addEventListener("change", syncFillFlowFields);
+  fillActionAi?.addEventListener("change", syncFillFlowFields);
+  fillActionDirect?.addEventListener("change", syncFillFlowFields);
+  fillUploadFile?.addEventListener("change", syncFillUploadPreview);
+  fillReferenceSelect?.addEventListener("change", syncFillReferencePreview);
+  fillDialogImage?.addEventListener("error", () => {
+    showFillDialogPreview(null, "图片加载失败，请重新选择");
+  });
+  fillPrompt?.addEventListener("keydown", (event) => {
+    if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) {
+      event.preventDefault();
+      void submitFillDialog();
+    }
+  });
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape" && fillDialog && !fillDialog.hidden) closeFillDialog();
+  });
+}
+
+function setGenerateButtonsBusy(busy: boolean, context: "default" | "fill" = "default"): void {
+  const isFill = context === "fill";
+  window._ui!.setBusy(
+    generateSubmit,
+    busy,
+    isFill ? "补齐中..." : currentCreationMode === "import" ? "导入中..." : "生成中..."
+  );
+  window._ui!.setBusy(
+    regenerateSubmit,
+    busy,
+    isFill ? "补齐中..." : "重新生成中..."
+  );
+  if (fillStickersBtn) fillStickersBtn.disabled = busy || !canFill();
   if (wechatAiProvider) wechatAiProvider.disabled = busy;
   if (cancelGenerate) {
     cancelGenerate.hidden = busy && currentCreationMode === "ai" ? false : true;
@@ -1795,6 +2731,9 @@ function syncCreationMode(): void {
   if (aiProviderField) aiProviderField.hidden = currentCreationMode !== "ai";
   window._ui!.setButtonLabel(generateSubmit, currentCreationMode === "import" ? "导入并打包" : "开始生成");
   regenerateSubmit.hidden = currentCreationMode !== "ai";
+  window._ui!.setButtonLabel(regenerateSubmit, "重新生成");
+  const stickyRegenerate = byId("stickyRegenerate");
+  if (stickyRegenerate) stickyRegenerate.hidden = currentCreationMode === "import";
   if (cancelGenerate) cancelGenerate.hidden = true;
   clearGenerateValidation();
   syncPlatformUI();
@@ -1803,7 +2742,14 @@ function syncCreationMode(): void {
     window._ui!.setNotice("请选择已有表情图，系统会自动标准化并打包。", "info");
   } else {
     window._ui!.setStatus(generateState, "等待生成", "idle");
-    window._ui!.setNotice(currentUploadId ? "参考图已就绪，可继续生成表情包。" : "先上传一张主体清晰的图片。", "info");
+    window._ui!.setNotice(
+      currentUploadId
+        ? "参考图已就绪，可继续生成表情包。"
+        : currentStickers.length
+          ? "可继续生成，或导入后使用「补齐」补上缺失的表情。"
+          : "可直接填写提示词生成，也可以先上传或让 AI 生成一张参考图。",
+      "info"
+    );
   }
   syncRegenerateButton();
 }
@@ -2034,14 +2980,35 @@ function syncStateFromResult(json: any, fallback?: { creationMode?: string }): v
   if (json?.meta?.version && !wechatAiVersion.value.trim()) wechatAiVersion.value = json.meta.version;
   if (json?.meta?.copyright && !wechatAiCopyright.value.trim()) wechatAiCopyright.value = json.meta.copyright;
 
-  // 包内带着参考图时把它接上，单张重新生成才有素材可用
+  // 旧版本把「补齐时临时选的参考图」写成了整包参考图（referenceMode=fill）。
+  // 这会让第 1 张补齐图变成整包参考图；读到这种包时清掉，避免继续误用。
+  const legacyFillReference = (json?.meta?.referenceMode ?? json?.generation?.referenceMode) === "fill";
+  if (legacyFillReference) {
+    if (json?.generation) {
+      json.generation.referenceAssetId = null;
+      json.generation.referenceMode = "none";
+    }
+    if (json?.meta) {
+      json.meta.referenceAssetId = null;
+      json.meta.referenceMode = "none";
+    }
+    currentUploadId = null;
+    originalPreview.removeAttribute("src");
+    syncOriginalPreviewSlot();
+  }
+
+  // 包内带着真实参考图时把它接上，单张重新生成才有素材可用。
+  // 补齐时选的参考图只服务单次生成，不会成为整包参考图。
   const referenceAssetId = json?.meta?.referenceAssetId;
-  if (!currentUploadId && typeof referenceAssetId === "string" && referenceAssetId) {
+  if (!legacyFillReference && !currentUploadId && typeof referenceAssetId === "string" && referenceAssetId) {
     currentUploadId = referenceAssetId;
     originalPreview.src = window._preview!.buildAssetUrl(referenceAssetId);
     syncOriginalPreviewSlot();
     window._ui!.setStatus(uploadState, "已还原参考图", "success");
   }
+
+  // 导入的包 / 无参考图的包也可能已经有成品图片：启用「补齐」按钮。
+  syncRegenerateButton();
 }
 
 function renderCompletedPackResult(json: any, successMessage: string, feedbackMessage: string): void {
@@ -2186,11 +3153,9 @@ async function restorePackZip(file: File): Promise<void> {
 }
 
 async function generatePlatformPack(): Promise<void> {
-  if (!currentUploadId) {
-    window._ui!.setNotice("请先上传参考图。", "error");
-    window._ui!.setStatus(generateState, "缺少参考图", "error");
-    return;
-  }
+  // 参考图是可选的：没有上传参考图时走纯文生图；导入过成品时也可以
+  // 用包内第一张图作为主体依据（由 getAiReferenceAssetId 兜底）。
+  const referenceAssetId = getAiReferenceAssetId();
   if (!validateGenerateInputs()) { syncRegenerateButton(); return; }
 
   const prompt = getEffectivePrompt();
@@ -2224,7 +3189,7 @@ async function generatePlatformPack(): Promise<void> {
 
   try {
     const payload = {
-      referenceAssetId: currentUploadId,
+      referenceAssetId: referenceAssetId ?? undefined,
       presetId: currentPlatform,
       prompt,
       promptPreset: currentPresetId,
@@ -2700,8 +3665,11 @@ function scrollToStep(stepIndex: number): void {
 function showStickyActionBar(stateText: string): void {
   const bar = byId("stickyActionBar");
   const statusEl = byId("stickyStatus");
+  const stickyRegenerate = byId("stickyRegenerate");
   if (!bar) return;
   if (statusEl) statusEl.textContent = stateText || "";
+  // 导入模式的一键操作是下载 / 重置；补齐入口在「表情主图」资源组内。
+  if (stickyRegenerate) stickyRegenerate.hidden = currentCreationMode === "import";
   bar.hidden = false;
   document.querySelector(".page")?.classList.add("has-sticky-bar");
 }
@@ -2978,10 +3946,12 @@ function bindEvents(): void {
     if (currentCreationMode !== "ai") return;
     await generatePlatformPack();
   });
+  fillStickersBtn?.addEventListener("click", () => openFillDialog());
   resetSubmit.addEventListener("click", () => resetAllState());
   // 阻止冒泡：清空按钮位于 #historyToggle 内，避免同时触发折叠/展开
   clearHistoryBtn?.addEventListener("click", (event) => { event.stopPropagation(); void clearPackHistory(); });
   mountEditDialog();
+  mountFillDialog();
   mountVersionDialog();
 
   document.addEventListener("click", (e) => {
@@ -2995,6 +3965,23 @@ function bindEvents(): void {
     e.preventDefault();
     const target = targetFromCard(editBtn);
     if (target) openEditDialog(target);
+  });
+  // 卡片上的「删除」：从当前包里移除不满意的图片，稍后可重新补齐
+  document.addEventListener("click", (e) => {
+    const deleteBtn = (e.target as HTMLElement | null)?.closest?.('[data-action="delete-resource"]') as HTMLElement | null;
+    if (!deleteBtn) return;
+    e.preventDefault();
+    e.stopPropagation();
+    const target = targetFromCard(deleteBtn);
+    if (target) void deleteResource(target);
+  });
+  // 卡片上的「重新补齐」：对补齐过的图片重新生成或上传替换，可换参考图 / 提示词 / 风格
+  document.addEventListener("click", (e) => {
+    const refillBtn = (e.target as HTMLElement | null)?.closest?.('[data-action="refill-resource"]') as HTMLElement | null;
+    if (!refillBtn) return;
+    e.preventDefault();
+    const target = targetFromCard(refillBtn);
+    if (target) openFillDialog(target);
   });
   // 卡片上的「版本 N」：查看该图的历史版本，可恢复某一版
   document.addEventListener("click", (e) => {
@@ -3015,7 +4002,12 @@ function bindEvents(): void {
     if (raw) {
       try { target = JSON.parse(raw); } catch { target = null; }
     }
-    if (target) void regenerateResource(target);
+    if (target?.kind === "extra") {
+      // 空白 / 失败的扩展资源：打开补齐弹窗，让用户确认内容、参考图与风格。
+      openFillDialog(target as ResourceTarget);
+      return;
+    }
+    if (target) void regenerateResource(target as ResourceTarget);
     else retryFromFailedPreview();
   });
   document.addEventListener("keydown", (e) => {

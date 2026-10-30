@@ -23,7 +23,8 @@ export type ResourceTarget =
   | { kind: "extra"; key: ExtraAssetKey };
 
 export type ResourceGenerateRequest = {
-  referenceAssetId: string;
+  /** 可选：没有原包参考图时，用 sourceAssetId 或纯文字生成。 */
+  referenceAssetId?: string;
   /** 编辑模式可为空：主体以 sourceAssetId 图为准。 */
   prompt?: string;
   /** 选中的提示词预设 id（可空）；用于复用预设自带的情绪/动作参数。 */
@@ -127,34 +128,39 @@ export async function generateSingleResource(
   if (!preset) throw createHttpError(400, `unknown presetId: ${presetId}`);
 
   const promptConfig = loadPromptConfig();
-  const styles = (req.styles?.filter(Boolean) ?? []).length
-    ? (req.styles!.filter(Boolean) as string[])
-    : [resolveStyleName(promptConfig, null)];
+  // 显式传 styles: [] 表示「不使用任何风格」；没传 styles 才回退到默认风格。
+  const styles = req.styles === undefined
+    ? [resolveStyleName(promptConfig, null)]
+    : (req.styles.filter(Boolean) as string[]);
+  const omitStyle = styles.length === 0;
   const providerId = req.provider ?? promptConfig.ai?.defaultProvider ?? "mock";
   const provider = getAiProvider(providerId);
   const client = buildMinimalClient(provider);
-
-  const reference = assetStore.find(req.referenceAssetId);
-  if (!reference) throw createHttpError(404, "reference asset not found");
 
   const referenceMode = promptConfig.ai?.referenceMode ?? "base64";
   const baseUrl = promptConfig.ai?.publicBaseUrl || "";
   const assetUrl = (id: string) => (baseUrl ? `${baseUrl.replace(/\/+$/, "")}/api/assets/${id}` : undefined);
 
-  let referenceAssetId = req.referenceAssetId;
-  let referenceBase64 = fs.readFileSync(reference.filePath).toString("base64");
-  let referenceUrl = assetUrl(referenceAssetId);
-  let referenceMime = mimeFromFilename(reference.filename);
+  let referenceAssetId: string | undefined;
+  let referenceBase64: string | undefined;
+  let referenceUrl: string | undefined;
+  let referenceMime = "image/png";
 
-  // 编辑模式：把「源资源」当作参考图。
+  // 编辑模式：把「源资源」当作参考图；重生成没有原包参考图时，
+  // 也可以用 sourceAssetId（例如导入成品里的某一张）兜底。
   const isEdit = req.mode === "edit" && Boolean(req.sourceAssetId);
-  if (isEdit) {
-    const source = assetStore.find(req.sourceAssetId!);
-    if (!source) throw createHttpError(404, "source asset not found");
-    referenceAssetId = req.sourceAssetId!;
-    referenceBase64 = fs.readFileSync(source.filePath).toString("base64");
-    referenceUrl = assetUrl(referenceAssetId);
-    referenceMime = mimeFromFilename(source.filename);
+  const primaryReferenceId = isEdit
+    ? req.sourceAssetId
+    : (req.referenceAssetId ?? req.sourceAssetId);
+  if (primaryReferenceId) {
+    const primary = assetStore.find(primaryReferenceId);
+    if (!primary) {
+      throw createHttpError(404, isEdit ? "source asset not found" : "reference asset not found");
+    }
+    referenceAssetId = primaryReferenceId;
+    referenceBase64 = fs.readFileSync(primary.filePath).toString("base64");
+    referenceUrl = assetUrl(primaryReferenceId);
+    referenceMime = mimeFromFilename(primary.filename);
   }
 
   // 附加参考图（可选）：编辑时除「待修改的这张」外，再给模型一张参考图，
@@ -200,8 +206,8 @@ export async function generateSingleResource(
     const emotions = resolveEmotions(promptConfig, req.promptPreset);
     if (!emotions.length) throw createHttpError(500, "emotions 未配置");
     const emotion = emotions[index % emotions.length];
-    const style = styles[index % styles.length];
-    compiledPrompt = buildStickerPrompt(promptConfig, { prompt: basePrompt, emotion, style });
+    const style = styles.length ? styles[index % styles.length] : undefined;
+    compiledPrompt = buildStickerPrompt(promptConfig, { prompt: basePrompt, emotion, style, omitStyle });
     const { width, height } = resolveTargetSize(preset);
     convert = (buf) => convertToPlatformFormat(buf, presetId, width, height);
     validatePreset = presetId;
@@ -217,7 +223,8 @@ export async function generateSingleResource(
     compiledPrompt = buildExtraPrompt(promptConfig, {
       prompt: basePrompt,
       requirement: promptConfig.extraPrompts[spec.promptKey],
-      style
+      style,
+      omitStyle
     });
     convert = spec.convert;
     validatePreset = spec.validatePreset;

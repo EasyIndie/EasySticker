@@ -11,7 +11,7 @@
     <title>EasySticker</title>
     <meta name="theme-color" id="themeMeta" content="#07c160" data-dark="#111827" />
     <script src="/js/theme.js?v=2ce5d795"></script>
-    <link rel="stylesheet" href="/styles.css?v=d29150bc" />
+    <link rel="stylesheet" href="/styles.css?v=84ffe3f9" />
   </head>
   <body>
     <a href="#mainContent" class="skip-link">跳到主要内容</a>
@@ -167,8 +167,8 @@
           </div>
           <form id="uploadForm" class="step-body">
             <label class="upload-panel" for="file">
-              <span class="upload-title"><span class="required-mark">*</span>选择图片</span>
-              <span class="upload-text">点击选择一张参考图，用于生成整套表情包。</span>
+              <span class="upload-title">选择图片<span class="optional-mark">可选</span></span>
+              <span class="upload-text">有角色图时上传一张，用于保持整套表情一致；没有图片也可以直接按提示词生成。</span>
               <input
                 id="file"
                 name="file"
@@ -177,7 +177,7 @@
                 aria-describedby="uploadHint"
                 required
               />
-              <span id="uploadHint" class="field-hint">建议上传主体清晰、边缘完整的 PNG 或 JPG，上传后仅作为当前生成流程的参考图。</span>
+              <span id="uploadHint" class="field-hint">建议上传主体清晰、边缘完整的 PNG 或 JPG。不上传时走纯文生图；也可以先在下方用 AI 生成一张参考图。</span>
             </label>
           </form>
           <div class="reference-generator">
@@ -311,6 +311,7 @@
             </section>
           </form>
           <div id="importState" class="status-chip" aria-live="polite">等待导入</div>
+          <p class="field-hint">导入完成后，可在预览区「表情主图」标题旁点击「补齐」，用 AI 生成或上传成品图补上缺少的表情。</p>
         </article>
 
         <article class="card step-card" data-step-index="2">
@@ -459,7 +460,7 @@
           <div class="step-index">04</div>
           <div class="step-head">
             <h2>生成表情</h2>
-            <p class="muted">基于上传图和提示词自动生成并打包。</p>
+            <p class="muted">参考图可选：有图则基于图生成，没图则按提示词生成。</p>
           </div>
           <div id="generateErrorSummary" class="error-summary" role="alert" aria-live="assertive" tabindex="-1" hidden>
             <div class="error-summary-title">请先处理以下问题</div>
@@ -495,8 +496,16 @@
 
             <!-- 组 1：表情主图 -->
             <div class="preview-section" id="sectionPrimary" hidden>
-              <div class="section-title">表情主图</div>
-              <p class="muted section-desc">微信表情平台的主表情图，尺寸随所选平台自动规范。</p>
+              <div class="preview-section-head">
+                <div>
+                  <div class="section-title">表情主图</div>
+                  <p class="muted section-desc">微信表情平台的主表情图，尺寸随所选平台自动规范。</p>
+                </div>
+                <button id="fillStickersBtn" type="button" class="preview-section-action preview-section-action-primary" hidden>
+                  <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                  <span>补齐</span>
+                </button>
+              </div>
               <div id="wechatAiPreview" class="grid"></div>
             </div>
 
@@ -623,6 +632,130 @@
       </div>
     </div>
 
+    <!-- 补齐弹窗：AI 生成或上传成品图，把缺少的图片补进当前表情包 -->
+    <div id="fillDialog" class="edit-dialog" hidden aria-modal="true" role="dialog" aria-labelledby="fillDialogTitle">
+      <div class="edit-dialog-backdrop" id="fillDialogBackdrop"></div>
+      <div class="edit-dialog-panel fill-dialog-panel">
+        <div class="edit-dialog-head">
+          <div>
+            <h2 id="fillDialogTitle">补齐表情</h2>
+            <p class="muted" id="fillDialogDescription" style="margin:4px 0 0;font-size:12px;">先选择图片来源，再决定用 AI 生成还是直接使用原图，把缺少的图片补进当前表情包。</p>
+          </div>
+          <button type="button" class="edit-dialog-close" id="fillDialogClose" aria-label="关闭"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+        </div>
+        <div class="edit-dialog-body fill-dialog-body">
+          <aside class="edit-dialog-preview fill-dialog-preview">
+            <div class="fill-preview-label">预览</div>
+            <div id="fillDialogPlaceholder" class="fill-dialog-placeholder">
+              <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+              <span id="fillDialogPlaceholderText">选择图片后显示预览</span>
+            </div>
+            <img id="fillDialogImage" alt="补齐预览" hidden />
+            <p class="edit-dialog-target" id="fillDialogReferenceInfo">AI 生成时可选择已有图片作为参考。</p>
+          </aside>
+          <div class="edit-dialog-form fill-dialog-form">
+            <section class="fill-step">
+              <div class="fill-step-head">
+                <span class="fill-step-index">1</span>
+                <div>
+                  <h3>选择图片来源</h3>
+                  <p>从包内已有图片中选择，或上传一张新图片。</p>
+                </div>
+              </div>
+              <div id="fillSourceSelector" class="fill-choice-grid" role="radiogroup" aria-label="图片来源">
+                <label class="fill-choice" for="fillSourceExisting">
+                  <input id="fillSourceExisting" name="fillSource" type="radio" value="existing" checked />
+                  <span class="fill-choice-icon"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg></span>
+                  <span class="fill-choice-body"><strong>使用已有图片</strong><small>从当前表情包中选择</small></span>
+                </label>
+                <label class="fill-choice" for="fillSourceUpload">
+                  <input id="fillSourceUpload" name="fillSource" type="radio" value="upload" />
+                  <span class="fill-choice-icon"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg></span>
+                  <span class="fill-choice-body"><strong>上传新图片</strong><small>从本地选择图片</small></span>
+                </label>
+              </div>
+              <div id="fillSourceHint" class="field-hint">选择包内已有图片作为参考。</div>
+
+              <label class="field fill-inline-field" id="fillReferenceField" for="fillReferenceSelect">
+                <span class="section-title">参考图</span>
+                <select id="fillReferenceSelect" class="select-field"></select>
+                <div class="field-hint">选择一张图片保持角色与画风一致。</div>
+              </label>
+
+              <div class="field fill-upload-block" id="fillUploadFields" hidden>
+                <label class="fill-upload-dropzone" for="fillUploadFile">
+                  <span class="fill-upload-icon"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg></span>
+                  <span class="fill-upload-copy">
+                    <strong id="fillUploadFileName">点击选择图片</strong>
+                    <small>支持 PNG / JPG / WebP / GIF</small>
+                  </span>
+                  <input id="fillUploadFile" type="file" accept="image/png,image/jpeg,image/webp,image/gif" />
+                </label>
+                <div id="fillUploadHint" class="field-hint">支持 PNG、JPG、WebP、GIF，上传后会自动规范为当前平台规格。</div>
+              </div>
+            </section>
+
+            <section class="fill-step">
+              <div class="fill-step-head">
+                <span class="fill-step-index">2</span>
+                <div>
+                  <h3>选择处理方式</h3>
+                  <p>让 AI 重新绘制，或直接把上传图片作为成品。</p>
+                </div>
+              </div>
+              <div id="fillActionSelector" class="fill-choice-grid fill-choice-grid-single" role="radiogroup" aria-label="处理方式">
+                <label class="fill-choice" for="fillActionAi">
+                  <input id="fillActionAi" name="fillAction" type="radio" value="ai" checked />
+                  <span class="fill-choice-icon"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l1.8 4.8L18.5 9.5 13.8 11.3 12 16l-1.8-4.7L5.5 9.5l4.7-1.7L12 3z"/><path d="M19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8L19 15z"/></svg></span>
+                  <span class="fill-choice-body"><strong>AI 生成新图</strong><small>参考所选图片，按提示词生成</small></span>
+                </label>
+                <label class="fill-choice" id="fillActionDirectOption" for="fillActionDirect" hidden>
+                  <input id="fillActionDirect" name="fillAction" type="radio" value="direct" />
+                  <span class="fill-choice-icon"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M8 12l2.5 2.5L16 9"/></svg></span>
+                  <span class="fill-choice-body"><strong>直接使用原图</strong><small>规范化后直接补进表情包</small></span>
+                </label>
+              </div>
+              <div id="fillActionHint" class="field-hint">以所选图片为参考，按提示词与风格生成新图。</div>
+            </section>
+
+            <section class="fill-step" id="fillAiSettingsStep">
+              <div class="fill-step-head">
+                <span class="fill-step-index">3</span>
+                <div>
+                  <h3>填写生成要求</h3>
+                  <p>描述要补的内容；风格不选时不会写入任何风格描述。</p>
+                </div>
+              </div>
+              <div class="fill-settings-grid">
+                <label class="field field-full" id="fillPromptField" for="fillPrompt">
+                  <span class="section-title"><span class="required-mark">*</span>补齐内容</span>
+                  <textarea id="fillPrompt" rows="4" placeholder="例如：同一只柴犬，补充开心、生气、睡觉等表情，保持透明背景"></textarea>
+                  <div class="field-hint">描述要补的表情、动作或场景；已有图片不会被修改。</div>
+                </label>
+                <label class="field" id="fillCountField" for="fillCount">
+                  <span class="section-title">补齐张数</span>
+                  <input id="fillCount" type="number" min="1" step="1" value="1" inputmode="numeric" />
+                  <div id="fillCountHint" class="field-hint">当前已有 0 张。</div>
+                </label>
+                <label class="field" id="fillStyleField" for="fillStyle">
+                  <span class="section-title">风格</span>
+                  <select id="fillStyle" class="select-field"></select>
+                  <div class="field-hint">可不指定，保持与参考图一致。</div>
+                </label>
+              </div>
+            </section>
+          </div>
+        </div>
+        <div class="edit-dialog-foot">
+          <span class="field-hint" id="fillDialogStatus"></span>
+          <div class="edit-dialog-actions">
+            <button type="button" class="secondary" id="fillDialogCancel">取消</button>
+            <button type="button" id="fillDialogSubmit">开始补齐</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- 历史版本弹窗 -->
     <div id="versionDialog" class="edit-dialog" hidden aria-modal="true" role="dialog" aria-labelledby="versionDialogTitle">
       <div class="edit-dialog-backdrop" id="versionDialogBackdrop"></div>
@@ -657,9 +790,9 @@
     </footer>
 
     <script src="/js/auth.js?v=cac9e5cb"></script>
-    <script src="/js/preview.js?v=e766a03b"></script>
+    <script src="/js/preview.js?v=46b7c655"></script>
     <script src="/js/generator-api.js?v=a1439256"></script>
     <script src="/js/ui.js?v=5463a81e"></script>
-    <script src="/js/app.js?v=478e9958"></script>
+    <script src="/js/app.js?v=8b4ac491"></script>
   </body>
 </html>

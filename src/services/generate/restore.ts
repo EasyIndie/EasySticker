@@ -108,7 +108,7 @@ type StickerPayload = {
 /** 从不可信的 metadata.json 里安全地解析历史版本数组。 */
 function parseVersions(value: unknown): PackFileVersion[] | undefined {
   if (!Array.isArray(value)) return undefined;
-  const kinds = new Set<PackFileVersion["kind"]>(["generate", "edit", "regenerate", "restore"]);
+  const kinds = new Set<PackFileVersion["kind"]>(["generate", "fill", "upload", "edit", "regenerate", "restore"]);
   const out: PackFileVersion[] = [];
   for (const raw of value) {
     if (out.length >= 50) break;

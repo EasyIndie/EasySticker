@@ -36,13 +36,13 @@ export function registerPackRoutes(deps: AppDeps) {
       }
 
       const { owner } = await resolveRequester(req);
-      const { packId, downloadUrl, downloadFilename } = await createPack(
+      const { packId, downloadUrl, downloadFilename, metadataJson } = await createPack(
         deps.assetStore,
         deps.dataDir,
         parsed.data,
         owner
       );
-      return { packId, downloadUrl, downloadFilename };
+      return { packId, downloadUrl, downloadFilename, metadataJson };
     });
 
     // 当前用户自己的包列表（已登录按邮箱，未登录按 x-client-id）。

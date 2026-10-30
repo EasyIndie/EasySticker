@@ -47,8 +47,9 @@ data/packs/<packId>.json         # 包清单（几 KB），含逐张提示词 / 
 具体包含哪些扩展资源取决于平台与选项（目前扩展资源仅微信生成）。
 
 **历史版本**：单张图被编辑 / 重生成后，每个旧版本原图都会打进 `history/<名称>/vN.<ext>`，
-并在 `metadata.json` 的 `files[].versions[]` 里记录（`assetId` / `createdAt` / `kind` /
-`instruction` / `prompt` / `style` / `emotion` / `zipPath`）。重新导入时这些图片会被重新入库并
+并在 `metadata.json` 的 `files[].versions[]` 里记录 `assetId`、`createdAt`、
+`kind`（`generate` / `fill` / `upload` / `edit` / `regenerate` / `restore`）、`instruction`、`prompt`、
+`style`、`emotion` 与 `zipPath`。重新导入时这些图片会被重新入库并
 重映射 `assetId`，所以「下载 → 导入 → 再下载」历史版本不会丢。未编辑过的图不带 `history/`。
 
 ---

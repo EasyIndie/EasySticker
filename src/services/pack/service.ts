@@ -18,8 +18,8 @@ export type PackFileRole =
   /** 生成时使用的参考图（源素材，不是交付资源）。 */
   | "reference";
 
-/** 单张资源的历史版本类型：初版 / 编辑 / 重生成 / 回退。 */
-export type PackFileVersionKind = "generate" | "edit" | "regenerate" | "restore";
+/** 单张资源的历史版本类型：初版 / AI 补齐 / 上传补齐 / 编辑 / 重生成 / 回退。 */
+export type PackFileVersionKind = "generate" | "fill" | "upload" | "edit" | "regenerate" | "restore";
 export type PackFileVersion = {
   assetId: string;
   createdAt: string;

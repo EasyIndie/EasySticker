@@ -18,8 +18,8 @@ export type ExtrasContext = {
   promptConfig: PromptConfig;
   prompt: string;
   styles: string[];
-  referenceMode: "base64" | "url" | "multipart";
-  referenceBase64: string;
+  referenceMode: "base64" | "url" | "multipart" | "none";
+  referenceBase64?: string;
   referenceUrl?: string;
   emit?: (event: string, data: unknown) => void;
   isCanceled?: () => boolean;

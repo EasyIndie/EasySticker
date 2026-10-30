@@ -27,11 +27,34 @@ export function resolveStyleName(config: PromptConfig, style?: string | null): s
   return config.global.styles?.find((s) => s && s.trim()) ?? "扁平插画";
 }
 
+/**
+ * 用户明确不选择风格时不写任何风格段：清掉模板里空的「画面风格：」行，
+ * 避免 compilePrompt 把空占位符留成一行无意义文本。
+ */
+function withoutStyleSection(text: string): string {
+  return text
+    .split("\n")
+    .filter((line) => !/^\s*画面风格\s*[:：]\s*$/.test(line))
+    .join("\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
 /** 一组针对「完整角色贴纸」的提示词：单主体、透明背景、1:1、缩略图可读。 */
 export function buildStickerPrompt(
   config: PromptConfig,
-  params: { prompt: string; emotion: string; style?: string | null }
+  params: { prompt: string; emotion: string; style?: string | null; omitStyle?: boolean }
 ): string {
+  if (params.omitStyle) {
+    return withoutStyleSection(
+      compilePrompt(config.templates.sticker, {
+        prompt: params.prompt.trim(),
+        emotion: params.emotion.trim(),
+        style: "",
+        styleName: ""
+      })
+    );
+  }
   const styleName = resolveStyleName(config, params.style);
   return compilePrompt(config.templates.sticker, {
     prompt: params.prompt.trim(),
@@ -44,8 +67,18 @@ export function buildStickerPrompt(
 /** 一组针对「扩展资源（封面 / 图标 / 横幅 / 赞赏图）」的提示词。 */
 export function buildExtraPrompt(
   config: PromptConfig,
-  params: { prompt: string; requirement: string; style?: string | null }
+  params: { prompt: string; requirement: string; style?: string | null; omitStyle?: boolean }
 ): string {
+  if (params.omitStyle) {
+    return withoutStyleSection(
+      compilePrompt(config.templates.extra, {
+        prompt: params.prompt.trim(),
+        customPrompt: params.requirement.trim(),
+        style: "",
+        styleName: ""
+      })
+    );
+  }
   const styleName = resolveStyleName(config, params.style);
   return compilePrompt(config.templates.extra, {
     prompt: params.prompt.trim(),

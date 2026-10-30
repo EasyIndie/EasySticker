@@ -169,6 +169,12 @@ const EDIT_ICON_SVG =
 const VERSION_ICON_SVG =
   '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l3 2"/></svg>';
 
+const REFILL_ICON_SVG =
+  '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>';
+
+const DELETE_ICON_SVG =
+  '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>';
+
 /** 标记「这一张是在原图基础上编辑过的」。 */
 function markEdited(card: HTMLElement): void {
   const title = card.querySelector(".preview-title");
@@ -183,6 +189,17 @@ function markEdited(card: HTMLElement): void {
 function appendEditAction(card: HTMLElement, versions?: PreviewVersion[]): void {
   const actions = document.createElement("div");
   actions.className = "preview-actions";
+
+  if (Array.isArray(versions) && versions.some((version) => version.kind === "fill" || version.kind === "upload")) {
+    // 补齐生成的图片如果不满意，直接按同样的入口重新补齐一张。
+    const refill = document.createElement("button");
+    refill.type = "button";
+    refill.className = "preview-action-btn";
+    refill.dataset.action = "refill-resource";
+    refill.title = "重新补齐这一张：可用 AI 生成或上传图片，当前版本会保留在历史里";
+    refill.innerHTML = `${REFILL_ICON_SVG}<span>重新补齐</span>`;
+    actions.appendChild(refill);
+  }
 
   if (Array.isArray(versions) && versions.length > 1) {
     const history = document.createElement("button");
@@ -201,7 +218,15 @@ function appendEditAction(card: HTMLElement, versions?: PreviewVersion[]): void 
   edit.title = "在这一张的基础上继续修改，不影响其它图片";
   edit.innerHTML = `${EDIT_ICON_SVG}<span>编辑图片</span>`;
 
+  const remove = document.createElement("button");
+  remove.type = "button";
+  remove.className = "preview-action-btn preview-action-danger";
+  remove.dataset.action = "delete-resource";
+  remove.title = "从当前表情包中移除这张图片";
+  remove.innerHTML = `${DELETE_ICON_SVG}<span>删除</span>`;
+
   actions.appendChild(edit);
+  actions.appendChild(remove);
   card.appendChild(actions);
 }
 
@@ -510,12 +535,14 @@ export function renderExtraAssets(extras: Record<string, any> = {}, tone: Tone =
 /** 构建一张扩展资源卡片（不含挂载）。 */
 function createExtraCard(item: ExtraAssetDef, extras: Record<string, any>, tone: Tone): HTMLElement {
   const assetId = extras?.[item.key] as string | undefined;
-    // 整包成功但该资源缺失（单张失败）时，也渲染为可点击重试的错误卡片。
+    // 整包成功但该资源缺失（单张失败 / 导入时未提供）时，也渲染为可点击补图的卡片。
+    const isMissing = tone === "success" && !assetId && !extras?.[`${item.key}_error`];
     const effectiveTone: Tone = tone === "success" && !assetId ? "error" : tone;
     const card = document.createElement("article");
     card.className = `preview-item${item.wide ? " preview-item-wide" : ""}`;
     card.dataset.tone = effectiveTone;
-    // 标记扩展资源目标，供失败时做单资源重生成。
+    if (isMissing) card.dataset.missing = "true";
+    // 标记扩展资源目标，供失败 / 空白时做单资源补齐。
     card.dataset.target = JSON.stringify({ kind: "extra", key: item.key });
 
     const head = document.createElement("div");
@@ -524,6 +551,12 @@ function createExtraCard(item: ExtraAssetDef, extras: Record<string, any>, tone:
     const title = document.createElement("div");
     title.className = "preview-title";
     title.textContent = item.title;
+    if (isMissing) {
+      const tag = document.createElement("span");
+      tag.className = "preview-edited-tag";
+      tag.textContent = "待补齐";
+      title.appendChild(tag);
+    }
 
     const spec = document.createElement("div");
     spec.className = "preview-spec";
@@ -531,7 +564,9 @@ function createExtraCard(item: ExtraAssetDef, extras: Record<string, any>, tone:
 
     const description = document.createElement("p");
     description.className = "preview-description";
-    description.textContent = getExtraAssetDescription(item, assetId, effectiveTone, extras?.[`${item.key}_prompt`] as string | undefined);
+    description.textContent = isMissing
+      ? `${item.description} 尚未生成，点击此处补齐。`
+      : getExtraAssetDescription(item, assetId, effectiveTone, extras?.[`${item.key}_prompt`] as string | undefined);
     description.style.whiteSpace = "pre-wrap";
 
     head.appendChild(title);
@@ -554,7 +589,9 @@ function createExtraCard(item: ExtraAssetDef, extras: Record<string, any>, tone:
       };
     } else {
       media.classList.add("asset-placeholder");
-      media.textContent = PLACEHOLDER_STATE_TEXT[effectiveTone] ?? PLACEHOLDER_STATE_TEXT.idle;
+      media.textContent = isMissing
+        ? "尚未生成，点击此处补齐"
+        : PLACEHOLDER_STATE_TEXT[effectiveTone] ?? PLACEHOLDER_STATE_TEXT.idle;
     }
 
     card.appendChild(head);
