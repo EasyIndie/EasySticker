@@ -11,7 +11,7 @@
     <title>EasySticker</title>
     <meta name="theme-color" id="themeMeta" content="#07c160" data-dark="#111827" />
     <script src="/js/theme.js?v=2ce5d795"></script>
-    <link rel="stylesheet" href="/styles.css?v=84ffe3f9" />
+    <link rel="stylesheet" href="/styles.css?v=f6c0e734" />
   </head>
   <body>
     <a href="#mainContent" class="skip-link">跳到主要内容</a>
@@ -676,11 +676,21 @@
               </div>
               <div id="fillSourceHint" class="field-hint">选择包内已有图片作为参考。</div>
 
-              <label class="field fill-inline-field" id="fillReferenceField" for="fillReferenceSelect">
-                <span class="section-title">参考图</span>
-                <select id="fillReferenceSelect" class="select-field"></select>
-                <div class="field-hint">选择一张图片保持角色与画风一致。</div>
-              </label>
+              <div class="field fill-inline-field" id="fillReferenceField">
+                <label class="section-title" for="fillReferenceSelect">参考图</label>
+                <div class="fill-reference-control">
+                  <select id="fillReferenceSelect" class="select-field"></select>
+                  <span class="fill-reference-stepper">
+                    <button type="button" class="fill-reference-nav" id="fillReferencePrev" aria-label="上一张参考图" title="上一张（↑）">
+                      <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 15 12 9 18 15"/></svg>
+                    </button>
+                    <button type="button" class="fill-reference-nav" id="fillReferenceNext" aria-label="下一张参考图" title="下一张（↓）">
+                      <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+                    </button>
+                  </span>
+                </div>
+                <div class="field-hint">点击下拉选择，或按 ↑ / ↓ 快速切换参考图。</div>
+              </div>
 
               <div class="field fill-upload-block" id="fillUploadFields" hidden>
                 <label class="fill-upload-dropzone" for="fillUploadFile">
@@ -793,6 +803,6 @@
     <script src="/js/preview.js?v=46b7c655"></script>
     <script src="/js/generator-api.js?v=a1439256"></script>
     <script src="/js/ui.js?v=5463a81e"></script>
-    <script src="/js/app.js?v=8b4ac491"></script>
+    <script src="/js/app.js?v=b48447ea"></script>
   </body>
 </html>

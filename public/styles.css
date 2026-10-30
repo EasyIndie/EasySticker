@@ -3224,6 +3224,70 @@ textarea:focus-visible {
   grid-column: 1 / -1;
 }
 
+.fill-reference-control {
+  position: relative;
+  display: flex;
+  align-items: stretch;
+  min-width: 0;
+}
+
+.fill-reference-control .select-field {
+  width: 100%;
+  padding-right: 42px;
+}
+
+/* 上下切换按钮贴在 select 右侧，避免两个大箭头挤占表单宽度。 */
+.fill-reference-stepper {
+  position: absolute;
+  top: 1px;
+  right: 1px;
+  bottom: 1px;
+  display: flex;
+  flex-direction: column;
+  width: 34px;
+  overflow: hidden;
+  border-left: 1px solid var(--color-border-default);
+  border-radius: 0 var(--radius-sm, 6px) var(--radius-sm, 6px) 0;
+  background: var(--color-surface-secondary);
+}
+
+.fill-reference-nav {
+  display: inline-flex;
+  flex: 1;
+  align-items: center;
+  justify-content: center;
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--color-text-tertiary);
+  cursor: pointer;
+}
+
+.fill-reference-nav + .fill-reference-nav {
+  border-top: 1px solid var(--color-border-subtle);
+}
+
+.fill-reference-nav:hover:not(:disabled) {
+  background: var(--color-surface-hover);
+  color: var(--success-ink);
+}
+
+.fill-reference-nav:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: -2px;
+}
+
+.fill-reference-nav:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.fill-reference-nav .icon {
+  width: 14px;
+  height: 14px;
+}
+
 .fill-upload-dropzone {
   position: relative;
   display: flex;

@@ -115,6 +115,8 @@ const fillDialogTitle = byId("fillDialogTitle");
 const fillDialogDescription = byId("fillDialogDescription");
 const fillDialogReferenceInfo = byId("fillDialogReferenceInfo");
 const fillReferenceSelect = byId<HTMLSelectElement>("fillReferenceSelect");
+const fillReferencePrev = byId<HTMLButtonElement>("fillReferencePrev");
+const fillReferenceNext = byId<HTMLButtonElement>("fillReferenceNext");
 const fillCount = byId<HTMLInputElement>("fillCount");
 const fillCountHint = byId("fillCountHint");
 const fillPrompt = byId<HTMLTextAreaElement>("fillPrompt");
@@ -2096,6 +2098,24 @@ function syncFillReferencePreview(): void {
   }
 }
 
+function syncFillReferenceControls(): void {
+  const disabled = (fillReferenceSelect?.options.length ?? 0) < 2;
+  if (fillReferencePrev) fillReferencePrev.disabled = disabled;
+  if (fillReferenceNext) fillReferenceNext.disabled = disabled;
+}
+
+/** 在已有图片之间循环切换；鼠标按钮、↑/↓ 和下拉框共用同一逻辑。 */
+function moveFillReference(delta: number): void {
+  const select = fillReferenceSelect;
+  if (!select || select.options.length < 2) return;
+  const length = select.options.length;
+  const current = select.selectedIndex < 0 ? 0 : select.selectedIndex;
+  const next = (current + delta + length) % length;
+  if (next === current) return;
+  select.selectedIndex = next;
+  select.dispatchEvent(new Event("change", { bubbles: true }));
+}
+
 function clearFillUploadPreviewUrls(): void {
   for (const url of fillUploadObjectUrls) URL.revokeObjectURL(url);
   fillUploadObjectUrls = [];
@@ -2260,6 +2280,7 @@ function openFillDialog(target?: ResourceTarget): void {
       : candidates[0].assetId;
     fillReferenceSelect.value = preferred;
   }
+  syncFillReferenceControls();
 
   const remaining = MAX_STICKER_COUNT - currentStickers.length;
   if (fillCount) {
@@ -2343,7 +2364,9 @@ function openFillDialog(target?: ResourceTarget): void {
   if (fillDialog) fillDialog.hidden = false;
   fillDialogSubmit!.disabled = false;
   if (fillDialogCancel) fillDialogCancel.disabled = false;
-  fillPrompt?.focus();
+  // 默认先聚焦图片选择器，打开弹窗后可直接用 ↑ / ↓ 快速切换参考图。
+  if (getFillSource() === "existing") fillReferenceSelect?.focus();
+  else fillUploadFile?.focus();
 }
 
 function closeFillDialog(): void {
@@ -2681,12 +2704,29 @@ function mountFillDialog(): void {
   fillDialogClose?.addEventListener("click", closeFillDialog);
   fillDialogCancel?.addEventListener("click", closeFillDialog);
   fillDialogSubmit?.addEventListener("click", () => void submitFillDialog());
-  fillSourceExisting?.addEventListener("change", syncFillFlowFields);
-  fillSourceUpload?.addEventListener("change", syncFillFlowFields);
+  fillSourceExisting?.addEventListener("change", () => {
+    syncFillFlowFields();
+    if (fillSourceExisting.checked) fillReferenceSelect?.focus();
+  });
+  fillSourceUpload?.addEventListener("change", () => {
+    syncFillFlowFields();
+    if (fillSourceUpload.checked) fillUploadFile?.focus();
+  });
   fillActionAi?.addEventListener("change", syncFillFlowFields);
   fillActionDirect?.addEventListener("change", syncFillFlowFields);
   fillUploadFile?.addEventListener("change", syncFillUploadPreview);
   fillReferenceSelect?.addEventListener("change", syncFillReferencePreview);
+  fillReferencePrev?.addEventListener("click", () => moveFillReference(-1));
+  fillReferenceNext?.addEventListener("click", () => moveFillReference(1));
+  // 焦点不在输入框时也支持上下键切换，例如点过预览区域或导航按钮后可直接连按。
+  fillDialog?.addEventListener("keydown", (event) => {
+    if (getFillSource() !== "existing") return;
+    if (event.key !== "ArrowUp" && event.key !== "ArrowDown") return;
+    const target = event.target as HTMLElement | null;
+    if (target?.closest?.("input, textarea, select, [contenteditable='true']")) return;
+    event.preventDefault();
+    moveFillReference(event.key === "ArrowUp" ? -1 : 1);
+  });
   fillDialogImage?.addEventListener("error", () => {
     showFillDialogPreview(null, "图片加载失败，请重新选择");
   });
