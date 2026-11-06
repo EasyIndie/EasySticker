@@ -257,7 +257,7 @@ async function readFileFacts(filePath: string): Promise<FileFacts> {
       width: meta.width ?? null,
       height: meta.height ?? null,
       format,
-      mimeType: format ? `image/${format === "jpg" ? "jpeg" : format}` : null,
+      mimeType: format ? `image/${format}` : null,
       bytes
     };
   } catch {
