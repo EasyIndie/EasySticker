@@ -260,3 +260,11 @@ RPS / P99 会随机器、容器、并发与预热状态大幅变化，不在文�
 | 首页还在跑旧的前端代码 | 执行 `npm run web:build`（会同时刷新 HTML 里的内容哈希） |
 | 生成结果一直是随机图 | `ai.defaultProvider` 还是 `mock`，或没有可用 API Key |
 | 数据目录越来越大 | 检查 `packRetentionDays`、孤儿素材安全期与备份策略；先 `npm run gc` 体检 |
+
+---
+
+## 告警静默窗口
+
+- 错误率统计窗口由时间驱动：即使没有请求也会推进，空闲期不会冻结。
+- 同一类告警在静默窗口内只推送一次，窗口结束后重新计时。
+- 相关配置项见 `docs/configuration-reference.md`。
